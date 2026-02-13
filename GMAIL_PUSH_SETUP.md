@@ -71,7 +71,7 @@ PowerShellで以下を実行：
 
 ```powershell
 # プロジェクトフォルダに移動
-cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\Car-Internal-System"
+cd "<プロジェクトフォルダ>/Car-Internal-System"
 
 # 認証トークンを設定
 .\ngrok.exe config add-authtoken <YOUR_NGROK_AUTHTOKEN>
@@ -79,7 +79,7 @@ cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システ�
 
 成功すると以下のように表示されます：
 ```
-Authtoken saved to configuration file: C:\Users\pnhr1\.ngrok2\ngrok.yml
+Authtoken saved to configuration file: $env:USERPROFILE\.ngrok2\ngrok.yml
 ```
 
 **③ ngrokの動作確認**
@@ -105,7 +105,7 @@ pip install -r requirements.txt
 
 ```powershell
 # プロジェクトフォルダに移動
-cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\Car-Internal-System"
+cd "<プロジェクトフォルダ>/Car-Internal-System"
 
 # 仮想環境アクティベート
 .\venv\Scripts\Activate.ps1
@@ -129,7 +129,7 @@ Quit the server with CTRL-BREAK.
 
 ```powershell
 # プロジェクトフォルダに移動
-cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\Car-Internal-System"
+cd "<プロジェクトフォルダ>/Car-Internal-System"
 
 # ngrok起動
 .\ngrok.exe http 8000

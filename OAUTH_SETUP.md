@@ -173,7 +173,7 @@ Gmail メール取得開始
 ### 6-1. PowerShellスクリプトを作成
 `run_fetch_gmail.ps1`を作成:
 ```powershell
-Set-Location "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\Car-Internal-System"
+Set-Location "<プロジェクトフォルダ>/Car-Internal-System"
 .\venv\Scripts\Activate.ps1
 python manage.py fetch_gmail --days 1 --max 100
 ```
