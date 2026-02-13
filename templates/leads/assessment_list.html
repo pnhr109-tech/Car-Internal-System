@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>車査定申込一覧 - gigicompany</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .navbar-header {
+            background-color: #343a40;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        .company-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo-container {
+            display: flex;
+            gap: 0;
+        }
+        
+        .logo-square {
+            width: 20px;
+            height: 40px;
+            display: inline-block;
+        }
+        
+        .logo-red { background-color: #dc3545; }
+        .logo-green { background-color: #28a745; }
+        
+        .table-container {
+            overflow-x: auto;
+        }
+        
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+        }
+        
+        .search-card {
+            margin-bottom: 20px;
+        }
+        
+        .badge-new {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+        
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9998;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .loading-overlay.active {
+            display: flex;
+        }
+        
+        .info-badge {
+            background-color: #0d6efd;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+        
+        .date-separator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <!-- ヘッダー -->
+    <nav class="navbar navbar-header navbar-dark">
+        <div class="container-fluid">
+            <div class="company-logo">
+                <div class="logo-container">
+                    <span class="logo-square logo-red"></span>
+                    <span class="logo-square logo-green"></span>
+                </div>
+                <span class="navbar-brand mb-0 h1">
+                    <strong>gigicompany</strong> 社内システム - 車査定申込一覧
+                </span>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-white">
+                    <i class="bi bi-person-circle"></i> {{ request.user.username }}
+                </span>
+                <a href="/admin/" class="btn btn-sm btn-outline-light">
+                    <i class="bi bi-gear"></i> 管理画面
+                </a>
+            </div>
+        </div>
+    </nav>
+    <!-- ローディングオーバーレイ -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner-border text-light" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <!-- トースト通知エリア -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="container-fluid py-4">
+        <!-- 件数表示エリア -->
+        <div class="row mb-3">
+            <div class="col">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-1">
+                            <i class="bi bi-car-front-fill text-primary"></i> 
+                            査定申込データ
+                        </h4>
+                        <p class="text-muted mb-0">
+                            <span class="info-badge" id="totalCountBadge">総件数: <span id="totalCount">-</span>件</span>
+                            <span class="ms-2" id="currentPageInfo">
+                                (<span id="pageStart">-</span>～<span id="pageEnd">-</span>件目を表示)
+                            </span>
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" onclick="resetAndLoad()">
+                        <i class="bi bi-arrow-clockwise"></i> 再読込
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 検索フォーム -->
+        <div class="card search-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-search"></i> 検索
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="searchForm" onsubmit="event.preventDefault(); searchAssessments();">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="applicationNumber" class="form-label">お申込番号</label>
+                            <input type="text" class="form-control" id="applicationNumber" placeholder="例: 9060727">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">お申込日時（範囲検索）</label>
+                            <div class="row g-2">
+                                <div class="col-5">
+                                    <input type="date" class="form-control" id="dateFrom">
+                                </div>
+                                <div class="col-2 date-separator">
+                                    ～
+                                </div>
+                                <div class="col-5">
+                                    <input type="date" class="form-control" id="dateTo">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="address" class="form-label">住所</label>
+                            <input type="text" class="form-control" id="address" placeholder="例: 東京都">
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-search"></i> 検索
+                            </button>
+                            <button type="button" class="btn btn-secondary ms-2" onclick="clearSearch()">
+                                <i class="bi bi-x-circle"></i> クリア
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ページネーション（上部） -->
+        <div class="row mb-2" id="paginationTopRow" style="display: none;">
+            <div class="col">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-muted">
+                        <span class="info-badge" id="totalCountBadgeTop">総件数: <span id="totalCountTop">-</span>件</span>
+                        <span class="ms-2" id="currentPageInfoTop">
+                            (<span id="pageStartTop">-</span>～<span id="pageEndTop">-</span>件目を表示)
+                        </span>
+                    </div>
+                    <nav aria-label="ページネーション" id="paginationNavTop">
+                        <ul class="pagination mb-0" id="paginationContainerTop">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+        <!-- データテーブル -->
+        <div class="card">
+            <div class="card-body p-0 table-container">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-dark sticky-top">
+                        <tr>
+                            <th>お申込番号</th>
+                            <th>お申込日時</th>
+                            <th>お名前</th>
+                            <th>電話番号</th>
+                            <th>希望売却時期</th>
+                            <th>メーカー</th>
+                            <th>車種</th>
+                            <th>年式</th>
+                            <th>走行距離</th>
+                            <th>住所</th>
+                            <th>メールアドレス</th>
+                        </tr>
+                    </thead>
+                    <tbody id="assessmentTableBody">
+                        <tr>
+                            <td colspan="11" class="text-center text-muted">
+                                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                データを読み込んでいます...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ページネーション（下部） -->
+        <div class="row mt-3" id="paginationBottomRow" style="display: none;">
+            <div class="col">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-muted">
+                        <span class="info-badge" id="totalCountBadgeBottom">総件数: <span id="totalCountBottom">-</span>件</span>
+                        <span class="ms-2" id="currentPageInfoBottom">
+                            (<span id="pageStartBottom">-</span>～<span id="pageEndBottom">-</span>件目を表示)
+                        </span>
+                    </div>
+                    <nav aria-label="ページネーション" id="paginationNavBottom">
+                        <ul class="pagination mb-0" id="paginationContainerBottom">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let lastId = 0;
+        let isPolling = false;
+        let currentPage = 1;
+        let perPage = 100;
+        let totalPages = 1;
+        let currentFilters = {};
+
+        // ページ読み込み時に初期データ取得
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAssessments();
+            startPolling();
+        });
+
+        // データ読み込み
+        function loadAssessments(page = 1) {
+            showLoading();
+            currentPage = page;
+            
+            const params = new URLSearchParams({
+                page: currentPage,
+                per_page: perPage
+            });
+            
+            fetch(`/sateiinfo/api/assessments/?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        renderTable(data.data);
+                        updatePagination(data);
+                        updateLastId(data.data);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('エラー', 'データの読み込みに失敗しました', 'danger');
+                })
+                .finally(() => {
+                    hideLoading();
+                });
+        }
+
+        // 検索実行
+        function searchAssessments(page = 1) {
+            showLoading();
+            currentPage = page;
+            
+            // 検索条件を保存
+            currentFilters = {
+                application_number: document.getElementById('applicationNumber').value,
+                date_from: document.getElementById('dateFrom').value,
+                date_to: document.getElementById('dateTo').value,
+                address: document.getElementById('address').value
+            };
+            
+            const params = new URLSearchParams({
+                ...currentFilters,
+                page: currentPage,
+                per_page: perPage
+            });
+
+            fetch(`/sateiinfo/api/assessments/?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        renderTable(data.data);
+                        updatePagination(data);
+                        if (page === 1) {
+                            showToast('検索完了', `${data.total_count}件の結果が見つかりました`, 'success');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showToast('エラー', '検索に失敗しました', 'danger');
+                })
+                .finally(() => {
+                    hideLoading();
+                });
+        }
+
+        // ページネーション情報更新
+        function updatePagination(data) {
+            // 総件数表示（3箇所）
+            document.getElementById('totalCount').textContent = data.total_count.toLocaleString();
+            document.getElementById('totalCountTop').textContent = data.total_count.toLocaleString();
+            document.getElementById('totalCountBottom').textContent = data.total_count.toLocaleString();
+            
+            // 現在ページの件数表示（3箇所）
+            const start = data.total_count > 0 ? (data.page - 1) * data.per_page + 1 : 0;
+            const end = Math.min(data.page * data.per_page, data.total_count);
+            document.getElementById('pageStart').textContent = start.toLocaleString();
+            document.getElementById('pageEnd').textContent = end.toLocaleString();
+            document.getElementById('pageStartTop').textContent = start.toLocaleString();
+            document.getElementById('pageEndTop').textContent = end.toLocaleString();
+            document.getElementById('pageStartBottom').textContent = start.toLocaleString();
+            document.getElementById('pageEndBottom').textContent = end.toLocaleString();
+            
+            totalPages = data.total_pages;
+            
+            // ページネーションUIを構築
+            renderPagination(data);
+        }
+
+        // ページネーションUI構築
+        function renderPagination(data) {
+            const containerTop = document.getElementById('paginationContainerTop');
+            const containerBottom = document.getElementById('paginationContainerBottom');
+            const rowTop = document.getElementById('paginationTopRow');
+            const rowBottom = document.getElementById('paginationBottomRow');
+            
+            if (data.total_pages <= 1) {
+                rowTop.style.display = 'none';
+                rowBottom.style.display = 'none';
+                return;
+            }
+            
+            rowTop.style.display = 'block';
+            rowBottom.style.display = 'block';
+            let html = '';
+            
+            // 前へボタン
+            html += `
+                <li class="page-item ${!data.has_previous ? 'disabled' : ''}">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); ${data.has_previous ? 'goToPage(' + (data.page - 1) + ')' : 'return false;'}">
+                        <i class="bi bi-chevron-left"></i> 前へ
+                    </a>
+                </li>
+            `;
+            
+            // ページ番号ボタン
+            const maxButtons = 5;
+            let startPage = Math.max(1, data.page - Math.floor(maxButtons / 2));
+            let endPage = Math.min(data.total_pages, startPage + maxButtons - 1);
+            
+            if (endPage - startPage < maxButtons - 1) {
+                startPage = Math.max(1, endPage - maxButtons + 1);
+            }
+            
+            if (startPage > 1) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); goToPage(1)">1</a></li>`;
+                if (startPage > 2) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `
+                    <li class="page-item ${i === data.page ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="event.preventDefault(); goToPage(${i})">${i}</a>
+                    </li>
+                `;
+            }
+            
+            if (endPage < data.total_pages) {
+                if (endPage < data.total_pages - 1) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); goToPage(${data.total_pages})">${data.total_pages}</a></li>`;
+            }
+            
+            // 次へボタン
+            html += `
+                <li class="page-item ${!data.has_next ? 'disabled' : ''}">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); ${data.has_next ? 'goToPage(' + (data.page + 1) + ')' : 'return false;'}">
+                        次へ <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+            `;
+            
+            containerTop.innerHTML = html;
+            containerBottom.innerHTML = html;
+        }
+        
+        // 初期状態にリセットして再読込
+        function resetAndLoad() {
+            clearSearch();
+        }
+
+        // ページ移動
+        function goToPage(page) {
+            // 検索条件がある場合は検索、ない場合は通常読み込み
+            if (Object.values(currentFilters).some(v => v)) {
+                searchAssessments(page);
+            } else {
+                loadAssessments(page);
+            }
+            
+            // ページトップにスクロール
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // 検索クリア
+        function clearSearch() {
+            document.getElementById('searchForm').reset();
+            currentFilters = {};
+            currentPage = 1;
+            loadAssessments();
+        }
+
+        // テーブル描画
+        function renderTable(data) {
+            const tbody = document.getElementById('assessmentTableBody');
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">データがありません</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(item => `
+                <tr>
+                    <td><strong>${item.application_number}</strong></td>
+                    <td>${item.application_datetime}</td>
+                    <td>${item.customer_name}</td>
+                    <td>${item.phone_number}</td>
+                    <td>${item.desired_sale_timing}</td>
+                    <td>${item.maker}</td>
+                    <td>${item.car_model}</td>
+                    <td>${item.year}</td>
+                    <td>${item.mileage}</td>
+                    <td>${item.address}</td>
+                    <td>${item.email}</td>
+                </tr>
+            `).join('');
+        }
+
+        // 最新IDを更新
+        function updateLastId(data) {
+            if (data.length > 0) {
+                const maxId = Math.max(...data.map(item => item.id));
+                if (maxId > lastId) {
+                    lastId = maxId;
+                }
+            }
+        }
+
+        // ポーリング開始（30秒ごとに新規レコードをチェック）
+        function startPolling() {
+            if (isPolling) return;
+            isPolling = true;
+            
+            setInterval(() => {
+                checkNewRecords();
+            }, 30000); // 30秒ごと
+        }
+
+        // 新規レコードチェック
+        function checkNewRecords() {
+            if (lastId === 0) return; // 初回読み込み前はチェックしない
+
+            fetch(`/sateiinfo/api/check-new/?last_id=${lastId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.has_new) {
+                        showNewRecordNotification(data.data);
+                        // 自動リロードするか、手動リロードボタンを表示するか選べます
+                        // loadAssessments(); // 自動リロード
+                    }
+                })
+                .catch(error => {
+                    console.error('Polling error:', error);
+                });
+        }
+
+        // 新規レコード通知ポップアップ
+        function showNewRecordNotification(newRecords) {
+            const message = newRecords.map(r => 
+                `${r.application_number} - ${r.customer_name} (${r.maker} ${r.car_model})`
+            ).join('<br>');
+            
+            showToast(
+                `${newRecords.length}件の新規申込`,
+                message,
+                'info',
+                true, // 自動で閉じない
+                () => resetAndLoad() // クリック時に初期表示に戻す
+            );
+        }
+
+        // トースト通知表示
+        function showToast(title, message, type = 'info', autohide = true, onClick = null) {
+            const toastContainer = document.getElementById('toastContainer');
+            const toastId = 'toast-' + Date.now();
+            
+            const bgClass = {
+                'success': 'bg-success',
+                'danger': 'bg-danger',
+                'info': 'bg-info',
+                'warning': 'bg-warning'
+            }[type] || 'bg-info';
+
+            const toastHtml = `
+                <div id="${toastId}" class="toast align-items-center text-white ${bgClass} border-0" role="alert" aria-live="assertive" aria-atomic="true" ${autohide ? 'data-bs-autohide="true" data-bs-delay="5000"' : 'data-bs-autohide="false"'}>
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>${title}</strong><br>
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement);
+            
+            if (onClick) {
+                toastElement.addEventListener('click', onClick);
+                toastElement.style.cursor = 'pointer';
+            }
+            
+            toast.show();
+        }
+
+        // ローディング表示
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.add('active');
+        }
+
+        // ローディング非表示
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+    </script>
+</body>
+</html>
