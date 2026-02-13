@@ -65,7 +65,7 @@ Gmail APIがPub/Subトピックにメッセージを送信できるように権�
 
 **② 認証トークンを設定**
 
-ngrokダッシュボードから認証トークンをコピー（あなたのトークン: `39b5lWXCXzMS2qXqol4HXnTyyEc_7fGDeT1fS4gCPeTNGyZ1j`）
+ngrokダッシュボードから認証トークンをコピー（例: `<YOUR_NGROK_AUTHTOKEN>`）
 
 PowerShellで以下を実行：
 
@@ -74,7 +74,7 @@ PowerShellで以下を実行：
 cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\Car-Internal-System"
 
 # 認証トークンを設定
-.\ngrok.exe config add-authtoken 39b5lWXCXzMS2qXqol4HXnTyyEc_7fGDeT1fS4gCPeTNGyZ1j
+.\ngrok.exe config add-authtoken <YOUR_NGROK_AUTHTOKEN>
 ```
 
 成功すると以下のように表示されます：
@@ -154,7 +154,7 @@ Connections                   ttl     opn     rt1     rt5     p50     p90
 
 **あなたのngrok URL:**
 ```
-https://lavinia-ornamented-jadiel.ngrok-free.dev
+https://<YOUR-NGROK-DOMAIN>.ngrok-free.app
 ```
 
 #### Step 4: Pub/Subサブスクリプション作成（Webhookエンドポイント登録）
@@ -182,7 +182,7 @@ https://lavinia-ornamented-jadiel.ngrok-free.dev
    
    **④ エンドポイント URL**（「プッシュ」選択後に表示されます）
    ```
-   https://lavinia-ornamented-jadiel.ngrok-free.dev/sateiinfo/webhook/gmail-push/
+   https://<YOUR-NGROK-DOMAIN>.ngrok-free.app/sateiinfo/webhook/gmail-push/
    ```
    
    **⑤ その他の設定**
@@ -249,9 +249,10 @@ Gmail Push通知（Watch）設定開始
 
 1. **PowerShellで以下を実行**:
    ```powershell
+   $ngrokUrl = "https://<YOUR-NGROK-DOMAIN>.ngrok-free.app"
    $body = @{ message = @{ data = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('{"emailAddress":"kaitori@gigicompany.jp","historyId":"123"}')) } } | ConvertTo-Json
    
-   Invoke-WebRequest -Uri "https://lavinia-ornamented-jadiel.ngrok-free.dev/sateiinfo/webhook/gmail-push/" -Method POST -Body $body -ContentType "application/json"
+   Invoke-WebRequest -Uri "$ngrokUrl/sateiinfo/webhook/gmail-push/" -Method POST -Body $body -ContentType "application/json"
    ```
 
 2. **期待される結果**:
