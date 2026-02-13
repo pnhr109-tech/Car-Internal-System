@@ -34,11 +34,6 @@ Gmail APIのPush通知を使用して、新着メールを自動的に検知し�
 6. **作成** をクリック
 7. 作成されたトピック名をコピー（例: `projects/your-project-id/topics/gmail-push`）
 
-**あなたのトピック名:**
-```
-projects/navikuru-mail-system/topics/gmail-push
-```
-
 #### Step 2: Pub/Subトピックに権限を追加
 
 Gmail APIがPub/Subトピックにメッセージを送信できるように権限を設定します。
@@ -66,9 +61,7 @@ Gmail APIがPub/Subトピックにメッセージを送信できるように権�
 3. ログイン後、ダッシュボードから **Windows (64-bit)** をダウンロード
 4. ダウンロードした `ngrok.zip` を解凍
 5. 解凍した `ngrok.exe` をプロジェクトフォルダにコピー
-   ```
-   C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\01_ナビクル新着メール読込\
-   ```
+
 
 **② 認証トークンを設定**
 
@@ -78,7 +71,7 @@ PowerShellで以下を実行：
 
 ```powershell
 # プロジェクトフォルダに移動
-cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\01_ナビクル新着メール読込"
+cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\Car-Internal-System"
 
 # 認証トークンを設定
 .\ngrok.exe config add-authtoken 39b5lWXCXzMS2qXqol4HXnTyyEc_7fGDeT1fS4gCPeTNGyZ1j
@@ -112,7 +105,7 @@ pip install -r requirements.txt
 
 ```powershell
 # プロジェクトフォルダに移動
-cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\01_ナビクル新着メール読込"
+cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\Car-Internal-System"
 
 # 仮想環境アクティベート
 .\venv\Scripts\Activate.ps1
@@ -136,7 +129,7 @@ Quit the server with CTRL-BREAK.
 
 ```powershell
 # プロジェクトフォルダに移動
-cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\01_ナビクル新着メール読込"
+cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\Car-Internal-System"
 
 # ngrok起動
 .\ngrok.exe http 8000

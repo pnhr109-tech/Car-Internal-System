@@ -70,7 +70,7 @@ OAuth 2.0方式は、**ドメインワイド委任（DWD）不要**の簡単な�
 
 1. ダウンロードした`credentials.json`を**プロジェクトのルートフォルダ**に配置
    ```
-   01_ナビクル新着メール読込/
+   Car-Internal-System/
    ├── credentials.json  ← ここに配置
    ├── .env
    ├── manage.py
@@ -173,7 +173,7 @@ Gmail メール取得開始
 ### 6-1. PowerShellスクリプトを作成
 `run_fetch_gmail.ps1`を作成:
 ```powershell
-Set-Location "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\01_ナビクル新着メール読込"
+Set-Location "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\Car-Internal-System"
 .\venv\Scripts\Activate.ps1
 python manage.py fetch_gmail --days 1 --max 100
 ```

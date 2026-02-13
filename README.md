@@ -145,7 +145,7 @@ python manage.py runserver
 **ターミナル2（ngrok）:**
 ```powershell
 # プロジェクトフォルダに移動
-cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\01_ナビクル新着メール読込"
+cd "C:\Users\pnhr1\OneDrive\ドキュメント\01_gigi_work\01_社内システム\01_アプリ開発\Car-Internal-System"
 
 # ngrok起動
 .\ngrok.exe http 8000
