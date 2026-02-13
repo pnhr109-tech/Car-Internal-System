@@ -162,7 +162,7 @@ https://<YOUR-NGROK-DOMAIN>.ngrok-free.app
 **詳細な手順:**
 
 1. [Google Cloud Console](https://console.cloud.google.com/) を開く
-2. プロジェクト `navikuru-mail-system` を選択
+2. プロジェクト `your-project-id` を選択
 3. 左メニュー → **Pub/Sub** → **サブスクリプション** をクリック
 4. 上部の **サブスクリプションを作成** ボタンをクリック
 5. 以下の項目を入力：
@@ -208,7 +208,7 @@ https://<YOUR-NGROK-DOMAIN>.ngrok-free.app
 
 ```powershell
 # 仮想環境内で実行
-python manage.py gmail_watch_start --topic projects/navikuru-mail-system/topics/gmail-push
+python manage.py gmail_watch_start --topic projects/your-project-id/topics/gmail-push
 ```
 
 **実行例:**
@@ -250,7 +250,7 @@ Gmail Push通知（Watch）設定開始
 1. **PowerShellで以下を実行**:
    ```powershell
    $ngrokUrl = "https://<YOUR-NGROK-DOMAIN>.ngrok-free.app"
-   $body = @{ message = @{ data = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('{"emailAddress":"kaitori@gigicompany.jp","historyId":"123"}')) } } | ConvertTo-Json
+   $body = @{ message = @{ data = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('{"emailAddress":"receiver@example.com","historyId":"123"}')) } } | ConvertTo-Json
    
    Invoke-WebRequest -Uri "$ngrokUrl/sateiinfo/webhook/gmail-push/" -Method POST -Body $body -ContentType "application/json"
    ```
@@ -265,15 +265,15 @@ Gmail Push通知（Watch）設定開始
    ```
    Received request body: b'{"message":{"data":"eyJlbWFpbEFkZHJlc3MiOiJrYWl0b3JpQGdpZ2ljb21wYW55LmpwIiwiaGlzdG9yeUlkIjoiMTIzIn0="}}'
    Parsed envelope: {'message': {'data': '...'}}
-   Received push notification: {'emailAddress': 'kaitori@gigicompany.jp', 'historyId': '123'}
-   Email: kaitori@gigicompany.jp, HistoryID: 123
+   Received push notification: {'emailAddress': 'receiver@example.com', 'historyId': '123'}
+   Email: receiver@example.com, HistoryID: 123
    
    ============================================================
    Gmail メール取得開始
    ============================================================
    ✓ Gmail API接続成功
    
-   検索条件: subject:申込み依頼がございました from:info@a-satei.com to:kaitori@gigicompany.jp newer_than:1d
+   検索条件: subject:申込み依頼がございました from:sender@example.com to:receiver@example.com newer_than:1d
    最大取得件数: 10
    取得: 最新10件（新しい順）
    
@@ -313,8 +313,8 @@ Gmail Push通知（Watch）設定開始
    - 一覧の一番上の申込番号を確認
 
 2. **テストメールを送信**:
-   - 送信元: `info@a-satei.com`
-   - 送信先: `kaitori@gigicompany.jp`
+   - 送信元: `sender@example.com`
+   - 送信先: `receiver@example.com`
    - 件名: `【かんたん車査定ガイド】申込み依頼がございました。`
    - 本文: 通常の申込メール内容
 
@@ -322,8 +322,8 @@ Gmail Push通知（Watch）設定開始
    ```
    Received request body: b'...'
    Parsed envelope: {'message': {'data': '...'}}
-   Received push notification: {'emailAddress': 'kaitori@gigicompany.jp', 'historyId': 'XXXXXXX'}
-   Email: kaitori@gigicompany.jp, HistoryID: XXXXXXX
+   Received push notification: {'emailAddress': 'receiver@example.com', 'historyId': 'XXXXXXX'}
+   Email: receiver@example.com, HistoryID: XXXXXXX
    
    ============================================================
    Gmail メール取得開始
@@ -362,7 +362,7 @@ Gmail Push通知（Watch）設定開始
 
 1. **Gmail Watch有効期限を確認**:
    - 2026-02-20 12:55:15より前か？
-   - 期限切れの場合: `python manage.py gmail_watch_start --topic projects/navikuru-mail-system/topics/gmail-push`
+   - 期限切れの場合: `python manage.py gmail_watch_start --topic projects/your-project-id/topics/gmail-push`
 
 2. **Pub/Subサブスクリプション確認**:
    - [Google Cloud Console](https://console.cloud.google.com/) → Pub/Sub → サブスクリプション
@@ -390,8 +390,8 @@ Gmail Push通知（Watch）設定開始
 ```
 Received request body: b'...'
 Parsed envelope: {'message': {'data': '...'}}
-Received push notification: {'emailAddress': 'kaitori@gigicompany.jp', 'historyId': '...'}
-Email: kaitori@gigicompany.jp, HistoryID: ...
+Received push notification: {'emailAddress': 'receiver@example.com', 'historyId': '...'}
+Email: receiver@example.com, HistoryID: ...
 Email fetch triggered successfully
 ```
 
@@ -426,7 +426,7 @@ python manage.py fetch_gmail --days 7
 python manage.py gmail_watch_stop
 
 # Watch設定再開（7日間有効）
-python manage.py gmail_watch_start --topic projects/navikuru-mail-system/topics/gmail-push
+python manage.py gmail_watch_start --topic projects/your-project-id/topics/gmail-push
 ```
 
 **ngrok Web Interface**:
@@ -449,14 +449,14 @@ python manage.py gmail_watch_start --topic projects/navikuru-mail-system/topics/
 
 3. **Gmail Watchを再設定**
    ```bash
-   python manage.py gmail_watch_start --topic projects/navikuru-mail-system/topics/gmail-push
+   python manage.py gmail_watch_start --topic projects/your-project-id/topics/gmail-push
    ```
 
 4. **定期的なWatch更新（cron / Cloud Scheduler）**
    - 7日ごとにWatch設定を更新するジョブを設定
    ```bash
    # 例: Cloud Schedulerで毎週実行
-   0 0 * * 0 python manage.py gmail_watch_start --topic projects/navikuru-mail-system/topics/gmail-push
+   0 0 * * 0 python manage.py gmail_watch_start --topic projects/your-project-id/topics/gmail-push
    ```
 
 ---
@@ -535,7 +535,7 @@ python manage.py gmail_watch_stop
 
 5. **初回のみ**: Gmail Watch設定
    ```powershell
-   python manage.py gmail_watch_start --topic projects/navikuru-mail-system/topics/gmail-push
+   python manage.py gmail_watch_start --topic projects/your-project-id/topics/gmail-push
    ```
 
 6. **ngrok URLが変わった場合**: Pub/Subサブスクリプションを更新

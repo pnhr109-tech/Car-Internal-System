@@ -332,7 +332,7 @@ python test_oauth.py
 ====================================================================
 ✅ 接続成功！
 ====================================================================
-メールアドレス: kaitori@gigicompany.jp
+メールアドレス: receiver@example.com
 総メール数: 1,234
 ====================================================================
 ```
@@ -412,7 +412,7 @@ Gmail メール取得開始
 
 ✓ Gmail API接続成功（system@gigicompany.jp）
 
-検索条件: subject:申込み依頼がございました from:info@a-satei.com to:kaitori@gigicompany.jp newer_than:1d
+検索条件: subject:申込み依頼がございました from:sender@example.com to:receiver@example.com newer_than:1d
 最大取得件数: 100
 取得: 最新3件（新しい順）
 

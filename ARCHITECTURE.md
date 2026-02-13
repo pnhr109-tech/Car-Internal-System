@@ -384,14 +384,14 @@ gigicompany-system/
 - 自動的な査定申込データのパース・DB保存
 
 **設定:**
-- プロジェクト: `navikuru-mail-system`
-- Pub/Subトピック: `projects/navikuru-mail-system/topics/gmail-push`
+- プロジェクト: `your-project-id`
+- Pub/Subトピック: `projects/your-project-id/topics/gmail-push`
 - Watch有効期限: 7日間（定期的な更新が必要）
 
 **管理コマンド:**
 ```bash
 # Gmail Watch開始
-python manage.py gmail_watch_start --topic projects/navikuru-mail-system/topics/gmail-push
+python manage.py gmail_watch_start --topic projects/your-project-id/topics/gmail-push
 
 # Gmail Watch停止
 python manage.py gmail_watch_stop

@@ -13,7 +13,7 @@
 
 ### 1-1. GCPプロジェクト作成
 1. [Google Cloud Console](https://console.cloud.google.com/)にアクセス
-2. プロジェクトを新規作成（例: `navikuru-mail-system`）
+2. プロジェクトを新規作成（例: `your-project-id`）
 
 ### 1-2. Gmail API有効化
 1. 左メニュー「APIとサービス」→「ライブラリ」
@@ -154,13 +154,13 @@ Gmail API 接続テスト（DWD）
 ✓ Gmail APIサービス構築完了
 
 --- メール検索テスト ---
-検索条件: from:info@a-satei.com to:kaitori@gigicompany.jp newer_than:7d
+検索条件: from:sender@example.com to:receiver@example.com newer_than:7d
 
 ✅ メール取得成功！ 3件
 
   [1] メッセージID: 1234567890abcdef
-      From: info@a-satei.com
-      To: kaitori@gigicompany.jp
+      From: sender@example.com
+      To: receiver@example.com
       Subject: 【ナビクル】新着査定依頼
       Date: Thu, 6 Feb 2026 10:00:00 +0900
 
