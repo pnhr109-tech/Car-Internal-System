@@ -121,29 +121,6 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <div class="container-fluid py-4">
-        <!-- 件数表示エリア -->
-        <div class="row mb-3">
-            <div class="col">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h4 class="mb-1">
-                            <i class="bi bi-car-front-fill text-primary"></i> 
-                            査定申込データ
-                        </h4>
-                        <p class="text-muted mb-0">
-                            <span class="info-badge" id="totalCountBadge">総件数: <span id="totalCount">-</span>件</span>
-                            <span class="ms-2" id="currentPageInfo">
-                                (<span id="pageStart">-</span>～<span id="pageEnd">-</span>件目を表示)
-                            </span>
-                        </p>
-                    </div>
-                    <button class="btn btn-primary" onclick="resetAndLoad()">
-                        <i class="bi bi-arrow-clockwise"></i> 再読込
-                    </button>
-                </div>
-            </div>
-        </div>
-
         <!-- 検索フォーム -->
         <div class="card search-card">
             <div class="card-header">
@@ -188,6 +165,29 @@
                         </div>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- 件数表示エリア（検索フォームの下に固定） -->
+        <div class="row mb-3">
+            <div class="col">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h4 class="mb-1">
+                            <i class="bi bi-car-front-fill text-primary"></i>
+                            査定申込データ
+                        </h4>
+                        <p class="text-muted mb-0">
+                            <span class="info-badge" id="totalCountBadge">総件数: <span id="totalCount">-</span>件</span>
+                            <span class="ms-2" id="currentPageInfo">
+                                (<span id="pageStart">-</span>～<span id="pageEnd">-</span>件目を表示)
+                            </span>
+                        </p>
+                    </div>
+                    <button class="btn btn-primary" onclick="resetAndLoad()">
+                        <i class="bi bi-arrow-clockwise"></i> 再読込
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -327,9 +327,6 @@
                     if (data.success) {
                         renderTable(data.data);
                         updatePagination(data);
-                        if (page === 1) {
-                            showToast('検索完了', `${data.total_count}件の結果が見つかりました`, 'success');
-                        }
                     }
                 })
                 .catch(error => {
