@@ -740,6 +740,9 @@ python manage.py createsuperuser --username system --email system@gigcompany.jp
 
 ## 本番環境への移行（参考）
 
+### クエリ性能確認（推奨）
+- Cloud SQL 本番投入前に実施: [CLOUDSQL_EXPLAIN_RUNBOOK.md](CLOUDSQL_EXPLAIN_RUNBOOK.md)
+
 ### Cloud SQL（MySQL）
 1. Cloud SQLインスタンス作成
 2. `.env` の DB接続情報を更新
