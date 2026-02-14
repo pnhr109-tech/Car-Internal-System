@@ -1,9 +1,13 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+    {% load static %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>車査定申込一覧 - gigicompany</title>
+    <link rel="icon" type="image/svg+xml" href="{% static 'leads/icons/favicon.svg' %}">
+    <link rel="shortcut icon" href="{% static 'leads/icons/favicon.svg' %}">
+    <link rel="apple-touch-icon" href="{% static 'leads/icons/favicon.svg' %}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
@@ -17,20 +21,12 @@
             align-items: center;
             gap: 10px;
         }
-        
-        .logo-container {
-            display: flex;
-            gap: 0;
-        }
-        
-        .logo-square {
-            width: 20px;
-            height: 40px;
+
+        .company-logo-icon {
+            width: 24px;
+            height: 24px;
             display: inline-block;
         }
-        
-        .logo-red { background-color: #dc3545; }
-        .logo-green { background-color: #28a745; }
         
         .table-container {
             overflow-x: auto;
@@ -96,10 +92,7 @@
     <nav class="navbar navbar-header navbar-dark">
         <div class="container-fluid">
             <div class="company-logo">
-                <div class="logo-container">
-                    <span class="logo-square logo-red"></span>
-                    <span class="logo-square logo-green"></span>
-                </div>
+                <img src="{% static 'leads/icons/favicon.svg' %}" alt="gigicompany" class="company-logo-icon">
                 <span class="navbar-brand mb-0 h1">
                     <strong>gigicompany</strong> 社内システム - 車査定申込一覧
                 </span>
