@@ -87,24 +87,43 @@ def get_assessments(request):
     paginator = Paginator(queryset, per_page)
     page_obj = paginator.get_page(page)
     
-    # JSON形式に変換
+    # JSON形式に変換（必要カラムのみ取得して軽量化）
+    page_rows = page_obj.object_list.values(
+        'id',
+        'application_number',
+        'application_datetime',
+        'desired_sale_timing',
+        'maker',
+        'car_model',
+        'year',
+        'mileage',
+        'customer_name',
+        'phone_number',
+        'postal_code',
+        'address',
+        'email',
+        'created_at',
+    )
+
     data = []
-    for obj in page_obj:
+    for row in page_rows:
+        application_datetime = row.get('application_datetime')
+        created_at = row.get('created_at')
         data.append({
-            'id': obj.id,
-            'application_number': obj.application_number,
-            'application_datetime': timezone.localtime(obj.application_datetime).strftime('%Y-%m-%d %H:%M') if obj.application_datetime else '',
-            'desired_sale_timing': obj.desired_sale_timing,
-            'maker': obj.maker,
-            'car_model': obj.car_model,
-            'year': obj.year,
-            'mileage': obj.mileage,
-            'customer_name': obj.customer_name,
-            'phone_number': obj.phone_number,
-            'postal_code': obj.postal_code,
-            'address': obj.address,
-            'email': obj.email,
-            'created_at': timezone.localtime(obj.created_at).strftime('%Y-%m-%d %H:%M:%S'),
+            'id': row['id'],
+            'application_number': row['application_number'],
+            'application_datetime': timezone.localtime(application_datetime).strftime('%Y-%m-%d %H:%M') if application_datetime else '',
+            'desired_sale_timing': row['desired_sale_timing'],
+            'maker': row['maker'],
+            'car_model': row['car_model'],
+            'year': row['year'],
+            'mileage': row['mileage'],
+            'customer_name': row['customer_name'],
+            'phone_number': row['phone_number'],
+            'postal_code': row['postal_code'],
+            'address': row['address'],
+            'email': row['email'],
+            'created_at': timezone.localtime(created_at).strftime('%Y-%m-%d %H:%M:%S') if created_at else '',
         })
     
     return JsonResponse({
@@ -133,18 +152,26 @@ def check_new_assessments(request):
     except ValueError:
         last_id = 0
     
-    # last_idより大きいIDのレコードを取得
-    new_records = CarAssessmentRequest.objects.filter(id__gt=last_id).order_by('-application_datetime')
-    
+    # last_idより大きいIDのレコードを取得（ポーリング向けに必要カラムのみ）
+    new_records = CarAssessmentRequest.objects.filter(id__gt=last_id).order_by('-id').values(
+        'id',
+        'application_number',
+        'application_datetime',
+        'customer_name',
+        'maker',
+        'car_model',
+    )
+
     data = []
-    for obj in new_records:
+    for row in new_records:
+        app_datetime = row.get('application_datetime')
         data.append({
-            'id': obj.id,
-            'application_number': obj.application_number,
-            'application_datetime': timezone.localtime(obj.application_datetime).strftime('%Y-%m-%d %H:%M') if obj.application_datetime else '',
-            'customer_name': obj.customer_name,
-            'maker': obj.maker,
-            'car_model': obj.car_model,
+            'id': row['id'],
+            'application_number': row['application_number'],
+            'application_datetime': timezone.localtime(app_datetime).strftime('%Y-%m-%d %H:%M') if app_datetime else '',
+            'customer_name': row['customer_name'],
+            'maker': row['maker'],
+            'car_model': row['car_model'],
         })
     
     return JsonResponse({
