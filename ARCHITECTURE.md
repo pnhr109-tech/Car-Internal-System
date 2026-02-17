@@ -97,6 +97,12 @@ gigicompany-system/
 │   ├── views.py                # システム設定・ユーザー管理
 │   └── templates/admin_panel/
 │
+├── accounts/                    # 認証機能 ✅実装済み
+│   ├── views.py                # Googleログイン / ログアウト
+│   ├── urls.py                 # /login, /logout
+│   └── templates/accounts/
+│       └── google_login.html
+│
 ├── static/                      # 共通静的ファイル
 │   ├── css/
 │   │   └── common.css
@@ -132,6 +138,7 @@ gigicompany-system/
 | **customers** | 🔨未実装 | 顧客マスタ管理 | Customer, Contact | /customers/ |
 | **dashboard** | 🔨未実装 | 統合ダッシュボード | - | / |
 | **admin_panel** | 🔨未実装 | システム管理者機能 | SystemConfig, AuditLog | /admin-panel/ |
+| **accounts** | ✅実装済み | Google認証・ログイン制御 | User(Django標準) | /login/, /logout/ |
 
 ### 業務系
 

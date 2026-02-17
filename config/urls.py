@@ -17,13 +17,10 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import RedirectView
-from leads import views as lead_views
 
 urlpatterns = [
     path('', RedirectView.as_view(url='/sateiinfo/', permanent=False)),
-    path('login/', lead_views.google_login_page, name='login'),
-    path('login/google/', lead_views.google_login, name='google_login'),
-    path('logout/', lead_views.logout_view, name='logout'),
+    path('', include('accounts.urls')),
     path('admin/', admin.site.urls),
     path('sateiinfo/', include('leads.urls')),
 ]
