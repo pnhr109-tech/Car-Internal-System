@@ -6,6 +6,7 @@ from django.http import JsonResponse, HttpResponse
 from django.db.models import Q
 from django.utils import timezone
 from django.core.paginator import Paginator
+from django.core.cache import cache
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from datetime import datetime
@@ -190,6 +191,10 @@ def gmail_push_notification(request):
     
     Google Cloud Pub/Subからのメッセージを受信し、新着メールを取得する
     """
+    lock_key = 'gmail_push:fetch_lock'
+    lock_acquired = False
+    dedupe_key = None
+
     try:
         # リクエストボディをログ出力（デバッグ用）
         logger.info(f'Received request body: {request.body}')
@@ -217,6 +222,20 @@ def gmail_push_notification(request):
             history_id = notification_data.get('historyId')
             
             logger.info(f'Email: {email_address}, HistoryID: {history_id}')
+
+            # 重複通知抑止（historyId単位で短時間の再実行を防止）
+            if email_address and history_id:
+                dedupe_key = f'gmail_push:history:{email_address}:{history_id}'
+                is_new_notification = cache.add(dedupe_key, '1', timeout=600)  # 10分
+                if not is_new_notification:
+                    logger.info(f'Duplicate push notification skipped: {dedupe_key}')
+                    return HttpResponse(status=200)
+
+        # fetch_gmail の同時実行制御（多重起動を防止）
+        lock_acquired = cache.add(lock_key, '1', timeout=300)  # 5分
+        if not lock_acquired:
+            logger.info('fetch_gmail is already running. Skip this push trigger.')
+            return HttpResponse(status=200)
         
         # 非同期でメール取得処理を実行（Celeryなど）
         # または直接実行（簡易版）
@@ -226,6 +245,9 @@ def gmail_push_notification(request):
             call_command('fetch_gmail', '--days', '1', '--max', '10')
             logger.info('Email fetch triggered successfully')
         except Exception as e:
+            # fetch失敗時は同一historyIdを再試行できるようにする
+            if dedupe_key:
+                cache.delete(dedupe_key)
             logger.error(f'Failed to fetch emails: {str(e)}')
         
         # Pub/Subには200を返す（確認応答）
@@ -237,3 +259,6 @@ def gmail_push_notification(request):
     except Exception as e:
         logger.error(f'Unexpected error in push notification: {str(e)}')
         return HttpResponse(status=500)
+    finally:
+        if lock_acquired:
+            cache.delete(lock_key)
