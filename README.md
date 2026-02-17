@@ -662,6 +662,13 @@ python manage.py fetch_gmail
 
 # オプション指定
 python manage.py fetch_gmail --days 7 --max 500
+
+# 障害時の手動範囲回収（from/to 指定）
+# 例: 09:00〜12:00 の範囲を回収
+python manage.py fetch_gmail --from "2026-02-16 09:00" --to "2026-02-16 12:00" --max 500
+
+# 日付のみ指定も可（to は翌日 00:00 扱い）
+python manage.py fetch_gmail --from "2026-02-16" --to "2026-02-17" --max 500
 ```
 
 ### Gmail Push通知管理

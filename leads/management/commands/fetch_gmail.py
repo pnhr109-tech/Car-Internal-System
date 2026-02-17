@@ -5,7 +5,7 @@ Gmail メール取得 management command
 import os
 import re
 import base64
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from django.core.management.base import BaseCommand
 from django.conf import settings
 from google.auth.transport.requests import Request
@@ -13,6 +13,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from leads.models import GmailMessage, CarAssessmentRequest
+from zoneinfo import ZoneInfo
 
 
 class Command(BaseCommand):
@@ -31,10 +32,26 @@ class Command(BaseCommand):
             default=100,
             help='最大取得件数（デフォルト: 100）※Gmail APIは新しい順に返すため見逃しなし'
         )
+        parser.add_argument(
+            '--from',
+            dest='from_datetime',
+            type=str,
+            default='',
+            help='取得開始日時（例: "2026-02-16 09:00" または "2026-02-16T09:00"）'
+        )
+        parser.add_argument(
+            '--to',
+            dest='to_datetime',
+            type=str,
+            default='',
+            help='取得終了日時（例: "2026-02-16 12:00" または "2026-02-16T12:00"）'
+        )
 
     def handle(self, *args, **options):
         days = options['days']
         max_results = options['max']
+        from_datetime_str = options['from_datetime']
+        to_datetime_str = options['to_datetime']
         
         self.stdout.write("=" * 60)
         self.stdout.write("Gmail メール取得開始")
@@ -46,12 +63,10 @@ class Command(BaseCommand):
             return
         
         # 2. メール検索
-        query = (
-            f'subject:申込み依頼がございました '
-            f'from:info@a-satei.com '
-            f'to:kaitori@gigicompany.jp '
-            f'newer_than:{days}d'
-        )
+        query = self._build_search_query(days, from_datetime_str, to_datetime_str)
+        if not query:
+            return
+
         self.stdout.write(f"\n検索条件: {query}")
         self.stdout.write(f"最大取得件数: {max_results}")
         
@@ -107,6 +122,71 @@ class Command(BaseCommand):
         self.stdout.write(f"  申込情報抽出: {parsed_count}件")
         self.stdout.write(f"  スキップ: {skipped_count}件")
         self.stdout.write("=" * 60)
+
+    def _build_search_query(self, days, from_datetime_str='', to_datetime_str=''):
+        """
+        Gmail検索クエリを構築
+
+        優先順位:
+        1) --from/--to が指定されていれば期間指定を使用
+        2) 未指定なら従来通り newer_than を使用
+        """
+        base_query = (
+            'subject:申込み依頼がございました '
+            'from:info@a-satei.com '
+            'to:kaitori@gigicompany.jp'
+        )
+
+        from_dt = self._parse_cli_datetime(from_datetime_str, 'from') if from_datetime_str else None
+        to_dt = self._parse_cli_datetime(to_datetime_str, 'to') if to_datetime_str else None
+
+        if from_datetime_str and not from_dt:
+            return None
+        if to_datetime_str and not to_dt:
+            return None
+
+        if from_dt and to_dt and from_dt >= to_dt:
+            self.stdout.write(self.style.ERROR('❌ --from は --to より前の日時を指定してください'))
+            return None
+
+        if from_dt or to_dt:
+            range_parts = []
+            if from_dt:
+                range_parts.append(f'after:{int(from_dt.timestamp())}')
+            if to_dt:
+                range_parts.append(f'before:{int(to_dt.timestamp())}')
+            return f"{base_query} {' '.join(range_parts)}"
+
+        return f'{base_query} newer_than:{days}d'
+
+    def _parse_cli_datetime(self, value, label):
+        """CLIの日時文字列をJSTとして解釈してdatetime化"""
+        if not value:
+            return None
+
+        text = value.strip()
+        formats = [
+            '%Y-%m-%d %H:%M',
+            '%Y-%m-%dT%H:%M',
+            '%Y-%m-%d',
+        ]
+
+        for fmt in formats:
+            try:
+                dt = datetime.strptime(text, fmt)
+                if fmt == '%Y-%m-%d':
+                    if label == 'to':
+                        dt = dt + timedelta(days=1)
+                return dt.replace(tzinfo=ZoneInfo('Asia/Tokyo'))
+            except ValueError:
+                continue
+
+        self.stdout.write(
+            self.style.ERROR(
+                f'❌ --{label} の形式が不正です: {value}（例: 2026-02-16 09:00 または 2026-02-16）'
+            )
+        )
+        return None
     
     def _build_gmail_service(self):
         """
@@ -350,7 +430,6 @@ class Command(BaseCommand):
             datetime_str = datetime_str.replace('年', '-').replace('月', '-').replace('日', '')
             dt = datetime.strptime(datetime_str.strip(), '%Y-%m-%d %H:%M')
             # タイムゾーンを付与（日本時間として扱う）
-            from zoneinfo import ZoneInfo
             return dt.replace(tzinfo=ZoneInfo('Asia/Tokyo'))
         except Exception:
             return datetime.now(tz=timezone.utc)
