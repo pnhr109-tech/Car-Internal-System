@@ -142,3 +142,13 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Authentication settings
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/sateiinfo/'
+LOGOUT_REDIRECT_URL = '/login/'
+
+# Google Sign-In settings
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
+ALLOWED_GOOGLE_DOMAIN = os.getenv('ALLOWED_GOOGLE_DOMAIN', 'gigicompany.jp')

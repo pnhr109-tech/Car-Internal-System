@@ -1,23 +1,110 @@
 """
 車査定申込一覧画面ビュー
 """
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponse
 from django.db.models import Q
 from django.utils import timezone
 from django.core.paginator import Paginator
+from django.conf import settings
 from django.core.cache import cache
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user_model, login, logout
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET
 from datetime import datetime
 import json
 import base64
 import logging
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 from .models import CarAssessmentRequest
 
 logger = logging.getLogger(__name__)
 
 
+@require_GET
+def google_login_page(request):
+    if request.user.is_authenticated:
+        return redirect(settings.LOGIN_REDIRECT_URL)
+
+    return render(request, 'leads/google_login.html', {
+        'google_client_id': settings.GOOGLE_CLIENT_ID,
+        'allowed_domain': settings.ALLOWED_GOOGLE_DOMAIN,
+    })
+
+
+@require_POST
+def google_login(request):
+    credential = request.POST.get('credential', '').strip()
+
+    if not settings.GOOGLE_CLIENT_ID:
+        return HttpResponse('GOOGLE_CLIENT_ID が未設定です', status=500)
+
+    if not credential:
+        return HttpResponse('Google認証情報がありません', status=400)
+
+    try:
+        idinfo = id_token.verify_oauth2_token(
+            credential,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID,
+        )
+    except Exception:
+        return HttpResponse('Googleトークンの検証に失敗しました', status=401)
+
+    email = idinfo.get('email', '').lower()
+    email_verified = idinfo.get('email_verified', False)
+    hosted_domain = idinfo.get('hd', '').lower()
+    allowed_domain = settings.ALLOWED_GOOGLE_DOMAIN.lower()
+
+    is_allowed_domain = email.endswith(f'@{allowed_domain}')
+    if hosted_domain:
+        is_allowed_domain = is_allowed_domain and hosted_domain == allowed_domain
+
+    if not email or not email_verified or not is_allowed_domain:
+        return HttpResponse('gigicompanyのアカウントのみログイン可能です', status=403)
+
+    User = get_user_model()
+    user, created = User.objects.get_or_create(
+        username=email,
+        defaults={
+            'email': email,
+            'first_name': idinfo.get('given_name', ''),
+            'last_name': idinfo.get('family_name', ''),
+            'is_active': True,
+        }
+    )
+
+    if not user.is_active:
+        return HttpResponse('このアカウントは無効化されています', status=403)
+
+    # 既存ユーザーの表示名情報を更新（空のときのみ）
+    updated = False
+    if not user.first_name and idinfo.get('given_name'):
+        user.first_name = idinfo.get('given_name')
+        updated = True
+    if not user.last_name and idinfo.get('family_name'):
+        user.last_name = idinfo.get('family_name')
+        updated = True
+    if not user.email:
+        user.email = email
+        updated = True
+    if updated:
+        user.save(update_fields=['first_name', 'last_name', 'email'])
+
+    login(request, user)
+    return JsonResponse({'success': True, 'redirect': settings.LOGIN_REDIRECT_URL})
+
+
+@require_GET
+def logout_view(request):
+    logout(request)
+    return redirect(settings.LOGOUT_REDIRECT_URL)
+
+
+@login_required
 def assessment_list(request):
     """
     車査定申込一覧画面
@@ -26,6 +113,7 @@ def assessment_list(request):
     return render(request, 'leads/assessment_list.html')
 
 
+@login_required
 def get_assessments(request):
     """
     査定申込データを取得するAPIエンドポイント
@@ -140,6 +228,7 @@ def get_assessments(request):
     })
 
 
+@login_required
 def check_new_assessments(request):
     """
     新規レコードをチェックするAPIエンドポイント

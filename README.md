@@ -55,6 +55,13 @@ pip install -r requirements.txt
 ### ✅ Step 4: 環境変数設定
 `.env` ファイルを編集（DB接続情報は設定済み）
 
+Googleログインを使う場合は以下も設定してください。
+
+```env
+GOOGLE_CLIENT_ID=xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
+ALLOWED_GOOGLE_DOMAIN=gigicompany.jp
+```
+
 ### ✅ Step 5: Django初期設定
 ```powershell
 python manage.py migrate
@@ -84,6 +91,9 @@ python manage.py runserver
 ブラウザで以下のURLを開きます：
 
 **http://127.0.0.1:8000/sateiinfo/**
+
+未ログインの場合は **http://127.0.0.1:8000/login/** にリダイレクトされ、
+`gigicompany.jp` ドメインのGoogleアカウントのみログイン可能です。
 
 ### 3. 主な機能
 
