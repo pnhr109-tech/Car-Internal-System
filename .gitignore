@@ -25,6 +25,7 @@ staticfiles/
 # Gmail API認証情報（重要！Gitにコミットしない）
 credentials.json
 token.json
+token_workspace.json
 
 # ngrok
 ngrok.exe

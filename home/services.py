@@ -24,13 +24,13 @@ def get_latest_assessments(limit=100):
 
 def _get_google_credentials(required_scopes):
     credentials_file = os.getenv('GMAIL_CREDENTIALS_FILE', 'credentials.json')
-    token_file = os.getenv('GMAIL_TOKEN_FILE', 'token.json')
+    token_file = os.getenv('GOOGLE_WORKSPACE_TOKEN_FILE', 'token_workspace.json')
 
     if not os.path.exists(credentials_file):
         return None, 'Google認証ファイル(credentials.json)が見つかりません。'
 
     if not os.path.exists(token_file):
-        return None, 'Googleトークン(token.json)が見つかりません。管理コマンドで再認証してください。'
+        return None, f'Google Workspaceトークン({token_file})が見つかりません。setup_google_workspace_token を実行してください。'
 
     try:
         with open(token_file, 'r', encoding='utf-8') as token_handle:
@@ -40,12 +40,12 @@ def _get_google_credentials(required_scopes):
         if missing_scopes:
             return None, 'Googleトークンの権限が不足しています。setup_google_workspace_token を実行して再認証してください。'
     except Exception:
-        return None, 'token.jsonの読み込みに失敗しました。token.jsonを再作成してください。'
+        return None, f'{token_file} の読み込みに失敗しました。setup_google_workspace_token で再作成してください。'
 
     try:
         creds = Credentials.from_authorized_user_file(token_file, required_scopes)
     except Exception:
-        return None, 'token.jsonの読み込みに失敗しました。token.jsonを再作成してください。'
+        return None, f'{token_file} の読み込みに失敗しました。setup_google_workspace_token で再作成してください。'
 
     if not creds.valid:
         if creds.expired and creds.refresh_token:
