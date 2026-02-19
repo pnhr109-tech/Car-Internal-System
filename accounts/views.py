@@ -1,8 +1,9 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model, login, logout
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
@@ -19,14 +20,23 @@ def google_login_page(request):
     if request.user.is_authenticated:
         return redirect(settings.LOGIN_REDIRECT_URL)
 
+    login_uri = request.build_absolute_uri('/login/google/')
+
     return render(request, 'accounts/google_login.html', {
         'google_client_id': settings.GOOGLE_CLIENT_ID,
         'allowed_domain': settings.ALLOWED_GOOGLE_DOMAIN,
+        'login_uri': login_uri,
     })
 
 
+@csrf_exempt
 @require_POST
 def google_login(request):
+    g_csrf_cookie = request.COOKIES.get('g_csrf_token', '').strip()
+    g_csrf_body = request.POST.get('g_csrf_token', '').strip()
+    if not g_csrf_cookie or not g_csrf_body or g_csrf_cookie != g_csrf_body:
+        return HttpResponse('CSRF検証に失敗しました', status=400)
+
     credential = request.POST.get('credential', '').strip()
 
     if not settings.GOOGLE_CLIENT_ID:
@@ -86,26 +96,39 @@ def google_login(request):
     login(request, user)
 
     now = timezone.now()
-    open_session = LoginActivity.objects.filter(user=user, logout_at__isnull=True).order_by('-login_at').first()
-    if not open_session:
+    today = timezone.localdate(now)
+    today_session = LoginActivity.objects.filter(
+        user=user,
+        work_date=today,
+    ).order_by('login_at').first()
+
+    if not today_session:
         LoginActivity.objects.create(
             user=user,
-            work_date=timezone.localdate(now),
+            work_date=today,
             login_at=now,
         )
     else:
-        logger.info(f'Open login activity exists for user={user.username}, skip new clock-in')
+        logger.info(f'Today login activity exists for user={user.username}, reuse existing record')
 
-    return JsonResponse({'success': True, 'redirect': settings.LOGIN_REDIRECT_URL})
+    return redirect(settings.LOGIN_REDIRECT_URL)
 
 
 @require_GET
 def logout_view(request):
+    logout(request)
+    return redirect(settings.LOGOUT_REDIRECT_URL)
+
+
+@require_GET
+def clock_out_view(request):
     if request.user.is_authenticated:
+        today = timezone.localdate(timezone.now())
         open_session = LoginActivity.objects.filter(
             user=request.user,
+            work_date=today,
             logout_at__isnull=True,
-        ).order_by('-login_at').first()
+        ).order_by('login_at').first()
         if open_session:
             open_session.close_session(timezone.now())
 

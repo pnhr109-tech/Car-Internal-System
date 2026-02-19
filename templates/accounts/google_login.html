@@ -15,27 +15,11 @@
                         <h4 class="mb-3">gigicompany 社内システム</h4>
                         <p class="text-muted mb-4">Googleアカウントでログインしてください。<br>許可ドメイン: {{ allowed_domain }}</p>
 
-                        <div id="g_id_onload"
-                             data-client_id="{{ google_client_id }}"
-                             data-callback="handleCredentialResponse"
-                             data-auto_prompt="false">
-                        </div>
-                        <div class="g_id_signin"
-                             data-type="standard"
-                             data-size="large"
-                             data-theme="outline"
-                             data-text="signin_with"
-                             data-shape="rectangular"
-                             data-logo_alignment="left"
-                             data-width="320">
-                        </div>
+                            <div id="googleSignInButton"></div>
+                            <div id="googleSignInFallback" class="alert alert-warning mt-3 d-none" role="alert">
+                               Googleログインボタンの読み込みに失敗しました。ページを再読み込みしてください。
+                            </div>
 
-                        <form id="googleLoginForm" method="post" action="/login/google/" class="d-none">
-                            {% csrf_token %}
-                            <input type="hidden" name="credential" id="credentialInput">
-                        </form>
-
-                        <div id="errorBox" class="alert alert-danger mt-3 d-none" role="alert"></div>
                     </div>
                 </div>
             </div>
@@ -44,33 +28,39 @@
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
-        async function handleCredentialResponse(response) {
-            const errorBox = document.getElementById('errorBox');
-            errorBox.classList.add('d-none');
+        function renderGoogleButton() {
+            const fallback = document.getElementById('googleSignInFallback');
 
-            try {
-                const formData = new FormData();
-                formData.append('credential', response.credential);
-                formData.append('csrfmiddlewaretoken', document.querySelector('input[name="csrfmiddlewaretoken"]').value);
-
-                const res = await fetch('/login/google/', {
-                    method: 'POST',
-                    body: formData,
-                    credentials: 'same-origin'
-                });
-
-                if (!res.ok) {
-                    const text = await res.text();
-                    throw new Error(text || 'ログインに失敗しました');
-                }
-
-                const data = await res.json();
-                window.location.href = data.redirect || '/sateiinfo/';
-            } catch (error) {
-                errorBox.textContent = error.message;
-                errorBox.classList.remove('d-none');
+            if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+                fallback.classList.remove('d-none');
+                return;
             }
+
+            window.google.accounts.id.initialize({
+                client_id: '{{ google_client_id }}',
+                ux_mode: 'redirect',
+                login_uri: '{{ login_uri }}',
+                auto_select: false
+            });
+
+            window.google.accounts.id.renderButton(
+                document.getElementById('googleSignInButton'),
+                {
+                    type: 'standard',
+                    size: 'large',
+                    theme: 'outline',
+                    text: 'signin_with',
+                    shape: 'rectangular',
+                    logo_alignment: 'left',
+                    width: 320
+                }
+            );
         }
+
+        window.addEventListener('load', function () {
+            setTimeout(renderGoogleButton, 100);
+            setTimeout(renderGoogleButton, 1000);
+        });
     </script>
 </body>
 </html>

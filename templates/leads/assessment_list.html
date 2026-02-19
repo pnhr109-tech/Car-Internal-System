@@ -1,18 +1,8 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    {% load static %}
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>車査定申込一覧 - gigicompany</title>
-    <link rel="icon" href="{% static 'leads/icons/favicon.ico' %}" sizes="any">
-    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'leads/icons/favicon-32x32.png' %}">
-    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'leads/icons/favicon-16x16.png' %}">
-    <link rel="icon" type="image/svg+xml" href="{% static 'leads/icons/favicon.svg' %}">
-    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'leads/icons/apple-touch-icon.png' %}">
-    <link rel="manifest" href="{% static 'leads/icons/site.webmanifest' %}">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+{% extends 'base/internal_base.html' %}
+
+{% block title %}車査定申込一覧 - gigicompany{% endblock %}
+
+{% block extra_head %}
     <style>
         .navbar-header {
             background-color: #343a40;
@@ -97,31 +87,45 @@
             font-weight: bold;
             color: #6c757d;
         }
+
+        .assessment-table th,
+        .assessment-table td {
+            font-size: 0.84rem;
+            padding: 0.4rem 0.45rem;
+            line-height: 1.25;
+            vertical-align: middle;
+        }
+
+        .assessment-table .badge {
+            font-size: 0.72rem;
+        }
+
+        .assessment-table .btn-sm {
+            --bs-btn-padding-y: 0.18rem;
+            --bs-btn-padding-x: 0.42rem;
+            --bs-btn-font-size: 0.72rem;
+        }
+
+        .assessment-table .application-number-cell {
+            padding-left: 0.45rem;
+            padding-right: 0.95rem;
+            white-space: nowrap;
+            text-align: left;
+        }
+
+        .assessment-table .application-number-col {
+            min-width: 120px;
+            white-space: nowrap;
+        }
+
+        .assessment-table .owner-name-cell {
+            white-space: normal;
+            line-height: 1.15;
+        }
     </style>
-</head>
-<body>
-    <!-- ヘッダー -->
-    <nav class="navbar navbar-header navbar-dark">
-        <div class="container-fluid">
-            <div class="company-logo">
-                <img src="{% static 'leads/icons/favicon.svg' %}" alt="gigicompany" class="company-logo-icon">
-                <span class="navbar-brand mb-0 h1">
-                    <strong>gigicompany</strong> 社内システム - 車査定申込一覧
-                </span>
-            </div>
-            <div class="d-flex align-items-center gap-3">
-                <span class="text-white">
-                    <i class="bi bi-person-circle"></i> {{ request.user.username }}
-                </span>
-                <a href="/admin/" class="btn btn-sm btn-outline-light">
-                    <i class="bi bi-gear"></i> 管理画面
-                </a>
-                <a href="/logout/" class="btn btn-sm btn-outline-warning">
-                    <i class="bi bi-box-arrow-right"></i> ログアウト
-                </a>
-            </div>
-        </div>
-    </nav>
+{% endblock %}
+
+{% block content %}
     <!-- ローディングオーバーレイ -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="spinner-border text-light" role="status">
@@ -218,11 +222,13 @@
         <!-- データテーブル -->
         <div class="card">
             <div class="card-body p-0 table-container">
-                <table class="table table-hover table-striped mb-0">
+                <table class="table table-hover table-striped mb-0 assessment-table">
                     <thead class="table-dark sticky-top">
                         <tr>
-                            <th>お申込番号</th>
+                            <th class="application-number-col">お申込番号</th>
                             <th>お申込日時</th>
+                            <th>担当営業</th>
+                            <th>対応ステータス</th>
                             <th>お名前</th>
                             <th>電話番号</th>
                             <th>希望売却時期</th>
@@ -232,11 +238,12 @@
                             <th>走行距離</th>
                             <th>住所</th>
                             <th>メールアドレス</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="assessmentTableBody">
                         <tr>
-                            <td colspan="11" class="text-center text-muted">
+                            <td colspan="14" class="text-center text-muted">
                                 <div class="spinner-border spinner-border-sm me-2" role="status"></div>
                                 データを読み込んでいます...
                             </td>
@@ -259,19 +266,84 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <div class="modal fade" id="statusUpdateModal" tabindex="-1" aria-labelledby="statusUpdateModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="statusUpdateModalLabel">対応ステータス更新</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="modalAssessmentId">
+                    <div class="mb-3">
+                        <label for="modalFollowStatus" class="form-label">対応ステータス</label>
+                        <select id="modalFollowStatus" class="form-select">
+                            {% for status in follow_status_choices %}
+                            <option value="{{ status }}">{{ status }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="modalSalesNote" class="form-label">コメント</label>
+                        <textarea id="modalSalesNote" class="form-control" rows="6" placeholder="電話結果・商談予定などを記録"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                    <button type="button" class="btn btn-primary" onclick="saveStatusUpdate()">更新する</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="assessmentDetailModal" tabindex="-1" aria-labelledby="assessmentDetailModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="assessmentDetailModalLabel">申込詳細</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="閉じる"></button>
+                </div>
+                <div class="modal-body" id="assessmentDetailBody">
+                    読み込み中...
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block extra_scripts %}
     <script>
-        let lastId = 0;
-        let isPolling = false;
         let currentPage = 1;
         let perPage = 100;
         let totalPages = 1;
         let currentFilters = {};
+        const currentUserDisplayName = '{{ current_user_display_name|escapejs }}';
+        const statusUpdateModal = new bootstrap.Modal(document.getElementById('statusUpdateModal'));
+        const assessmentDetailModal = new bootstrap.Modal(document.getElementById('assessmentDetailModal'));
+
+        function escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value ?? '';
+            return div.innerHTML;
+        }
+
+        function formatOwnerName(value) {
+            const raw = (value || '').trim();
+            if (!raw || raw === '-') return '-';
+            return raw
+                .split(/\s+/)
+                .filter(Boolean)
+                .map(part => escapeHtml(part))
+                .join('<br>');
+        }
 
         // ページ読み込み時に初期データ取得
         document.addEventListener('DOMContentLoaded', function() {
             loadAssessments();
-            startPolling();
         });
 
         // データ読み込み
@@ -290,7 +362,6 @@
                     if (data.success) {
                         renderTable(data.data);
                         updatePagination(data);
-                        updateLastId(data.data);
                     }
                 })
                 .catch(error => {
@@ -456,16 +527,51 @@
             const tbody = document.getElementById('assessmentTableBody');
             
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">データがありません</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted">データがありません</td></tr>';
                 return;
             }
 
+            const statusBadge = (status) => {
+                const clsMap = {
+                    '未対応': 'secondary',
+                    '不通': 'dark',
+                    '再コール予定': 'warning text-dark',
+                    '商談アポ獲得': 'primary',
+                    '成約': 'success',
+                    '見送り': 'danger',
+                };
+                return `<span class="badge bg-${clsMap[status] || 'secondary'}">${escapeHtml(status || '未対応')}</span>`;
+            };
+
+            const renderAction = (item) => {
+                if (!item.sales_owner_name) {
+                    return `<button class="btn btn-sm btn-outline-primary" onclick="claimSalesOwner(${item.id})">挙手</button>`;
+                }
+
+                if (item.sales_owner_name === currentUserDisplayName) {
+                    const encodedStatus = encodeURIComponent(item.follow_status || '未対応');
+                    const encodedNote = encodeURIComponent(item.sales_note || '');
+                    return `<button class="btn btn-sm btn-outline-success" onclick="openStatusModal(${item.id}, '${encodedStatus}', '${encodedNote}')">更新</button>`;
+                }
+
+                return '<span class="text-muted small">担当確定済</span>';
+            };
+
+            const renderPhoneLink = (phoneNumber) => {
+                const raw = phoneNumber || '';
+                const tel = raw.replace(/[^0-9+]/g, '');
+                if (!tel) return '-';
+                return `<a href="tel:${tel}" class="text-decoration-none">${escapeHtml(raw)}</a>`;
+            };
+
             tbody.innerHTML = data.map(item => `
                 <tr>
-                    <td><strong>${item.application_number}</strong></td>
+                    <td class="application-number-cell"><a href="#" class="text-decoration-none fw-semibold" onclick="event.preventDefault(); openAssessmentDetailModal(${item.id})">${escapeHtml(item.application_number)}</a></td>
                     <td>${item.application_datetime}</td>
+                    <td class="owner-name-cell">${formatOwnerName(item.sales_owner_name)}</td>
+                    <td>${statusBadge(item.follow_status)}</td>
                     <td>${item.customer_name}</td>
-                    <td>${item.phone_number}</td>
+                    <td>${renderPhoneLink(item.phone_number)}</td>
                     <td>${item.desired_sale_timing}</td>
                     <td>${item.maker}</td>
                     <td>${item.car_model}</td>
@@ -473,61 +579,121 @@
                     <td>${item.mileage}</td>
                     <td>${item.address}</td>
                     <td>${item.email}</td>
+                    <td>${renderAction(item)}</td>
                 </tr>
             `).join('');
         }
 
-        // 最新IDを更新
-        function updateLastId(data) {
-            if (data.length > 0) {
-                const maxId = Math.max(...data.map(item => item.id));
-                if (maxId > lastId) {
-                    lastId = maxId;
-                }
+        function getCsrfToken() {
+            const cookie = document.cookie.split(';').map(v => v.trim()).find(v => v.startsWith('csrftoken='));
+            return cookie ? cookie.split('=')[1] : '';
+        }
+
+        function refreshCurrentList() {
+            if (Object.values(currentFilters).some(v => v)) {
+                searchAssessments(currentPage);
+            } else {
+                loadAssessments(currentPage);
             }
         }
 
-        // ポーリング開始（30秒ごとに新規レコードをチェック）
-        function startPolling() {
-            if (isPolling) return;
-            isPolling = true;
-            
-            setInterval(() => {
-                checkNewRecords();
-            }, 30000); // 30秒ごと
-        }
-
-        // 新規レコードチェック
-        function checkNewRecords() {
-            if (lastId === 0) return; // 初回読み込み前はチェックしない
-
-            fetch(`/sateiinfo/api/check-new/?last_id=${lastId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.has_new) {
-                        showNewRecordNotification(data.data);
-                        // 自動リロードするか、手動リロードボタンを表示するか選べます
-                        // loadAssessments(); // 自動リロード
+        function claimSalesOwner(assessmentId) {
+            fetch(`/sateiinfo/api/assessments/${assessmentId}/claim/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCsrfToken(),
+                },
+                credentials: 'same-origin',
+            })
+                .then(async (response) => {
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || '担当営業登録に失敗しました');
                     }
+                    showToast('成功', data.message || '担当営業を登録しました', 'success');
+                    refreshCurrentList();
                 })
-                .catch(error => {
-                    console.error('Polling error:', error);
+                .catch((error) => {
+                    showToast('エラー', error.message, 'danger');
                 });
         }
 
-        // 新規レコード通知ポップアップ
-        function showNewRecordNotification(newRecords) {
-            const message = newRecords.map(r => 
-                `${r.application_number} - ${r.customer_name} (${r.maker} ${r.car_model})`
-            ).join('<br>');
-            
-            showToast(
-                `${newRecords.length}件の新規申込`,
-                message,
-                'info',
-                true, // 自動で閉じない
-                () => resetAndLoad() // クリック時に初期表示に戻す
-            );
+        function openAssessmentDetailModal(assessmentId) {
+            const body = document.getElementById('assessmentDetailBody');
+            body.innerHTML = '読み込み中...';
+            assessmentDetailModal.show();
+
+            fetch(`/sateiinfo/api/assessments/${assessmentId}/detail/`)
+                .then(response => response.json())
+                .then(result => {
+                    if (!result.success) {
+                        throw new Error(result.message || '詳細取得に失敗しました');
+                    }
+
+                    const d = result.data;
+                    body.innerHTML = `
+                        <div class="row g-3">
+                            <div class="col-md-6"><strong>お申込番号</strong><div>${escapeHtml(d.application_number)}</div></div>
+                            <div class="col-md-6"><strong>お申込日時</strong><div>${escapeHtml(d.application_datetime || '-')}</div></div>
+                            <div class="col-md-6"><strong>担当営業</strong><div>${escapeHtml(d.sales_owner_name || '-')}</div></div>
+                            <div class="col-md-6"><strong>対応ステータス</strong><div>${escapeHtml(d.follow_status || '-')}</div></div>
+                            <div class="col-md-6"><strong>お名前</strong><div>${escapeHtml(d.customer_name || '-')}</div></div>
+                            <div class="col-md-6"><strong>電話番号</strong><div>${escapeHtml(d.phone_number || '-')}</div></div>
+                            <div class="col-md-6"><strong>希望売却時期</strong><div>${escapeHtml(d.desired_sale_timing || '-')}</div></div>
+                            <div class="col-md-6"><strong>メーカー / 車種</strong><div>${escapeHtml(d.maker || '-')} / ${escapeHtml(d.car_model || '-')}</div></div>
+                            <div class="col-md-6"><strong>年式 / 走行距離</strong><div>${escapeHtml(d.year || '-')} / ${escapeHtml(d.mileage || '-')}</div></div>
+                            <div class="col-md-6"><strong>住所</strong><div>${escapeHtml(d.address || '-')}</div></div>
+                            <div class="col-md-6"><strong>メールアドレス</strong><div>${escapeHtml(d.email || '-')}</div></div>
+                            <div class="col-md-6"><strong>担当確定日時</strong><div>${escapeHtml(d.sales_assigned_at || '-')}</div></div>
+                            <div class="col-12"><strong>コメント</strong><div class="border rounded p-2 bg-light">${escapeHtml(d.sales_note || '-')}</div></div>
+                            <div class="col-md-6"><strong>更新者</strong><div>${escapeHtml(d.status_updated_by || '-')}</div></div>
+                            <div class="col-md-6"><strong>更新日時</strong><div>${escapeHtml(d.status_updated_at || '-')}</div></div>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    body.innerHTML = `<div class="text-danger">${escapeHtml(error.message)}</div>`;
+                });
+        }
+
+        function openStatusModal(assessmentId, encodedStatus, encodedNote) {
+            document.getElementById('modalAssessmentId').value = assessmentId;
+            const currentStatus = decodeURIComponent(encodedStatus || '未対応');
+            const currentNote = decodeURIComponent(encodedNote || '');
+            document.getElementById('modalFollowStatus').value = currentStatus;
+            document.getElementById('modalSalesNote').value = currentNote;
+            statusUpdateModal.show();
+        }
+
+        function saveStatusUpdate() {
+            const assessmentId = document.getElementById('modalAssessmentId').value;
+            const followStatus = document.getElementById('modalFollowStatus').value;
+            const salesNote = document.getElementById('modalSalesNote').value;
+
+            fetch(`/sateiinfo/api/assessments/${assessmentId}/update/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken(),
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    follow_status: followStatus,
+                    sales_note: salesNote,
+                }),
+            })
+                .then(async (response) => {
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || '更新に失敗しました');
+                    }
+                    statusUpdateModal.hide();
+                    showToast('成功', data.message || '更新しました', 'success');
+                    refreshCurrentList();
+                })
+                .catch((error) => {
+                    showToast('エラー', error.message, 'danger');
+                });
         }
 
         // トースト通知表示
@@ -576,5 +742,4 @@
             document.getElementById('loadingOverlay').classList.remove('active');
         }
     </script>
-</body>
-</html>
+{% endblock %}

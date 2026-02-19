@@ -40,6 +40,22 @@ class GmailMessage(models.Model):
 
 class CarAssessmentRequest(models.Model):
     """かんたん車査定ガイドの申込情報（メール本文から抽出）"""
+
+    STATUS_UNTOUCHED = '未対応'
+    STATUS_NO_ANSWER = '不通'
+    STATUS_CALLBACK = '再コール予定'
+    STATUS_APPOINTMENT = '商談アポ獲得'
+    STATUS_CLOSED = '成約'
+    STATUS_LOST = '見送り'
+
+    FOLLOW_STATUS_CHOICES = [
+        (STATUS_UNTOUCHED, '未対応'),
+        (STATUS_NO_ANSWER, '不通'),
+        (STATUS_CALLBACK, '再コール予定'),
+        (STATUS_APPOINTMENT, '商談アポ獲得'),
+        (STATUS_CLOSED, '成約'),
+        (STATUS_LOST, '見送り'),
+    ]
     
     # 申込情報（一意性制約）
     application_number = models.CharField(max_length=50, unique=True, db_index=True, verbose_name='お申込番号')
@@ -58,6 +74,19 @@ class CarAssessmentRequest(models.Model):
     postal_code = models.CharField(max_length=10, blank=True, verbose_name='郵便番号')
     address = models.CharField(max_length=255, blank=True, verbose_name='住所')
     email = models.EmailField(max_length=255, blank=True, verbose_name='メールアドレス')
+
+    # 営業対応情報
+    sales_owner_name = models.CharField(max_length=150, blank=True, default='', db_index=True, verbose_name='担当営業')
+    sales_assigned_at = models.DateTimeField(null=True, blank=True, verbose_name='担当確定日時')
+    follow_status = models.CharField(
+        max_length=30,
+        choices=FOLLOW_STATUS_CHOICES,
+        default=STATUS_UNTOUCHED,
+        verbose_name='対応ステータス',
+    )
+    sales_note = models.TextField(blank=True, default='', verbose_name='対応コメント')
+    status_updated_at = models.DateTimeField(null=True, blank=True, verbose_name='ステータス更新日時')
+    status_updated_by = models.CharField(max_length=150, blank=True, default='', verbose_name='ステータス更新者')
     
     # 関連メール（参照用）
     gmail_message = models.ForeignKey(

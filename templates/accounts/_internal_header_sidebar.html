@@ -1,0 +1,347 @@
+{% load static %}
+<style>
+    .header-icon-btn {
+        border: 0;
+        background: transparent;
+        color: #fff;
+        box-shadow: none;
+    }
+
+    .header-icon-btn:focus,
+    .header-icon-btn:active {
+        box-shadow: none;
+    }
+
+    .header-icon-btn:hover,
+    .header-icon-btn:focus-visible {
+        color: #9ec5fe;
+    }
+
+    .notification-btn {
+        padding: 0.35rem 0.8rem;
+        min-width: 52px;
+        min-height: 38px;
+    }
+
+    .sidebar-menu-link {
+        border: 0;
+        border-radius: 0;
+        padding-left: 0;
+        padding-right: 0;
+        background: transparent;
+    }
+
+    .sidebar-menu-link + .sidebar-menu-link {
+        border-top: 1px solid #dee2e6;
+    }
+
+    .global-toast-container {
+        position: fixed;
+        top: 70px;
+        right: 16px;
+        z-index: 1095;
+    }
+</style>
+<nav class="navbar navbar-dark bg-dark sticky-top">
+    <div class="container-fluid">
+        <button class="navbar-toggler header-icon-btn p-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#appSidebar" aria-controls="appSidebar" aria-label="メニューを開く">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <span class="navbar-brand mb-0 h1 d-flex align-items-center gap-2">
+            <img src="{% static 'leads/icons/favicon.svg' %}" alt="gigicompany" width="20" height="20">
+            gigicompany 社内システム
+        </span>
+        <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-sm header-icon-btn notification-btn position-relative"
+                    type="button"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#globalNotificationPanel"
+                    aria-controls="globalNotificationPanel"
+                    id="globalNotificationToggle"
+                    aria-label="通知">
+                <span aria-hidden="true" class="d-inline-flex align-items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M8 16a2 2 0 0 0 1.985-1.75h-3.97A2 2 0 0 0 8 16Zm.104-14.804A1 1 0 0 0 7 2.196v.718C5.286 3.36 4 4.99 4 7v2.764l-.895 1.789A.5.5 0 0 0 3.553 12h8.894a.5.5 0 0 0 .448-.658L12 9.764V7c0-2.01-1.286-3.64-3-4.086v-.718a1 1 0 0 0-.896-1Z"/>
+                    </svg>
+                </span>
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="globalNotificationBadge">0</span>
+            </button>
+            <span class="text-white small">{{ request.user.username }}</span>
+            <a href="/logout/" class="btn btn-sm btn-outline-light">ログアウト</a>
+        </div>
+    </div>
+</nav>
+
+<div class="offcanvas offcanvas-start" tabindex="-1" id="appSidebar" aria-labelledby="appSidebarLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="appSidebarLabel">メニュー</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="閉じる"></button>
+    </div>
+    <div class="offcanvas-body d-flex flex-column">
+        <div>
+            <div class="list-group list-group-flush mb-3">
+                <a href="/" class="list-group-item list-group-item-action sidebar-menu-link">トップページ</a>
+                <a href="/sateiinfo/" class="list-group-item list-group-item-action sidebar-menu-link">査定申込一覧</a>
+                <a href="/admin/" class="list-group-item list-group-item-action sidebar-menu-link">管理画面</a>
+            </div>
+        </div>
+
+        <div class="mt-auto border-top pt-3">
+            <p class="mb-1 text-muted small">出勤時間</p>
+            <p class="mb-2" id="attendanceLoginAt">{{ attendance_login_at_label }}</p>
+            <p class="mb-1 text-muted small">現在の勤務時間</p>
+            <p class="mb-3 fw-semibold" id="attendanceWorkDuration" data-login-at="{{ attendance_login_at_iso }}" data-initial-minutes="{{ attendance_work_minutes }}" data-clocked-out="{{ attendance_is_clocked_out|yesno:'true,false' }}">{{ attendance_work_minutes }}分</p>
+            <a href="/clock-out/" class="btn btn-warning w-100">退勤</a>
+        </div>
+    </div>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="globalNotificationPanel" aria-labelledby="globalNotificationPanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="globalNotificationPanelLabel">新着通知</h5>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="globalNotificationClearBtn">クリア</button>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="閉じる"></button>
+        </div>
+    </div>
+    <div class="offcanvas-body">
+        <div class="small text-muted mb-2">通知をクリックすると反映します。</div>
+        <div class="list-group" id="globalNotificationList">
+            <div class="list-group-item text-muted">通知はまだありません</div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container global-toast-container" id="globalToastContainer"></div>
+
+<script>
+    (function () {
+        const durationEl = document.getElementById('attendanceWorkDuration');
+        if (!durationEl) return;
+
+        const initialMinutes = Number(durationEl.dataset.initialMinutes || '0');
+        const clockedOut = durationEl.dataset.clockedOut === 'true';
+
+        const formatMinutes = (totalMinutes) => {
+            const safeMinutes = Math.max(totalMinutes, 0);
+            const hours = Math.floor(safeMinutes / 60);
+            const minutes = safeMinutes % 60;
+            return `${hours}時間 ${minutes}分`;
+        };
+
+        if (clockedOut) {
+            durationEl.textContent = formatMinutes(initialMinutes);
+            return;
+        }
+
+        const loginAtIso = durationEl.dataset.loginAt;
+        if (!loginAtIso) {
+            durationEl.textContent = formatMinutes(initialMinutes);
+            return;
+        }
+
+        const loginAt = new Date(loginAtIso);
+        if (Number.isNaN(loginAt.getTime())) {
+            durationEl.textContent = formatMinutes(initialMinutes);
+            return;
+        }
+
+        const updateDuration = () => {
+            const now = new Date();
+            const diffMs = Math.max(now - loginAt, 0);
+            const totalMinutes = Math.floor(diffMs / 60000);
+            durationEl.textContent = formatMinutes(totalMinutes);
+        };
+
+        updateDuration();
+        setInterval(updateDuration, 30000);
+    })();
+
+    (function () {
+        const storageKey = 'globalLatestAssessmentId';
+        const recentKey = 'globalRecentAssessmentNotifications';
+        const maxRecentItems = 15;
+        const badgeEl = document.getElementById('globalNotificationBadge');
+        const panelEl = document.getElementById('globalNotificationPanel');
+        const listEl = document.getElementById('globalNotificationList');
+        const clearBtnEl = document.getElementById('globalNotificationClearBtn');
+
+        if (!badgeEl || !panelEl || !listEl || !clearBtnEl) return;
+
+        const toInt = (v) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : 0;
+        };
+
+        const getRecent = () => {
+            try {
+                const items = JSON.parse(localStorage.getItem(recentKey) || '[]');
+                return Array.isArray(items) ? items : [];
+            } catch {
+                return [];
+            }
+        };
+
+        const setRecent = (items) => {
+            localStorage.setItem(recentKey, JSON.stringify(items.slice(0, maxRecentItems)));
+        };
+
+        const clearRecent = () => {
+            localStorage.removeItem(recentKey);
+            unseenCount = 0;
+            renderBadge();
+            renderRecentList();
+        };
+
+        let unseenCount = 0;
+
+        const renderBadge = () => {
+            if (unseenCount <= 0) {
+                badgeEl.classList.add('d-none');
+                return;
+            }
+            badgeEl.textContent = unseenCount > 99 ? '99+' : String(unseenCount);
+            badgeEl.classList.remove('d-none');
+        };
+
+        const currentPath = window.location.pathname;
+
+        const showGlobalNewToast = (records, count) => {
+            const container = document.getElementById('globalToastContainer');
+            if (!container || typeof bootstrap === 'undefined') return;
+
+            const first = records[0] || {};
+            const summary = `${first.application_number || '-'} ${first.customer_name || ''}`.trim();
+            const message = count > 1
+                ? `${summary} ほか ${count - 1}件`
+                : summary;
+            const toastId = `global-toast-${Date.now()}`;
+
+            const html = `
+                <div id="${toastId}" class="toast align-items-center text-white bg-info border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="6000">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <strong>${count}件の新着申込</strong><br>
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+
+            container.insertAdjacentHTML('beforeend', html);
+            const toastEl = document.getElementById(toastId);
+            if (!toastEl) return;
+
+            toastEl.style.cursor = 'pointer';
+            toastEl.addEventListener('click', applyNotificationAction);
+            toastEl.addEventListener('hidden.bs.toast', () => {
+                toastEl.remove();
+            });
+
+            const toast = new bootstrap.Toast(toastEl);
+            toast.show();
+        };
+
+        const applyNotificationAction = () => {
+            if (currentPath === '/' || currentPath === '/home/' || currentPath === '/home') {
+                window.location.reload();
+                return;
+            }
+
+            if (currentPath.startsWith('/sateiinfo/')) {
+                if (typeof window.resetAndLoad === 'function') {
+                    window.resetAndLoad();
+                } else {
+                    window.location.reload();
+                }
+                return;
+            }
+
+            window.location.href = '/';
+        };
+
+        const renderRecentList = () => {
+            const items = getRecent();
+
+            if (items.length === 0) {
+                listEl.innerHTML = '<div class="list-group-item text-muted">通知はまだありません</div>';
+                return;
+            }
+
+            listEl.innerHTML = items.map((item) => {
+                return `
+                    <button type="button" class="list-group-item list-group-item-action" data-notification-id="${item.id}">
+                        <div class="fw-semibold">${item.title}</div>
+                        <div class="small text-muted">${item.body}</div>
+                        <div class="small text-muted mt-1">${item.time}</div>
+                    </button>
+                `;
+            }).join('');
+
+            listEl.querySelectorAll('[data-notification-id]').forEach((button) => {
+                button.addEventListener('click', applyNotificationAction);
+            });
+        };
+
+        panelEl.addEventListener('shown.bs.offcanvas', () => {
+            unseenCount = 0;
+            renderBadge();
+        });
+
+        clearBtnEl.addEventListener('click', clearRecent);
+
+        const ensureBaseline = async () => {
+            const existing = toInt(localStorage.getItem(storageKey));
+            if (existing > 0) return existing;
+
+            const res = await fetch('/sateiinfo/api/latest-id/');
+            if (!res.ok) return 0;
+            const data = await res.json();
+            const latestId = toInt(data.latest_id);
+            localStorage.setItem(storageKey, String(latestId));
+            return latestId;
+        };
+
+        const pollNewAssessments = async () => {
+            const lastId = await ensureBaseline();
+            if (lastId <= 0) return;
+
+            const res = await fetch(`/sateiinfo/api/check-new/?last_id=${lastId}`);
+            if (!res.ok) return;
+
+            const data = await res.json();
+            if (!data.success || !data.has_new || !Array.isArray(data.data) || data.data.length === 0) {
+                return;
+            }
+
+            const latestId = Math.max(...data.data.map(item => toInt(item.id)));
+            if (latestId > lastId) {
+                localStorage.setItem(storageKey, String(latestId));
+            }
+
+            const first = data.data[0] || {};
+            const recent = getRecent();
+            recent.unshift({
+                id: Date.now(),
+                title: `${data.count}件の新着申込`,
+                body: `${first.application_number || '-'} ${first.customer_name || ''}`.trim(),
+                time: new Date().toLocaleString('ja-JP'),
+            });
+            setRecent(recent);
+
+            unseenCount += data.count;
+            renderBadge();
+            renderRecentList();
+
+            showGlobalNewToast(data.data, data.count);
+        };
+
+        renderRecentList();
+        renderBadge();
+        ensureBaseline().catch(() => {});
+        setInterval(() => {
+            pollNewAssessments().catch(() => {});
+        }, 30000);
+    })();
+</script>

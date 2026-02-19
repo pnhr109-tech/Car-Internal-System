@@ -3,7 +3,8 @@
 """
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Q, Max
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.core.cache import cache
@@ -19,13 +20,21 @@ from .models import CarAssessmentRequest
 logger = logging.getLogger(__name__)
 
 
+def _current_user_display_name(user):
+    full_name = user.get_full_name().strip()
+    return full_name or user.username
+
+
 @login_required
 def assessment_list(request):
     """
     車査定申込一覧画面
     初期表示: 新しいレコード100件
     """
-    return render(request, 'leads/assessment_list.html')
+    return render(request, 'leads/assessment_list.html', {
+        'current_user_display_name': _current_user_display_name(request.user),
+        'follow_status_choices': [choice[0] for choice in CarAssessmentRequest.FOLLOW_STATUS_CHOICES],
+    })
 
 
 @login_required
@@ -106,6 +115,12 @@ def get_assessments(request):
         'postal_code',
         'address',
         'email',
+        'sales_owner_name',
+        'sales_assigned_at',
+        'follow_status',
+        'sales_note',
+        'status_updated_at',
+        'status_updated_by',
         'created_at',
     )
 
@@ -113,6 +128,8 @@ def get_assessments(request):
     for row in page_rows:
         application_datetime = row.get('application_datetime')
         created_at = row.get('created_at')
+        sales_assigned_at = row.get('sales_assigned_at')
+        status_updated_at = row.get('status_updated_at')
         data.append({
             'id': row['id'],
             'application_number': row['application_number'],
@@ -127,6 +144,12 @@ def get_assessments(request):
             'postal_code': row['postal_code'],
             'address': row['address'],
             'email': row['email'],
+            'sales_owner_name': row['sales_owner_name'],
+            'sales_assigned_at': timezone.localtime(sales_assigned_at).strftime('%Y-%m-%d %H:%M') if sales_assigned_at else '',
+            'follow_status': row['follow_status'],
+            'sales_note': row['sales_note'],
+            'status_updated_at': timezone.localtime(status_updated_at).strftime('%Y-%m-%d %H:%M') if status_updated_at else '',
+            'status_updated_by': row['status_updated_by'],
             'created_at': timezone.localtime(created_at).strftime('%Y-%m-%d %H:%M:%S') if created_at else '',
         })
     
@@ -184,6 +207,142 @@ def check_new_assessments(request):
         'has_new': len(data) > 0,
         'count': len(data),
         'data': data
+    })
+
+
+@login_required
+def get_latest_assessment_id(request):
+    latest_id = CarAssessmentRequest.objects.aggregate(max_id=Max('id')).get('max_id') or 0
+    return JsonResponse({
+        'success': True,
+        'latest_id': latest_id,
+    })
+
+
+@login_required
+def get_assessment_detail(request, request_id):
+    target = CarAssessmentRequest.objects.filter(id=request_id).values(
+        'id',
+        'application_number',
+        'application_datetime',
+        'desired_sale_timing',
+        'maker',
+        'car_model',
+        'year',
+        'mileage',
+        'customer_name',
+        'phone_number',
+        'postal_code',
+        'address',
+        'email',
+        'sales_owner_name',
+        'sales_assigned_at',
+        'follow_status',
+        'sales_note',
+        'status_updated_at',
+        'status_updated_by',
+        'created_at',
+    ).first()
+
+    if not target:
+        return JsonResponse({'success': False, 'message': '対象データが存在しません'}, status=404)
+
+    def fmt(dt_value, pattern):
+        if not dt_value:
+            return ''
+        return timezone.localtime(dt_value).strftime(pattern)
+
+    data = {
+        **target,
+        'application_datetime': fmt(target.get('application_datetime'), '%Y-%m-%d %H:%M'),
+        'sales_assigned_at': fmt(target.get('sales_assigned_at'), '%Y-%m-%d %H:%M'),
+        'status_updated_at': fmt(target.get('status_updated_at'), '%Y-%m-%d %H:%M'),
+        'created_at': fmt(target.get('created_at'), '%Y-%m-%d %H:%M:%S'),
+    }
+
+    return JsonResponse({'success': True, 'data': data})
+
+
+@login_required
+@require_POST
+def claim_assessment_owner(request, request_id):
+    sales_name = _current_user_display_name(request.user)
+
+    try:
+        with transaction.atomic():
+            target = CarAssessmentRequest.objects.select_for_update().filter(id=request_id).first()
+            if not target:
+                return JsonResponse({'success': False, 'message': '対象データが存在しません'}, status=404)
+
+            if target.sales_owner_name:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'すでに担当営業が確定しています（{target.sales_owner_name}）',
+                    'sales_owner_name': target.sales_owner_name,
+                }, status=409)
+
+            now = timezone.now()
+            target.sales_owner_name = sales_name
+            target.sales_assigned_at = now
+            target.status_updated_by = sales_name
+            target.status_updated_at = now
+            target.save(update_fields=['sales_owner_name', 'sales_assigned_at', 'status_updated_by', 'status_updated_at', 'updated_at'])
+    except Exception as exc:
+        logger.error(f'claim_assessment_owner failed: request_id={request_id}, error={exc}')
+        return JsonResponse({'success': False, 'message': '担当営業の登録に失敗しました'}, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'message': '担当営業として登録しました',
+        'sales_owner_name': sales_name,
+    })
+
+
+@login_required
+@require_POST
+def update_assessment_follow_status(request, request_id):
+    sales_name = _current_user_display_name(request.user)
+
+    try:
+        payload = json.loads(request.body.decode('utf-8')) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    follow_status = str(payload.get('follow_status', '')).strip()
+    sales_note = str(payload.get('sales_note', '')).strip()
+    allowed_statuses = {choice[0] for choice in CarAssessmentRequest.FOLLOW_STATUS_CHOICES}
+
+    if follow_status not in allowed_statuses:
+        return JsonResponse({'success': False, 'message': '対応ステータスが不正です'}, status=400)
+
+    try:
+        with transaction.atomic():
+            target = CarAssessmentRequest.objects.select_for_update().filter(id=request_id).first()
+            if not target:
+                return JsonResponse({'success': False, 'message': '対象データが存在しません'}, status=404)
+
+            if not target.sales_owner_name:
+                return JsonResponse({'success': False, 'message': '先に担当営業として挙手してください'}, status=400)
+
+            if target.sales_owner_name != sales_name:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'担当営業（{target.sales_owner_name}）のみ更新できます',
+                }, status=403)
+
+            now = timezone.now()
+            target.follow_status = follow_status
+            target.sales_note = sales_note
+            target.status_updated_by = sales_name
+            target.status_updated_at = now
+            target.save(update_fields=['follow_status', 'sales_note', 'status_updated_by', 'status_updated_at', 'updated_at'])
+    except Exception as exc:
+        logger.error(f'update_assessment_follow_status failed: request_id={request_id}, error={exc}')
+        return JsonResponse({'success': False, 'message': 'ステータス更新に失敗しました'}, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'message': 'ステータスを更新しました',
     })
 
 
