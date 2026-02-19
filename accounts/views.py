@@ -2,9 +2,16 @@ from django.conf import settings
 from django.contrib.auth import get_user_model, login, logout
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
+import logging
+
+from .models import LoginActivity
+
+
+logger = logging.getLogger(__name__)
 
 
 @require_GET
@@ -77,10 +84,30 @@ def google_login(request):
         user.save(update_fields=['first_name', 'last_name', 'email'])
 
     login(request, user)
+
+    now = timezone.now()
+    open_session = LoginActivity.objects.filter(user=user, logout_at__isnull=True).order_by('-login_at').first()
+    if not open_session:
+        LoginActivity.objects.create(
+            user=user,
+            work_date=timezone.localdate(now),
+            login_at=now,
+        )
+    else:
+        logger.info(f'Open login activity exists for user={user.username}, skip new clock-in')
+
     return JsonResponse({'success': True, 'redirect': settings.LOGIN_REDIRECT_URL})
 
 
 @require_GET
 def logout_view(request):
+    if request.user.is_authenticated:
+        open_session = LoginActivity.objects.filter(
+            user=request.user,
+            logout_at__isnull=True,
+        ).order_by('-login_at').first()
+        if open_session:
+            open_session.close_session(timezone.now())
+
     logout(request)
     return redirect(settings.LOGOUT_REDIRECT_URL)
