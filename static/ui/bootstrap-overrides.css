@@ -1,0 +1,91 @@
+/* Bootstrap overrides based on UI tokens */
+/* typography */
+body { font-size: var(--font-base); color: var(--c-text); background: var(--c-bg); }
+h1, .h1 { font-size: var(--font-heading); font-weight: 700; }
+
+/* focus ring */
+:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+/* controls (Bootstrap form controls) */
+.form-control,
+.form-select,
+.btn {
+  height: var(--control-height);
+  border-radius: var(--radius);
+}
+
+.form-control,
+.form-select {
+  border-color: var(--c-border);
+  font-size: var(--font-base);
+}
+
+/* buttons */
+.btn {
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-primary {
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+  color: var(--c-on-primary);
+}
+.btn-primary:hover {
+  background: var(--c-primary-hover);
+  border-color: var(--c-primary-hover);
+}
+.btn-primary:active,
+.btn-primary.active {
+  background: var(--c-primary-active);
+  border-color: var(--c-primary-active);
+}
+.btn-primary:disabled,
+.btn-primary.disabled {
+  background: var(--c-primary-disabled);
+  border-color: var(--c-primary-disabled);
+}
+
+/* Secondary mapping (Bootstrap: btn-outline-primary) */
+.btn-outline-primary {
+  color: var(--c-primary);
+  border-color: var(--c-primary);
+}
+.btn-outline-primary:hover {
+  background: var(--c-secondary-hover-bg);
+  color: var(--c-primary);
+  border-color: var(--c-primary);
+}
+.btn-outline-primary:active,
+.btn-outline-primary.active {
+  background: var(--c-secondary-active-bg);
+  color: var(--c-primary-active);
+  border-color: var(--c-primary-active);
+}
+
+/* danger button hover: keep bootstrap red but add subtle feedback */
+.btn-danger:hover { filter: brightness(0.92); }
+
+/* table hover */
+.table-hover tbody tr:hover { background: var(--c-table-row-hover-bg); }
+
+/* badge-like status chips (use custom classes) */
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ui-badge--success { background: var(--c-success-bg); color: var(--c-success); }
+.ui-badge--warning { background: var(--c-warning-bg); color: var(--c-warning); }
+.ui-badge--danger  { background: var(--c-danger-bg);  color: var(--c-danger); }
+.ui-badge--info    { background: var(--c-info-bg);    color: var(--c-info); }

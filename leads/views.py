@@ -281,6 +281,12 @@ def claim_assessment_owner(request, request_id):
                     'sales_owner_name': target.sales_owner_name,
                 }, status=409)
 
+            if target.follow_status != CarAssessmentRequest.STATUS_UNTOUCHED:
+                return JsonResponse({
+                    'success': False,
+                    'message': '未対応の案件のみ挙手できます',
+                }, status=400)
+
             now = timezone.now()
             target.sales_owner_name = sales_name
             target.sales_assigned_at = now

@@ -1,0 +1,43 @@
+{
+  "typography": {
+    "base": "14px",
+    "heading": "24px",
+    "button": "14px"
+  },
+  "shape": {
+    "radius": "6px",
+    "controlHeight": "40px"
+  },
+  "colors": {
+    "neutral": {
+      "white": "#FFFFFF",
+      "bg": "#F5F7FA",
+      "border": "#E5E7EB",
+      "text": "#1F2937",
+      "textMuted": "#6B7280"
+    },
+    "primary": {
+      "base": "#1E3A5F",
+      "hover": "#24476F",
+      "active": "#162B45",
+      "disabledBg": "#CBD5E1",
+      "onPrimary": "#FFFFFF"
+    },
+    "status": {
+      "success": "#16A34A",
+      "successBg": "#DCFCE7",
+      "warning": "#F59E0B",
+      "warningBg": "#FEF3C7",
+      "danger": "#DC2626",
+      "dangerBg": "#FEE2E2",
+      "info": "#0284C7",
+      "infoBg": "#E0F2FE"
+    },
+    "interaction": {
+      "secondaryHoverBg": "#F0F4F8",
+      "secondaryActiveBg": "#E2E8F0",
+      "tableRowHoverBg": "#F9FAFB",
+      "focusOutline": "#1E3A5F"
+    }
+  }
+}

@@ -1,47 +1,4 @@
 {% load static %}
-<style>
-    .header-icon-btn {
-        border: 0;
-        background: transparent;
-        color: #fff;
-        box-shadow: none;
-    }
-
-    .header-icon-btn:focus,
-    .header-icon-btn:active {
-        box-shadow: none;
-    }
-
-    .header-icon-btn:hover,
-    .header-icon-btn:focus-visible {
-        color: #9ec5fe;
-    }
-
-    .notification-btn {
-        padding: 0.35rem 0.8rem;
-        min-width: 52px;
-        min-height: 38px;
-    }
-
-    .sidebar-menu-link {
-        border: 0;
-        border-radius: 0;
-        padding-left: 0;
-        padding-right: 0;
-        background: transparent;
-    }
-
-    .sidebar-menu-link + .sidebar-menu-link {
-        border-top: 1px solid #dee2e6;
-    }
-
-    .global-toast-container {
-        position: fixed;
-        top: 70px;
-        right: 16px;
-        z-index: 1095;
-    }
-</style>
 <nav class="navbar navbar-dark bg-dark sticky-top">
     <div class="container-fluid">
         <button class="navbar-toggler header-icon-btn p-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#appSidebar" aria-controls="appSidebar" aria-label="メニューを開く">

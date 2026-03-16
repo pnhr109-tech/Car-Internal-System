@@ -1,0 +1,48 @@
+{% extends 'base/internal_base.html' %}
+
+{% block title %}{{ page_title }} - gigicompany{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">{{ page_title }}</h5>
+            <a href="/" class="btn btn-sm btn-outline-primary">ダッシュボードへ戻る</a>
+        </div>
+        <div class="card-body">
+            {% if message %}
+            <div class="alert alert-info mb-0">{{ message }}</div>
+            {% elif records %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            {% for header in headers %}
+                            <th>{{ header }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in records %}
+                        <tr>
+                            {% for col in row %}
+                            <td>
+                                {% if forloop.parentloop and forloop.counter0 in datetime_indexes and col %}
+                                    {{ col|date:'Y-m-d H:i' }}
+                                {% else %}
+                                    {{ col }}
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-muted">表示できるデータがありません。</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

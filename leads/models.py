@@ -44,7 +44,7 @@ class CarAssessmentRequest(models.Model):
     STATUS_UNTOUCHED = '未対応'
     STATUS_NO_ANSWER = '不通'
     STATUS_CALLBACK = '再コール予定'
-    STATUS_APPOINTMENT = '商談アポ獲得'
+    STATUS_APPOINTMENT = '商談確定'
     STATUS_CLOSED = '成約'
     STATUS_LOST = '見送り'
 
@@ -52,7 +52,7 @@ class CarAssessmentRequest(models.Model):
         (STATUS_UNTOUCHED, '未対応'),
         (STATUS_NO_ANSWER, '不通'),
         (STATUS_CALLBACK, '再コール予定'),
-        (STATUS_APPOINTMENT, '商談アポ獲得'),
+        (STATUS_APPOINTMENT, '商談確定'),
         (STATUS_CLOSED, '成約'),
         (STATUS_LOST, '見送り'),
     ]

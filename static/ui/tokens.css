@@ -1,0 +1,39 @@
+:root {
+  /* typography */
+  --font-base: 14px;
+  --font-heading: 24px;
+
+  /* shape */
+  --radius: 6px;
+  --control-height: 40px;
+
+  /* neutral */
+  --c-white: #FFFFFF;
+  --c-bg: #F5F7FA;
+  --c-border: #E5E7EB;
+  --c-text: #1F2937;
+  --c-text-muted: #6B7280;
+
+  /* primary (navy) */
+  --c-primary: #1E3A5F;
+  --c-primary-hover: #24476F;
+  --c-primary-active: #162B45;
+  --c-primary-disabled: #CBD5E1;
+  --c-on-primary: #FFFFFF;
+
+  /* interaction */
+  --c-secondary-hover-bg: #F0F4F8;
+  --c-secondary-active-bg: #E2E8F0;
+  --c-table-row-hover-bg: #F9FAFB;
+  --c-focus: #1E3A5F;
+
+  /* status */
+  --c-success: #16A34A;
+  --c-success-bg: #DCFCE7;
+  --c-warning: #F59E0B;
+  --c-warning-bg: #FEF3C7;
+  --c-danger: #DC2626;
+  --c-danger-bg: #FEE2E2;
+  --c-info: #0284C7;
+  --c-info-bg: #E0F2FE;
+}

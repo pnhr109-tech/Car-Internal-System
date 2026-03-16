@@ -3,6 +3,7 @@ import json
 from datetime import date, datetime
 
 from django.utils import timezone
+from django.db.models import Count
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -20,6 +21,186 @@ CHAT_SCOPES = [
 
 def get_latest_assessments(limit=100):
     return CarAssessmentRequest.objects.order_by('-application_datetime')[:limit]
+
+
+def _current_month_range():
+    now = timezone.localtime()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if month_start.month == 12:
+        next_month_start = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        next_month_start = month_start.replace(month=month_start.month + 1)
+    return month_start, next_month_start
+
+
+def get_user_monthly_kpis(display_name):
+    month_start, next_month_start = _current_month_range()
+
+    appointment_count = CarAssessmentRequest.objects.filter(
+        follow_status=CarAssessmentRequest.STATUS_APPOINTMENT,
+        status_updated_by=display_name,
+        status_updated_at__gte=month_start,
+        status_updated_at__lt=next_month_start,
+    ).count()
+
+    contract_count = CarAssessmentRequest.objects.filter(
+        follow_status=CarAssessmentRequest.STATUS_CLOSED,
+        status_updated_by=display_name,
+        status_updated_at__gte=month_start,
+        status_updated_at__lt=next_month_start,
+    ).count()
+
+    mq_count = CarAssessmentRequest.objects.filter(
+        sales_owner_name=display_name,
+        application_datetime__gte=month_start,
+        application_datetime__lt=next_month_start,
+    ).count()
+
+    close_rate = round((contract_count / appointment_count) * 100, 1) if appointment_count else 0.0
+
+    return {
+        'month_label': month_start.strftime('%Y-%m'),
+        'appointments': appointment_count,
+        'contracts': contract_count,
+        'close_rate': close_rate,
+        'mq': mq_count,
+    }
+
+
+def get_store_performance_summary():
+    month_start, next_month_start = _current_month_range()
+    month_queryset = CarAssessmentRequest.objects.filter(
+        application_datetime__gte=month_start,
+        application_datetime__lt=next_month_start,
+    )
+
+    stores = [
+        ('つくば', 'つくば'),
+        ('水戸', '水戸'),
+        ('小山', '小山'),
+    ]
+
+    summary = []
+    for label, keyword in stores:
+        store_queryset = month_queryset.filter(address__icontains=keyword)
+        mq = store_queryset.count()
+        appointments = store_queryset.filter(follow_status=CarAssessmentRequest.STATUS_APPOINTMENT).count()
+        contracts = store_queryset.filter(follow_status=CarAssessmentRequest.STATUS_CLOSED).count()
+        close_rate = round((contracts / appointments) * 100, 1) if appointments else 0.0
+        summary.append({
+            'store': label,
+            'mq': mq,
+            'appointments': appointments,
+            'contracts': contracts,
+            'close_rate': close_rate,
+        })
+    return summary
+
+
+def get_monthly_store_performance_detail():
+    month_start, next_month_start = _current_month_range()
+    month_queryset = CarAssessmentRequest.objects.filter(
+        application_datetime__gte=month_start,
+        application_datetime__lt=next_month_start,
+    )
+
+    records = []
+    for store_label, keyword in [('つくば', 'つくば'), ('水戸', '水戸'), ('小山', '小山')]:
+        store_queryset = month_queryset.filter(address__icontains=keyword)
+        mq = store_queryset.count()
+        appointments = store_queryset.filter(follow_status=CarAssessmentRequest.STATUS_APPOINTMENT).count()
+        contracts = store_queryset.filter(follow_status=CarAssessmentRequest.STATUS_CLOSED).count()
+        close_rate = round((contracts / appointments) * 100, 1) if appointments else 0.0
+        records.append({
+            'store': store_label,
+            'mq': mq,
+            'appointments': appointments,
+            'contracts': contracts,
+            'close_rate': close_rate,
+        })
+    return records
+
+
+def get_recent_appointment_updates_detail(limit=50):
+    return CarAssessmentRequest.objects.filter(
+        follow_status=CarAssessmentRequest.STATUS_APPOINTMENT,
+        status_updated_at__isnull=False,
+    ).order_by('-status_updated_at').values(
+        'application_number',
+        'customer_name',
+        'sales_owner_name',
+        'status_updated_at',
+        'address',
+    )[:limit]
+
+
+def get_recent_closed_updates_detail(limit=50):
+    return CarAssessmentRequest.objects.filter(
+        follow_status=CarAssessmentRequest.STATUS_CLOSED,
+        status_updated_at__isnull=False,
+    ).order_by('-status_updated_at').values(
+        'application_number',
+        'customer_name',
+        'sales_owner_name',
+        'status_updated_at',
+        'address',
+    )[:limit]
+
+
+def get_closed_rankings_detail(limit=30):
+    return CarAssessmentRequest.objects.filter(
+        follow_status=CarAssessmentRequest.STATUS_CLOSED,
+    ).exclude(
+        sales_owner_name='',
+    ).values(
+        'sales_owner_name',
+    ).annotate(
+        closed_count=Count('id'),
+    ).order_by(
+        '-closed_count',
+        'sales_owner_name',
+    )[:limit]
+
+
+def get_recent_appointment_updates(limit=8):
+    return CarAssessmentRequest.objects.filter(
+        follow_status=CarAssessmentRequest.STATUS_APPOINTMENT,
+        status_updated_at__isnull=False,
+    ).order_by('-status_updated_at').values(
+        'id',
+        'application_number',
+        'customer_name',
+        'sales_owner_name',
+        'status_updated_at',
+    )[:limit]
+
+
+def get_recent_closed_updates(limit=5):
+    return CarAssessmentRequest.objects.filter(
+        follow_status=CarAssessmentRequest.STATUS_CLOSED,
+        status_updated_at__isnull=False,
+    ).order_by('-status_updated_at').values(
+        'id',
+        'application_number',
+        'customer_name',
+        'sales_owner_name',
+        'status_updated_at',
+    )[:limit]
+
+
+def get_closed_rankings(limit=3):
+    return CarAssessmentRequest.objects.filter(
+        follow_status=CarAssessmentRequest.STATUS_CLOSED,
+    ).exclude(
+        sales_owner_name='',
+    ).values(
+        'sales_owner_name',
+    ).annotate(
+        closed_count=Count('id'),
+    ).order_by(
+        '-closed_count',
+        'sales_owner_name',
+    )[:limit]
 
 
 def _get_google_credentials(required_scopes):

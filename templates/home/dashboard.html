@@ -3,164 +3,140 @@
 {% block title %}トップページ - gigicompany{% endblock %}
 {% block body_class %}bg-light{% endblock %}
 
-{% block extra_head %}
-    <style>
-        .dashboard-assessment-table {
-            width: 100%;
-            table-layout: fixed;
-        }
-
-        .dashboard-assessment-table th,
-        .dashboard-assessment-table td {
-            white-space: normal;
-            word-break: break-word;
-            overflow-wrap: anywhere;
-            font-size: 0.68rem;
-            line-height: 1.14;
-            padding: 0.26rem 0.18rem;
-            vertical-align: middle;
-        }
-
-        .dashboard-assessment-table th {
-            font-weight: 600;
-            font-size: 0.64rem;
-            line-height: 1.1;
-        }
-
-        .dashboard-assessment-table .btn-sm {
-            --bs-btn-padding-y: 0.15rem;
-            --bs-btn-padding-x: 0.35rem;
-            --bs-btn-font-size: 0.68rem;
-        }
-
-        .dashboard-assessment-table .col-application-number { width: 8.5%; }
-        .dashboard-assessment-table .col-application-datetime { width: 7.8%; }
-        .dashboard-assessment-table .col-owner { width: 6%; }
-        .dashboard-assessment-table .col-status { width: 6%; }
-        .dashboard-assessment-table .col-customer { width: 6.5%; }
-        .dashboard-assessment-table .col-phone { width: 7%; }
-        .dashboard-assessment-table .col-sale-timing { width: 6%; }
-        .dashboard-assessment-table .col-maker { width: 5.5%; }
-        .dashboard-assessment-table .col-model { width: 5.5%; }
-        .dashboard-assessment-table .col-year { width: 4.5%; }
-        .dashboard-assessment-table .col-mileage { width: 5%; }
-        .dashboard-assessment-table .col-address { width: 7.4%; }
-        .dashboard-assessment-table .col-action { width: 4.5%; }
-
-        .dashboard-assessment-table .application-number-cell,
-        .dashboard-assessment-table .application-datetime-cell {
-            white-space: nowrap;
-            overflow-wrap: normal;
-            word-break: normal;
-        }
-
-        .dashboard-assessment-table .application-datetime-cell {
-            white-space: normal;
-            line-height: 1.1;
-        }
-
-        .dashboard-assessment-table .application-datetime-cell .date-part,
-        .dashboard-assessment-table .application-datetime-cell .time-part {
-            display: block;
-            white-space: nowrap;
-        }
-
-        .dashboard-assessment-table .action-cell {
-            text-align: center;
-        }
-
-        .dashboard-assessment-table .owner-name-cell {
-            white-space: normal;
-            line-height: 1.12;
-        }
-
-        .dashboard-table-wrapper {
-            overflow-x: hidden !important;
-            overflow-y: auto;
-        }
-
-        .workspace-panel {
-            overflow-y: auto;
-            padding: 0.75rem;
-            background-color: var(--bs-secondary-bg);
-        }
-
-        .workspace-panel.chat {
-            height: 300px;
-        }
-
-        .workspace-panel.calendar {
-            height: 600px;
-        }
-
-        .workspace-item {
-            border: 1px solid #dee2e6;
-            border-radius: 0.5rem;
-            padding: 0.55rem 0.65rem;
-            margin-bottom: 0.55rem;
-            background-color: #fff;
-        }
-
-        .workspace-item.chat-item {
-            border-left: 0.3rem solid var(--bs-primary);
-        }
-
-        .workspace-item.calendar-item {
-            border-left: 0.3rem solid var(--bs-success);
-        }
-
-        .workspace-item .workspace-text {
-            margin-top: 0.1rem;
-            margin-bottom: 0.15rem;
-            color: var(--bs-body-color);
-        }
-
-        .workspace-item:last-child {
-            margin-bottom: 0;
-        }
-
-        .workspace-item .meta {
-            color: #6c757d;
-            font-size: 0.78rem;
-        }
-
-        .workspace-empty {
-            color: #6c757d;
-            font-size: 0.9rem;
-            text-align: center;
-            padding: 1rem 0.5rem;
-        }
-
-        .google-wordmark {
-            font-weight: 700;
-            letter-spacing: 0.02em;
-        }
-    </style>
-{% endblock %}
-
 {% block content %}
     <div class="container-fluid py-4">
         <div class="row g-3">
             <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center bg-primary-subtle border-primary-subtle">
-                        <span>
-                            <span class="google-wordmark"><span class="text-primary">G</span><span class="text-danger">o</span><span class="text-warning">o</span><span class="text-primary">g</span><span class="text-success">l</span><span class="text-danger">e</span></span>
-                            チャット（最新）
-                        </span>
-                        <a href="https://chat.google.com/" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary">Google Chatを開く</a>
-                    </div>
-                    <div class="card-body workspace-panel chat" id="chatPanel">
-                        <div class="workspace-empty">読み込み中...</div>
+                <div class="sales-hero-wrap">
+                    <div class="sales-hero-panel">
+                        <div class="sales-kpi-header">
+                            <span class="sales-kpi-owner">👤 {{ current_user_display_name }} さんの実績</span>
+                            <span class="sales-kpi-month">対象: {{ monthly_kpis.month_label }}</span>
+                        </div>
+                        <div class="sales-kpi-row">
+                            <div class="sales-kpi-card">
+                                <div class="sales-kpi-label">当月商談数</div>
+                                <div class="sales-kpi-value">{{ monthly_kpis.appointments }}</div>
+                            </div>
+                            <div class="sales-kpi-card">
+                                <div class="sales-kpi-label">当月契約数</div>
+                                <div class="sales-kpi-value">{{ monthly_kpis.contracts }}</div>
+                            </div>
+                            <div class="sales-kpi-card">
+                                <div class="sales-kpi-label">当月成約率</div>
+                                <div class="sales-kpi-value">{{ monthly_kpis.close_rate }}%</div>
+                            </div>
+                            <div class="sales-kpi-card">
+                                <div class="sales-kpi-label">当月MQ</div>
+                                <div class="sales-kpi-value">{{ monthly_kpis.mq }}</div>
+                            </div>
+                        </div>
+
+                        <div class="sales-hero-main-ribbon-row">
+                            <button type="button" class="sales-hero-main-ribbon sales-board-tab is-active" data-board-tab="sales">🔥 営業 BOARD</button>
+                            <button type="button" class="sales-hero-main-ribbon sales-board-tab" data-board-tab="cc">🎧 CC BOARD</button>
+                            <button type="button" class="sales-hero-main-ribbon sales-board-tab" data-board-tab="ranking">👑 RANK BOARD</button>
+                            <button type="button" class="sales-hero-main-ribbon sales-board-tab" data-board-tab="rate">📈 RATE BOARD</button>
+                        </div>
+
+                        <div class="sales-board-panel is-active" data-board-panel="sales">
+                            <div class="sales-hero-section-ribbon">⚡ 営業予定速報</div>
+                            {% if recent_appointment_updates %}
+                            <div class="sales-hero-feed-grid">
+                                {% for item in recent_appointment_updates|slice:':3' %}
+                                <div class="sales-hero-feed-card">
+                                    <div class="sales-hero-feed-label">HOT LEAD</div>
+                                    <div class="sales-hero-feed-main">{{ item.customer_name|default:'-' }}</div>
+                                    <div class="sales-hero-feed-meta">{{ item.status_updated_at|date:'m/d H:i' }} / {{ item.sales_owner_name|default:'担当未設定' }}</div>
+                                    <div class="sales-hero-feed-id">申込番号: {{ item.application_number }}</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="board-detail-link-row"><a href="{% url 'home:board_detail' 'sales-appointments' %}" class="board-detail-link">詳細へ⇒</a></div>
+                            {% else %}
+                            <div class="workspace-empty">営業予定速報データがまだありません</div>
+                            {% endif %}
+
+                            <div class="sales-hero-section-ribbon">🏆 成約速報</div>
+                            {% if recent_closed_updates %}
+                            <div class="sales-hero-feed-grid">
+                                {% for item in recent_closed_updates|slice:':3' %}
+                                <div class="sales-hero-feed-card sales-hero-feed-card--closed">
+                                    <div class="sales-hero-feed-label sales-hero-feed-label--closed">CLOSED</div>
+                                    <div class="sales-hero-feed-main">{{ item.customer_name|default:'-' }}</div>
+                                    <div class="sales-hero-feed-meta">{{ item.status_updated_at|date:'m/d H:i' }} / {{ item.sales_owner_name|default:'担当未設定' }}</div>
+                                    <div class="sales-hero-feed-id">申込番号: {{ item.application_number }}</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="board-detail-link-row"><a href="{% url 'home:board_detail' 'sales-closed' %}" class="board-detail-link">詳細へ⇒</a></div>
+                            {% else %}
+                            <div class="workspace-empty">成約速報データがまだありません</div>
+                            {% endif %}
+
+                            <div class="sales-hero-section-ribbon">🏪 営業店別実績（当月）</div>
+                            <div class="store-mq-row">
+                                {% for store_item in store_performance_summary %}
+                                <div class="store-mq-card">
+                                    <div class="store-mq-name">{{ store_item.store }}</div>
+                                    <div class="store-mq-value-row"><span>MQ</span><strong>{{ store_item.mq }}</strong></div>
+                                    <div class="store-mq-value-row"><span>商談</span><strong>{{ store_item.appointments }}</strong></div>
+                                    <div class="store-mq-value-row"><span>契約</span><strong>{{ store_item.contracts }}</strong></div>
+                                    <div class="store-mq-value-row"><span>契約率</span><strong>{{ store_item.close_rate }}%</strong></div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="board-detail-link-row"><a href="{% url 'home:board_detail' 'store-performance' %}" class="board-detail-link">詳細へ⇒</a></div>
+                        </div>
+
+                        <div class="sales-board-panel" data-board-panel="cc">
+                            <div class="sales-hero-section-ribbon">🎯 CC予定速報</div>
+                            <div class="workspace-empty">CC予定データ未実装のため準備中です</div>
+                            <div class="sales-hero-section-ribbon">📊 CC案件 MQ</div>
+                            <div class="workspace-empty">CC案件MQデータ未実装のため準備中です</div>
+                            <div class="sales-hero-section-ribbon">📞 CC通話率・予定率</div>
+                            <div class="workspace-empty">CC通話率・予定率データ未実装のため準備中です</div>
+                        </div>
+
+                        <div class="sales-board-panel" data-board-panel="ranking">
+                            <div class="sales-hero-section-ribbon">👑 成約ランキング TOP3</div>
+                            {% if closed_rankings %}
+                            <div class="sales-hero-rank-grid">
+                                {% for rank in closed_rankings %}
+                                <div class="sales-hero-rank-card sales-hero-rank-card--{{ forloop.counter }}">
+                                    {% if forloop.counter == 1 %}<div class="sales-hero-king-label">KING OF THE MONTH</div>{% endif %}
+                                    <div class="sales-hero-rank-content">
+                                        <div class="sales-hero-rank-no">
+                                            {% if forloop.counter == 1 %}👑 1位{% elif forloop.counter == 2 %}🥈 2位{% else %}🥉 3位{% endif %}
+                                        </div>
+                                        <div class="sales-hero-rank-name">{{ rank.sales_owner_name }}</div>
+                                        <div class="sales-hero-rank-count">{{ rank.closed_count }}件</div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="board-detail-link-row"><a href="{% url 'home:board_detail' 'rank-closed' %}" class="board-detail-link">詳細へ⇒</a></div>
+                            {% else %}
+                            <div class="workspace-empty">ランキングデータがまだありません</div>
+                            {% endif %}
+                            <div class="sales-hero-section-ribbon">🏁 売上ランキング TOP3</div>
+                            <div class="workspace-empty">売上データベース未実装のため準備中です</div>
+                            <div class="board-detail-link-row"><a href="{% url 'home:board_detail' 'rank-sales' %}" class="board-detail-link">詳細へ⇒</a></div>
+                            <div class="sales-hero-section-ribbon">📊 MQランキング</div>
+                            <div class="workspace-empty">MQデータ未実装のため準備中です</div>
+                            <div class="board-detail-link-row"><a href="{% url 'home:board_detail' 'rank-mq' %}" class="board-detail-link">詳細へ⇒</a></div>
+                        </div>
+
+                        <div class="sales-board-panel" data-board-panel="rate">
+                            <div class="sales-hero-section-ribbon">📈 通話率・予定率</div>
+                            <div class="workspace-empty">率データ未実装のため準備中です</div>
+                        </div>
                     </div>
                 </div>
                 <div class="card mt-3">
                     <div class="card-header d-flex justify-content-between align-items-center bg-success-subtle border-success-subtle">
-                        <span>
-                            <span class="google-wordmark"><span class="text-primary">G</span><span class="text-danger">o</span><span class="text-warning">o</span><span class="text-primary">g</span><span class="text-success">l</span><span class="text-danger">e</span></span>
-                            カレンダー（予定）
-                        </span>
-                        <a href="https://calendar.google.com/" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-success">Google Calendarを開く</a>
+                        <span>業務カレンダー（予定）</span>
+                        <a href="https://calendar.google.com/" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-success">カレンダーを開く</a>
                     </div>
                     <div class="card-body workspace-panel calendar" id="calendarPanel">
                         <div class="workspace-empty">読み込み中...</div>
@@ -174,10 +150,10 @@
                         <span>査定申込一覧（最新100件）</span>
                         <a href="/sateiinfo/" class="btn btn-sm btn-outline-primary">一覧へ</a>
                     </div>
-                    <div class="card-body p-0 d-flex flex-column" style="height: 550px;">
+                    <div class="card-body p-0 d-flex flex-column dashboard-assessment-card-body">
                         <div class="table-responsive dashboard-table-wrapper flex-grow-1">
                             <table class="table table-striped table-hover table-sm mb-0 dashboard-assessment-table">
-                                <thead class="table-dark sticky-top">
+                                <thead class="sticky-top dashboard-table-head">
                                     <tr>
                                         <th class="col-application-number">お申込番号</th>
                                         <th class="col-application-datetime">お申込日時</th>
@@ -202,8 +178,20 @@
                                             <span class="date-part">{{ item.application_datetime|date:'Y-m-d' }}</span>
                                             <span class="time-part">{{ item.application_datetime|date:'H:i' }}</span>
                                         </td>
-                                        <td class="owner-name-cell">{{ item.sales_owner_name|default:'-' }}</td>
-                                        <td>{{ item.follow_status }}</td>
+                                        <td class="owner-name-cell">{{ item.sales_owner_name }}</td>
+                                        <td>
+                                            {% if item.follow_status == '成約' %}
+                                            <span class="ui-badge ui-badge--success">{{ item.follow_status }}</span>
+                                            {% elif item.follow_status == '商談確定' %}
+                                            <span class="ui-badge ui-badge--info">{{ item.follow_status }}</span>
+                                            {% elif item.follow_status == '見送り' %}
+                                            <span class="ui-badge ui-badge--danger">{{ item.follow_status }}</span>
+                                            {% elif item.follow_status == '再コール予定' %}
+                                            <span class="ui-badge ui-badge--warning">{{ item.follow_status }}</span>
+                                            {% else %}
+                                            <span class="ui-badge ui-badge--warning">{{ item.follow_status }}</span>
+                                            {% endif %}
+                                        </td>
                                         <td>{{ item.customer_name }}</td>
                                         <td>
                                             {% if item.phone_number %}
@@ -219,7 +207,7 @@
                                         <td>{{ item.mileage }}</td>
                                         <td>{{ item.address }}</td>
                                         <td class="action-cell">
-                                            {% if not item.sales_owner_name %}
+                                            {% if item.follow_status == '未対応' and not item.sales_owner_name %}
                                             <button class="btn btn-sm btn-outline-primary" onclick="claimSalesOwnerTop({{ item.id }})">挙手</button>
                                             {% elif item.sales_owner_name == current_user_display_name %}
                                             <button class="btn btn-sm btn-outline-success" onclick="openTopStatusModal({{ item.id }}, '{{ item.follow_status|urlencode }}', '{{ item.sales_note|urlencode }}')">更新</button>
@@ -302,7 +290,7 @@
 
         function formatOwnerName(value) {
             const raw = (value || '').trim();
-            if (!raw || raw === '-') return '-';
+            if (!raw || raw === '-') return '';
             return raw
                 .split(/\s+/)
                 .filter(Boolean)
@@ -435,36 +423,12 @@
 
             panel.innerHTML = items.map((item) => {
                 return `
-                    <div class="workspace-item calendar-item">
-                        <div class="fw-semibold">${escapeHtml(item.summary || '(タイトル未設定)')}</div>
-                        <div class="meta">${escapeHtml(item.start || '-')} / ${escapeHtml(item.location || '-')}</div>
-                        <a href="${escapeHtml(item.link || 'https://calendar.google.com/')}" target="_blank" rel="noopener noreferrer" class="small text-success-emphasis text-decoration-none">予定を開く</a>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function renderChatPanel(payload) {
-            const panel = document.getElementById('chatPanel');
-            if (!panel) return;
-
-            if (!payload.success) {
-                panel.innerHTML = `<div class="workspace-empty">${escapeHtml(payload.message || 'チャット取得に失敗しました')}</div>`;
-                return;
-            }
-
-            const items = Array.isArray(payload.items) ? payload.items : [];
-            if (items.length === 0) {
-                panel.innerHTML = '<div class="workspace-empty">表示できるチャットメッセージはありません</div>';
-                return;
-            }
-
-            panel.innerHTML = items.map((item) => {
-                return `
-                    <div class="workspace-item chat-item">
-                        <div class="fw-semibold">${escapeHtml(item.space || 'スペース')}</div>
-                        <div class="workspace-text">${escapeHtml(item.text || '(本文なし)')}</div>
-                        <div class="meta">${escapeHtml(item.time || '-')} / ${escapeHtml(item.sender || '-')}</div>
+                    <div class="calendar-event-card">
+                        <div class="calendar-event-main">
+                            <div class="calendar-event-title">${escapeHtml(item.summary || '(タイトル未設定)')}</div>
+                            <div class="calendar-event-meta">${escapeHtml(item.start || '-')} / ${escapeHtml(item.location || '-')}</div>
+                        </div>
+                        <a href="${escapeHtml(item.link || 'https://calendar.google.com/')}" target="_blank" rel="noopener noreferrer" class="calendar-event-link">開く</a>
                     </div>
                 `;
             }).join('');
@@ -475,13 +439,27 @@
                 .then(response => response.json())
                 .then(renderCalendarPanel)
                 .catch(() => renderCalendarPanel({ success: false, message: 'カレンダー取得に失敗しました。' }));
-
-            fetch('/api/chat-messages/')
-                .then(response => response.json())
-                .then(renderChatPanel)
-                .catch(() => renderChatPanel({ success: false, message: 'チャット取得に失敗しました。' }));
         }
 
+        function initSalesBoardTabs() {
+            const tabs = Array.from(document.querySelectorAll('.sales-board-tab'));
+            const panels = Array.from(document.querySelectorAll('.sales-board-panel'));
+            if (tabs.length === 0 || panels.length === 0) return;
+
+            tabs.forEach((tab) => {
+                tab.addEventListener('click', () => {
+                    const target = tab.dataset.boardTab;
+                    tabs.forEach((item) => {
+                        item.classList.toggle('is-active', item === tab);
+                    });
+                    panels.forEach((panel) => {
+                        panel.classList.toggle('is-active', panel.dataset.boardPanel === target);
+                    });
+                });
+            });
+        }
+
+        initSalesBoardTabs();
         loadGoogleWorkspacePanels();
     </script>
 {% endblock %}
