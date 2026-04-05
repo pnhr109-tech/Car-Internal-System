@@ -108,6 +108,7 @@
                             <th>対応ステータス</th>
                             <th>お名前</th>
                             <th>電話番号</th>
+                            <th class="call-count-col">通話数</th>
                             <th>希望売却時期</th>
                             <th>メーカー</th>
                             <th>車種</th>
@@ -120,7 +121,7 @@
                     </thead>
                     <tbody id="assessmentTableBody">
                         <tr>
-                            <td colspan="14" class="text-center text-muted">
+                            <td colspan="15" class="text-center text-muted">
                                 <div class="spinner-border spinner-border-sm me-2" role="status"></div>
                                 データを読み込んでいます...
                             </td>
@@ -404,7 +405,7 @@
             const tbody = document.getElementById('assessmentTableBody');
             
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted">データがありません</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="15" class="text-center text-muted">データがありません</td></tr>';
                 return;
             }
 
@@ -424,8 +425,10 @@
                 const status = (item.follow_status || '').trim();
                 const owner = (item.sales_owner_name || '').trim();
 
-                if (!owner && status === '未対応') {
-                    return `<button class="btn btn-sm btn-outline-primary" onclick="claimSalesOwner(${item.id})">挙手</button>`;
+                if (!owner) {
+                    const encodedStatus = encodeURIComponent(item.follow_status || '未対応');
+                    const encodedNote = encodeURIComponent(item.sales_note || '');
+                    return `<button class="btn btn-sm btn-outline-success" onclick="openStatusModal(${item.id}, '${encodedStatus}', '${encodedNote}')">更新</button>`;
                 }
 
                 if (owner === currentUserDisplayName) {
@@ -437,11 +440,11 @@
                 return '<span class="text-muted small">担当確定済</span>';
             };
 
-            const renderPhoneLink = (phoneNumber) => {
+            const renderPhoneLink = (assessmentId, phoneNumber) => {
                 const raw = phoneNumber || '';
                 const tel = raw.replace(/[^0-9+]/g, '');
                 if (!tel) return '-';
-                return `<a href="tel:${tel}" class="text-decoration-none">${escapeHtml(raw)}</a>`;
+                return `<a href="tel:${tel}" class="text-decoration-none" onclick="recordCallAndDial(event, ${assessmentId})">${escapeHtml(raw)}</a>`;
             };
 
             tbody.innerHTML = data.map(item => `
@@ -451,7 +454,8 @@
                     <td class="owner-name-cell">${formatOwnerName(item.sales_owner_name)}</td>
                     <td>${statusBadge(item.follow_status)}</td>
                     <td>${item.customer_name}</td>
-                    <td>${renderPhoneLink(item.phone_number)}</td>
+                    <td>${renderPhoneLink(item.id, item.phone_number)}</td>
+                    <td id="call-count-${item.id}" class="call-count-cell">${item.call_count || 0}</td>
                     <td>${item.desired_sale_timing}</td>
                     <td>${item.maker}</td>
                     <td>${item.car_model}</td>
@@ -477,8 +481,12 @@
             }
         }
 
-        function claimSalesOwner(assessmentId) {
-            fetch(`/sateiinfo/api/assessments/${assessmentId}/claim/`, {
+        function recordCallAndDial(event, assessmentId) {
+            incrementCallCount(assessmentId);
+        }
+
+        function incrementCallCount(assessmentId) {
+            fetch(`/sateiinfo/api/assessments/${assessmentId}/call/`, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': getCsrfToken(),
@@ -488,10 +496,12 @@
                 .then(async (response) => {
                     const data = await response.json();
                     if (!response.ok || !data.success) {
-                        throw new Error(data.message || '担当営業登録に失敗しました');
+                        throw new Error(data.message || '通話数更新に失敗しました');
                     }
-                    showToast('成功', data.message || '担当営業を登録しました', 'success');
-                    refreshCurrentList();
+                    const countCell = document.getElementById(`call-count-${assessmentId}`);
+                    if (countCell) {
+                        countCell.textContent = data.call_count;
+                    }
                 })
                 .catch((error) => {
                     showToast('エラー', error.message, 'danger');
@@ -519,6 +529,7 @@
                             <div class="col-md-6"><strong>対応ステータス</strong><div>${escapeHtml(d.follow_status || '-')}</div></div>
                             <div class="col-md-6"><strong>お名前</strong><div>${escapeHtml(d.customer_name || '-')}</div></div>
                             <div class="col-md-6"><strong>電話番号</strong><div>${escapeHtml(d.phone_number || '-')}</div></div>
+                            <div class="col-md-6"><strong>通話数</strong><div>${escapeHtml(String(d.call_count ?? 0))}</div></div>
                             <div class="col-md-6"><strong>希望売却時期</strong><div>${escapeHtml(d.desired_sale_timing || '-')}</div></div>
                             <div class="col-md-6"><strong>メーカー / 車種</strong><div>${escapeHtml(d.maker || '-')} / ${escapeHtml(d.car_model || '-')}</div></div>
                             <div class="col-md-6"><strong>年式 / 走行距離</strong><div>${escapeHtml(d.year || '-')} / ${escapeHtml(d.mileage || '-')}</div></div>

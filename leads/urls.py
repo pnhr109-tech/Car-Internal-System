@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/latest-id/', views.get_latest_assessment_id, name='get_latest_assessment_id'),
     path('api/check-new/', views.check_new_assessments, name='check_new_assessments'),
     path('api/assessments/<int:request_id>/claim/', views.claim_assessment_owner, name='claim_assessment_owner'),
+    path('api/assessments/<int:request_id>/call/', views.increment_assessment_call_count, name='increment_assessment_call_count'),
     path('api/assessments/<int:request_id>/update/', views.update_assessment_follow_status, name='update_assessment_follow_status'),
     path('webhook/gmail-push/', views.gmail_push_notification, name='gmail_push_notification'),
 ]

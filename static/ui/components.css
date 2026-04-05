@@ -102,6 +102,39 @@ h1, .h1 {
   color: #9ec5fe;
 }
 
+.app-brand-logo {
+  height: 42px;
+  width: auto;
+  max-width: 320px;
+  object-fit: contain;
+}
+
+.app-brand-text {
+  margin-left: 10px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  color: #f8f9fa;
+}
+
+.app-brand-logo--fallback {
+  height: 20px;
+  width: 20px;
+}
+
+@media (max-width: 576px) {
+  .app-brand-logo {
+    height: 34px;
+    max-width: 220px;
+  }
+
+  .app-brand-text {
+    font-size: 1.15rem;
+    margin-left: 8px;
+  }
+}
+
 .notification-btn {
   padding: 0.35rem 0.8rem;
   min-width: 52px;
@@ -231,6 +264,15 @@ h1, .h1 {
   line-height: 1.15;
 }
 
+.assessment-table .call-count-col,
+.assessment-table .call-count-cell {
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+  white-space: nowrap;
+  text-align: center;
+}
+
 /* dashboard page */
 .dashboard-assessment-table {
   width: 100%;
@@ -266,6 +308,7 @@ h1, .h1 {
 .dashboard-assessment-table .col-status { width: 8.8%; }
 .dashboard-assessment-table .col-customer { width: 6.5%; }
 .dashboard-assessment-table .col-phone { width: 7%; }
+.dashboard-assessment-table .col-call-count { width: 3%; }
 .dashboard-assessment-table .col-sale-timing { width: 6%; }
 .dashboard-assessment-table .col-maker { width: 5.5%; }
 .dashboard-assessment-table .col-model { width: 5.5%; }
@@ -299,6 +342,11 @@ h1, .h1 {
 .dashboard-assessment-table .owner-name-cell {
   white-space: normal;
   line-height: 1.12;
+}
+
+.dashboard-assessment-table .call-count-cell {
+  white-space: nowrap;
+  text-align: center;
 }
 
 .dashboard-table-wrapper {

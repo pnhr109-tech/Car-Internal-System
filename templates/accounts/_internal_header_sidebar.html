@@ -4,9 +4,14 @@
         <button class="navbar-toggler header-icon-btn p-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#appSidebar" aria-controls="appSidebar" aria-label="メニューを開く">
             <span class="navbar-toggler-icon"></span>
         </button>
-        <span class="navbar-brand mb-0 h1 d-flex align-items-center gap-2">
-            <img src="{% static 'leads/icons/favicon.svg' %}" alt="gigicompany" width="20" height="20">
-            gigicompany 社内システム
+        <span class="navbar-brand mb-0 h1 d-flex align-items-center">
+            <img
+                src="{% static 'images/brand/gigicompany_logo.png' %}"
+                alt="gigicompany"
+                class="app-brand-logo"
+                onerror="this.onerror=null;this.src='{% static 'leads/icons/favicon.svg' %}';this.classList.add('app-brand-logo--fallback');"
+            >
+            <span class="app-brand-text">社内システム</span>
         </span>
         <div class="d-flex align-items-center gap-3">
                 <button class="btn btn-sm header-icon-btn notification-btn position-relative"

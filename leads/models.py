@@ -71,6 +71,7 @@ class CarAssessmentRequest(models.Model):
     # 顧客情報
     customer_name = models.CharField(max_length=100, verbose_name='お名前')
     phone_number = models.CharField(max_length=20, verbose_name='電話番号')
+    call_count = models.PositiveIntegerField(default=0, verbose_name='通話数')
     postal_code = models.CharField(max_length=10, blank=True, verbose_name='郵便番号')
     address = models.CharField(max_length=255, blank=True, verbose_name='住所')
     email = models.EmailField(max_length=255, blank=True, verbose_name='メールアドレス')

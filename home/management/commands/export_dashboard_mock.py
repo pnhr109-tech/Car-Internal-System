@@ -94,19 +94,76 @@ class Command(BaseCommand):
             },
         ]
 
+        recent_sale_updates = [
+            {
+                'customer_name': '小川 俊介',
+                'status_updated_at': now - timedelta(hours=2, minutes=11),
+                'sales_owner_name': '山田 太郎',
+                'application_number': 'N-202603-2201',
+            },
+            {
+                'customer_name': '村上 里奈',
+                'status_updated_at': now - timedelta(hours=4, minutes=2),
+                'sales_owner_name': '鈴木 次郎',
+                'application_number': 'S-202603-2202',
+            },
+            {
+                'customer_name': '田中 翼',
+                'status_updated_at': now - timedelta(hours=6, minutes=18),
+                'sales_owner_name': '佐々木 明',
+                'application_number': 'H-202603-2203',
+            },
+        ]
+
         closed_rankings = [
             {'sales_owner_name': '山田 太郎', 'closed_count': 12},
             {'sales_owner_name': '鈴木 次郎', 'closed_count': 10},
             {'sales_owner_name': '佐々木 明', 'closed_count': 8},
         ]
 
+        mq_rankings = [
+            {'sales_owner_name': '山田 太郎', 'mq_count': 18},
+            {'sales_owner_name': '鈴木 次郎', 'mq_count': 15},
+            {'sales_owner_name': '佐々木 明', 'mq_count': 11},
+        ]
+
         store_performance_summary = [
-            {'store': '札幌店', 'mq': 15, 'appointments': 12, 'contracts': 5, 'close_rate': 41.7},
-            {'store': '仙台店', 'mq': 12, 'appointments': 10, 'contracts': 4, 'close_rate': 40.0},
-            {'store': '東京店', 'mq': 22, 'appointments': 19, 'contracts': 9, 'close_rate': 47.4},
-            {'store': '名古屋店', 'mq': 14, 'appointments': 11, 'contracts': 5, 'close_rate': 45.5},
-            {'store': '大阪店', 'mq': 18, 'appointments': 15, 'contracts': 6, 'close_rate': 40.0},
-            {'store': '福岡店', 'mq': 11, 'appointments': 9, 'contracts': 3, 'close_rate': 33.3},
+            {
+                'store': 'つくば',
+                'mq': 22,
+                'appointments': 18,
+                'contracts': 8,
+                'close_rate': 44.4,
+                'cc_appointments': 5,
+                'self_cc_ratio': '75%：25%',
+                'managed_count': 18,
+                'lost_count': 3,
+                'pre_assessment_cancel_count': 1,
+            },
+            {
+                'store': '水戸',
+                'mq': 16,
+                'appointments': 13,
+                'contracts': 5,
+                'close_rate': 38.5,
+                'cc_appointments': 3,
+                'self_cc_ratio': '75%：25%',
+                'managed_count': 13,
+                'lost_count': 2,
+                'pre_assessment_cancel_count': 1,
+            },
+            {
+                'store': '小山',
+                'mq': 14,
+                'appointments': 11,
+                'contracts': 4,
+                'close_rate': 36.4,
+                'cc_appointments': 3,
+                'self_cc_ratio': '75%：25%',
+                'managed_count': 11,
+                'lost_count': 2,
+                'pre_assessment_cancel_count': 0,
+            },
         ]
 
         assessment_seed = [
@@ -115,6 +172,7 @@ class Command(BaseCommand):
                 'follow_status': '商談確定',
                 'customer_name': '佐藤 一郎',
                 'phone_number': '090-1111-2222',
+                'call_count': 3,
                 'desired_sale_timing': '1ヶ月以内',
                 'maker': 'トヨタ',
                 'car_model': 'プリウス',
@@ -127,6 +185,7 @@ class Command(BaseCommand):
                 'follow_status': '再コール予定',
                 'customer_name': '高橋 美咲',
                 'phone_number': '080-3333-4444',
+                'call_count': 1,
                 'desired_sale_timing': '3ヶ月以内',
                 'maker': '日産',
                 'car_model': 'セレナ',
@@ -139,6 +198,7 @@ class Command(BaseCommand):
                 'follow_status': '成約',
                 'customer_name': '伊藤 健',
                 'phone_number': '070-5555-6666',
+                'call_count': 4,
                 'desired_sale_timing': '即日',
                 'maker': 'ホンダ',
                 'car_model': 'フィット',
@@ -151,6 +211,7 @@ class Command(BaseCommand):
                 'follow_status': '見送り',
                 'customer_name': '松本 翼',
                 'phone_number': '090-7777-8888',
+                'call_count': 2,
                 'desired_sale_timing': '未定',
                 'maker': 'マツダ',
                 'car_model': 'CX-5',
@@ -163,6 +224,7 @@ class Command(BaseCommand):
                 'follow_status': '未対応',
                 'customer_name': '井上 玲奈',
                 'phone_number': '080-9999-0000',
+                'call_count': 0,
                 'desired_sale_timing': '2ヶ月以内',
                 'maker': 'スバル',
                 'car_model': 'レヴォーグ',
@@ -173,9 +235,11 @@ class Command(BaseCommand):
         ]
 
         latest_assessments = []
+        channels = ['N', 'S', 'H', 'M', 'C']
         for index in range(180):
             base = assessment_seed[index % len(assessment_seed)].copy()
-            base['application_number'] = f"A202603-{1001 + index:04d}"
+            channel = channels[index % len(channels)]
+            base['application_number'] = f"{channel}-202603-{1001 + index:04d}"
             base['application_datetime'] = now - timedelta(minutes=9 * index)
 
             if index % 6 == 0:
@@ -208,15 +272,57 @@ class Command(BaseCommand):
         return {
             'current_user_display_name': '山田 太郎',
             'monthly_kpis': {
-                'month_label': now.strftime('%Y年%m月'),
+                'period_label': now.strftime('%Y年%m月'),
                 'appointments': 21,
                 'contracts': 8,
                 'close_rate': 38.1,
+                'self_cc_ratio': '75%：25%',
+                'cc_appointments': 5,
                 'mq': 25,
+                'managed_count': 25,
+                'lost_count': 4,
+                'pre_assessment_cancel_count': 2,
+            },
+            'period_kpis': {
+                'year': {
+                    'period_label': now.strftime('%Y年'),
+                    'appointments': 168,
+                    'contracts': 62,
+                    'close_rate': 36.9,
+                    'self_cc_ratio': '75%：25%',
+                    'mq': 210,
+                    'managed_count': 210,
+                    'lost_count': 31,
+                    'pre_assessment_cancel_count': 17,
+                },
+                'month': {
+                    'period_label': now.strftime('%Y年%m月'),
+                    'appointments': 21,
+                    'contracts': 8,
+                    'close_rate': 38.1,
+                    'self_cc_ratio': '75%：25%',
+                    'mq': 25,
+                    'managed_count': 25,
+                    'lost_count': 4,
+                    'pre_assessment_cancel_count': 2,
+                },
+                'week': {
+                    'period_label': f"{now.month}月第{((now.day - 1) // 7) + 1}週",
+                    'appointments': 7,
+                    'contracts': 3,
+                    'close_rate': 42.9,
+                    'self_cc_ratio': '75%：25%',
+                    'mq': 9,
+                    'managed_count': 9,
+                    'lost_count': 1,
+                    'pre_assessment_cancel_count': 1,
+                },
             },
             'recent_appointment_updates': recent_appointment_updates,
             'recent_closed_updates': recent_closed_updates,
+            'recent_sale_updates': recent_sale_updates,
             'closed_rankings': closed_rankings,
+            'mq_rankings': mq_rankings,
             'store_performance_summary': store_performance_summary,
             'latest_assessments': latest_assessments,
             'calendar_events': calendar_events,

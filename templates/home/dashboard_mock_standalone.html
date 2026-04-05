@@ -15,12 +15,9 @@
             <button class="navbar-toggler header-icon-btn p-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#appSidebar" aria-controls="appSidebar" aria-label="メニューを開く">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <span class="navbar-brand mb-0 h1 d-flex align-items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="20" height="20" role="img" aria-label="gigicompany icon">
-                    <rect x="0" y="0" width="32" height="64" fill="#dc3545"></rect>
-                    <rect x="32" y="0" width="32" height="64" fill="#28a745"></rect>
-                </svg>
-                gigicompany 社内システム
+            <span class="navbar-brand mb-0 h1 d-flex align-items-center">
+                <img src="../static/images/brand/gigicompany_logo.png" alt="gigicompany" class="app-brand-logo">
+                <span class="app-brand-text">社内システム</span>
             </span>
             <div class="d-flex align-items-center gap-3">
                 <button class="btn btn-sm header-icon-btn notification-btn position-relative" type="button" data-bs-toggle="offcanvas" data-bs-target="#globalNotificationPanel" aria-controls="globalNotificationPanel" aria-label="通知">
@@ -91,24 +88,45 @@
                     <div class="sales-hero-panel">
                         <div class="sales-kpi-header">
                             <span class="sales-kpi-owner">👤 {{ current_user_display_name }} さんの実績</span>
-                            <span class="sales-kpi-month">対象: {{ monthly_kpis.month_label }}</span>
+                            <span class="sales-kpi-month" id="personalKpiTarget">対象: {{ monthly_kpis.period_label }}</span>
+                        </div>
+                        <div class="btn-group btn-group-sm mb-2" role="group" aria-label="個人成績の期間切替">
+                            <button type="button" class="btn btn-outline-secondary personal-period-btn" data-period="year">年</button>
+                            <button type="button" class="btn btn-outline-secondary personal-period-btn is-active" data-period="month">月</button>
+                            <button type="button" class="btn btn-outline-secondary personal-period-btn" data-period="week">週</button>
                         </div>
                         <div class="sales-kpi-row">
                             <div class="sales-kpi-card">
-                                <div class="sales-kpi-label">当月商談数</div>
-                                <div class="sales-kpi-value">{{ monthly_kpis.appointments }}</div>
+                                <div class="sales-kpi-label">商談数</div>
+                                <div class="sales-kpi-value" id="kpiAppointments">{{ monthly_kpis.appointments }}</div>
                             </div>
                             <div class="sales-kpi-card">
-                                <div class="sales-kpi-label">当月契約数</div>
-                                <div class="sales-kpi-value">{{ monthly_kpis.contracts }}</div>
+                                <div class="sales-kpi-label">契約数</div>
+                                <div class="sales-kpi-value" id="kpiContracts">{{ monthly_kpis.contracts }}</div>
                             </div>
                             <div class="sales-kpi-card">
-                                <div class="sales-kpi-label">当月成約率</div>
-                                <div class="sales-kpi-value">{{ monthly_kpis.close_rate }}%</div>
+                                <div class="sales-kpi-label">成約率</div>
+                                <div class="sales-kpi-value" id="kpiCloseRate">{{ monthly_kpis.close_rate }}%</div>
                             </div>
                             <div class="sales-kpi-card">
-                                <div class="sales-kpi-label">当月MQ</div>
-                                <div class="sales-kpi-value">{{ monthly_kpis.mq }}</div>
+                                <div class="sales-kpi-label">自アポ：CC</div>
+                                <div class="sales-kpi-value" id="kpiSelfCcRatio">{{ monthly_kpis.self_cc_ratio }}</div>
+                            </div>
+                            <div class="sales-kpi-card">
+                                <div class="sales-kpi-label">MQ</div>
+                                <div class="sales-kpi-value" id="kpiMq">{{ monthly_kpis.mq }}</div>
+                            </div>
+                            <div class="sales-kpi-card">
+                                <div class="sales-kpi-label">管理数</div>
+                                <div class="sales-kpi-value" id="kpiManagedCount">{{ monthly_kpis.managed_count }}</div>
+                            </div>
+                            <div class="sales-kpi-card">
+                                <div class="sales-kpi-label">没数</div>
+                                <div class="sales-kpi-value" id="kpiLostCount">{{ monthly_kpis.lost_count }}</div>
+                            </div>
+                            <div class="sales-kpi-card">
+                                <div class="sales-kpi-label">査定前キャンセル数</div>
+                                <div class="sales-kpi-value" id="kpiPreCancelCount">{{ monthly_kpis.pre_assessment_cancel_count }}</div>
                             </div>
                         </div>
 
@@ -125,6 +143,19 @@
                                 {% for item in recent_appointment_updates %}
                                 <div class="sales-hero-feed-card">
                                     <div class="sales-hero-feed-label">HOT LEAD</div>
+                                    <div class="sales-hero-feed-main">{{ item.customer_name }}</div>
+                                    <div class="sales-hero-feed-meta">{{ item.status_updated_at|date:'m/d H:i' }} / {{ item.sales_owner_name }}</div>
+                                    <div class="sales-hero-feed-id">申込番号: {{ item.application_number }}</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="board-detail-link-row"><a href="#" class="board-detail-link">詳細へ⇒</a></div>
+
+                            <div class="sales-hero-section-ribbon">🚗 売却速報</div>
+                            <div class="sales-hero-feed-grid">
+                                {% for item in recent_sale_updates %}
+                                <div class="sales-hero-feed-card sales-hero-feed-card--closed">
+                                    <div class="sales-hero-feed-label sales-hero-feed-label--closed">SOLD</div>
                                     <div class="sales-hero-feed-main">{{ item.customer_name }}</div>
                                     <div class="sales-hero-feed-meta">{{ item.status_updated_at|date:'m/d H:i' }} / {{ item.sales_owner_name }}</div>
                                     <div class="sales-hero-feed-id">申込番号: {{ item.application_number }}</div>
@@ -155,6 +186,10 @@
                                     <div class="store-mq-value-row"><span>商談</span><strong>{{ store_item.appointments }}</strong></div>
                                     <div class="store-mq-value-row"><span>契約</span><strong>{{ store_item.contracts }}</strong></div>
                                     <div class="store-mq-value-row"><span>契約率</span><strong>{{ store_item.close_rate }}%</strong></div>
+                                    <div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>
+                                    <div class="store-mq-value-row"><span>管理数</span><strong>{{ store_item.managed_count }}</strong></div>
+                                    <div class="store-mq-value-row"><span>没数</span><strong>{{ store_item.lost_count }}</strong></div>
+                                    <div class="store-mq-value-row"><span>査定前キャンセル数</span><strong>{{ store_item.pre_assessment_cancel_count }}</strong></div>
                                 </div>
                                 {% endfor %}
                             </div>
@@ -163,11 +198,43 @@
 
                         <div class="sales-board-panel" data-board-panel="cc">
                             <div class="sales-hero-section-ribbon">🎯 CC予定速報</div>
-                            <div class="workspace-empty">CC予定データ未実装のため準備中です</div>
+                            <div class="sales-kpi-row">
+                                <div class="sales-kpi-card">
+                                    <div class="sales-kpi-label">当月CC商談数</div>
+                                    <div class="sales-kpi-value">{{ monthly_kpis.cc_appointments }}</div>
+                                </div>
+                                <div class="sales-kpi-card">
+                                    <div class="sales-kpi-label">当月自アポ：CC</div>
+                                    <div class="sales-kpi-value">{{ monthly_kpis.self_cc_ratio }}</div>
+                                </div>
+                                <div class="sales-kpi-card">
+                                    <div class="sales-kpi-label">当月商談数（全体）</div>
+                                    <div class="sales-kpi-value">{{ monthly_kpis.appointments }}</div>
+                                </div>
+                            </div>
                             <div class="sales-hero-section-ribbon">📊 CC案件 MQ</div>
-                            <div class="workspace-empty">CC案件MQデータ未実装のため準備中です</div>
+                            <div class="store-mq-row">
+                                {% for store_item in store_performance_summary %}
+                                <div class="store-mq-card">
+                                    <div class="store-mq-name">{{ store_item.store }}</div>
+                                    <div class="store-mq-value-row"><span>CC商談</span><strong>{{ store_item.cc_appointments }}</strong></div>
+                                    <div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>
+                                    <div class="store-mq-value-row"><span>MQ</span><strong>{{ store_item.mq }}</strong></div>
+                                </div>
+                                {% endfor %}
+                            </div>
                             <div class="sales-hero-section-ribbon">📞 CC通話率・予定率</div>
-                            <div class="workspace-empty">CC通話率・予定率データ未実装のため準備中です</div>
+                            <div class="sales-kpi-row">
+                                <div class="sales-kpi-card">
+                                    <div class="sales-kpi-label">自アポ：CC</div>
+                                    <div class="sales-kpi-value">{{ monthly_kpis.self_cc_ratio }}</div>
+                                </div>
+                                <div class="sales-kpi-card">
+                                    <div class="sales-kpi-label">成約率</div>
+                                    <div class="sales-kpi-value">{{ monthly_kpis.close_rate }}%</div>
+                                </div>
+                            </div>
+                            <div class="board-detail-link-row"><a href="#" class="board-detail-link">詳細へ⇒</a></div>
                         </div>
 
                         <div class="sales-board-panel" data-board-panel="ranking">
@@ -188,16 +255,57 @@
                             </div>
                             <div class="board-detail-link-row"><a href="#" class="board-detail-link">詳細へ⇒</a></div>
                             <div class="sales-hero-section-ribbon">🏁 売上ランキング TOP3</div>
-                            <div class="workspace-empty">売上データベース未実装のため準備中です</div>
+                            <div class="sales-hero-rank-grid">
+                                {% for rank in closed_rankings %}
+                                <div class="sales-hero-rank-card sales-hero-rank-card--{{ forloop.counter }}">
+                                    <div class="sales-hero-rank-content">
+                                        <div class="sales-hero-rank-no">{{ forloop.counter }}位</div>
+                                        <div class="sales-hero-rank-name">{{ rank.sales_owner_name }}</div>
+                                        <div class="sales-hero-rank-count">{{ rank.closed_count }}件</div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
                             <div class="board-detail-link-row"><a href="#" class="board-detail-link">詳細へ⇒</a></div>
                             <div class="sales-hero-section-ribbon">📊 MQランキング</div>
-                            <div class="workspace-empty">MQデータ未実装のため準備中です</div>
+                            <div class="sales-hero-rank-grid">
+                                {% for rank in mq_rankings %}
+                                <div class="sales-hero-rank-card sales-hero-rank-card--{{ forloop.counter }}">
+                                    <div class="sales-hero-rank-content">
+                                        <div class="sales-hero-rank-no">{{ forloop.counter }}位</div>
+                                        <div class="sales-hero-rank-name">{{ rank.sales_owner_name }}</div>
+                                        <div class="sales-hero-rank-count">{{ rank.mq_count }}件</div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
                             <div class="board-detail-link-row"><a href="#" class="board-detail-link">詳細へ⇒</a></div>
                         </div>
 
                         <div class="sales-board-panel" data-board-panel="rate">
-                            <div class="sales-hero-section-ribbon">📈 通話率・予定率</div>
-                            <div class="workspace-empty">率データ未実装のため準備中です</div>
+                            <div class="sales-hero-section-ribbon">👤 個人RATE（当月）</div>
+                            <div class="sales-kpi-row">
+                                <div class="sales-kpi-card">
+                                    <div class="sales-kpi-label">成約率</div>
+                                    <div class="sales-kpi-value">{{ monthly_kpis.close_rate }}%</div>
+                                </div>
+                                <div class="sales-kpi-card">
+                                    <div class="sales-kpi-label">自アポ：CC</div>
+                                    <div class="sales-kpi-value">{{ monthly_kpis.self_cc_ratio }}</div>
+                                </div>
+                            </div>
+
+                            <div class="sales-hero-section-ribbon">🏪 店舗RATE（当月）</div>
+                            <div class="store-mq-row">
+                                {% for store_item in store_performance_summary %}
+                                <div class="store-mq-card">
+                                    <div class="store-mq-name">{{ store_item.store }}</div>
+                                    <div class="store-mq-value-row"><span>成約率</span><strong>{{ store_item.close_rate }}%</strong></div>
+                                    <div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="board-detail-link-row"><a href="#" class="board-detail-link">詳細へ⇒</a></div>
                         </div>
                     </div>
                 </div>
@@ -238,6 +346,7 @@
                                         <th class="col-status">対応ステータス</th>
                                         <th class="col-customer">お名前</th>
                                         <th class="col-phone">電話番号</th>
+                                        <th class="col-call-count">通話数</th>
                                         <th class="col-sale-timing">希望売却時期</th>
                                         <th class="col-maker">メーカー</th>
                                         <th class="col-model">車種</th>
@@ -268,7 +377,8 @@
                                             {% endif %}
                                         </td>
                                         <td>{{ item.customer_name }}</td>
-                                        <td>{{ item.phone_number }}</td>
+                                        <td><a href="tel:{{ item.phone_number|cut:'-' }}" class="text-decoration-none fw-semibold">{{ item.phone_number }}</a></td>
+                                        <td>{{ item.call_count }}</td>
                                         <td>{{ item.desired_sale_timing }}</td>
                                         <td>{{ item.maker }}</td>
                                         <td>{{ item.car_model }}</td>
@@ -276,12 +386,12 @@
                                         <td>{{ item.mileage }}</td>
                                         <td>{{ item.address }}</td>
                                         <td class="action-cell">
-                                            {% if item.follow_status == '未対応' and not item.sales_owner_name %}
-                                            <button class="btn btn-sm btn-outline-primary">挙手</button>
+                                            {% if not item.sales_owner_name %}
+                                            <button class="btn btn-sm btn-outline-success">更新</button>
                                             {% elif item.sales_owner_name == current_user_display_name %}
                                             <button class="btn btn-sm btn-outline-success">更新</button>
                                             {% else %}
-                                            <span class="text-muted small">担当確定済</span>
+                                            <button class="btn btn-sm btn-outline-secondary" disabled>更新</button>
                                             {% endif %}
                                         </td>
                                     </tr>
@@ -295,8 +405,50 @@
         </div>
     </div>
 
+    {{ period_kpis|json_script:"periodKpisData" }}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const periodKpis = JSON.parse(document.getElementById('periodKpisData').textContent || '{}');
+
+        function renderPersonalKpis(periodKey) {
+            const data = periodKpis[periodKey];
+            if (!data) return;
+
+            const setText = (id, value) => {
+                const target = document.getElementById(id);
+                if (target) target.textContent = value;
+            };
+
+            setText('personalKpiTarget', `対象: ${data.period_label}`);
+            setText('kpiAppointments', data.appointments ?? 0);
+            setText('kpiContracts', data.contracts ?? 0);
+            setText('kpiCloseRate', `${data.close_rate ?? 0}%`);
+            setText('kpiSelfCcRatio', data.self_cc_ratio ?? '0:0');
+            setText('kpiMq', data.mq ?? 0);
+            setText('kpiManagedCount', data.managed_count ?? 0);
+            setText('kpiLostCount', data.lost_count ?? 0);
+            setText('kpiPreCancelCount', data.pre_assessment_cancel_count ?? 0);
+
+            document.querySelectorAll('.personal-period-btn').forEach((btn) => {
+                const isActive = btn.dataset.period === periodKey;
+                btn.classList.toggle('btn-secondary', isActive);
+                btn.classList.toggle('btn-outline-secondary', !isActive);
+            });
+        }
+
+        (function initPersonalPeriodSwitch() {
+            const buttons = Array.from(document.querySelectorAll('.personal-period-btn'));
+            if (buttons.length === 0) return;
+
+            buttons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    renderPersonalKpis(btn.dataset.period);
+                });
+            });
+
+            renderPersonalKpis('month');
+        })();
+
         (function initSalesBoardTabs() {
             const tabs = Array.from(document.querySelectorAll('.sales-board-tab'));
             const panels = Array.from(document.querySelectorAll('.sales-board-panel'));

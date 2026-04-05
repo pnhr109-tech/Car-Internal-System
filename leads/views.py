@@ -4,6 +4,7 @@
 from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse
 from django.db import transaction
+from django.db.models import F
 from django.db.models import Q, Max
 from django.utils import timezone
 from django.core.paginator import Paginator
@@ -112,6 +113,7 @@ def get_assessments(request):
         'mileage',
         'customer_name',
         'phone_number',
+        'call_count',
         'postal_code',
         'address',
         'email',
@@ -141,6 +143,7 @@ def get_assessments(request):
             'mileage': row['mileage'],
             'customer_name': row['customer_name'],
             'phone_number': row['phone_number'],
+            'call_count': row['call_count'],
             'postal_code': row['postal_code'],
             'address': row['address'],
             'email': row['email'],
@@ -232,6 +235,7 @@ def get_assessment_detail(request, request_id):
         'mileage',
         'customer_name',
         'phone_number',
+        'call_count',
         'postal_code',
         'address',
         'email',
@@ -306,6 +310,28 @@ def claim_assessment_owner(request, request_id):
 
 @login_required
 @require_POST
+def increment_assessment_call_count(request, request_id):
+    try:
+        with transaction.atomic():
+            target = CarAssessmentRequest.objects.select_for_update().filter(id=request_id).first()
+            if not target:
+                return JsonResponse({'success': False, 'message': '対象データが存在しません'}, status=404)
+
+            target.call_count = F('call_count') + 1
+            target.save(update_fields=['call_count', 'updated_at'])
+            target.refresh_from_db(fields=['call_count'])
+    except Exception as exc:
+        logger.error(f'increment_assessment_call_count failed: request_id={request_id}, error={exc}')
+        return JsonResponse({'success': False, 'message': '通話数の更新に失敗しました'}, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'call_count': target.call_count,
+    })
+
+
+@login_required
+@require_POST
 def update_assessment_follow_status(request, request_id):
     sales_name = _current_user_display_name(request.user)
 
@@ -328,7 +354,11 @@ def update_assessment_follow_status(request, request_id):
                 return JsonResponse({'success': False, 'message': '対象データが存在しません'}, status=404)
 
             if not target.sales_owner_name:
-                return JsonResponse({'success': False, 'message': '先に担当営業として挙手してください'}, status=400)
+                if follow_status != CarAssessmentRequest.STATUS_APPOINTMENT:
+                    return JsonResponse({'success': False, 'message': '担当未確定の案件は商談確定で更新してください'}, status=400)
+
+                target.sales_owner_name = sales_name
+                target.sales_assigned_at = timezone.now()
 
             if target.sales_owner_name != sales_name:
                 return JsonResponse({
@@ -341,7 +371,7 @@ def update_assessment_follow_status(request, request_id):
             target.sales_note = sales_note
             target.status_updated_by = sales_name
             target.status_updated_at = now
-            target.save(update_fields=['follow_status', 'sales_note', 'status_updated_by', 'status_updated_at', 'updated_at'])
+            target.save(update_fields=['sales_owner_name', 'sales_assigned_at', 'follow_status', 'sales_note', 'status_updated_by', 'status_updated_at', 'updated_at'])
     except Exception as exc:
         logger.error(f'update_assessment_follow_status failed: request_id={request_id}, error={exc}')
         return JsonResponse({'success': False, 'message': 'ステータス更新に失敗しました'}, status=500)
