@@ -15,12 +15,12 @@
 
 | 項目 | 内容 |
 |------|------|
-| バックエンド | Django (Python) |
+| バックエンド | Django 5.0.1 (Python) |
 | フロントエンド | Bootstrap 5 + カスタムトークン/オーバーライド |
-| データベース | PostgreSQL (Cloud SQL on GCP) |
+| データベース | MySQL 8.0 (mysqlclient 2.2.1) |
 | インフラ | Docker / Docker Compose |
-| 認証 | Google OAuth 2.0 |
-| メール | Gmail API (Push通知対応) |
+| 認証 | Google OAuth 2.0 (google-auth-oauthlib) |
+| メール | Gmail API (Push通知: Google Cloud Pub/Sub) |
 
 ---
 
