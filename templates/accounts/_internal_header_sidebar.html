@@ -42,9 +42,35 @@
     <div class="offcanvas-body d-flex flex-column">
         <div>
             <div class="list-group list-group-flush mb-3">
-                <a href="/" class="list-group-item list-group-item-action sidebar-menu-link">トップページ</a>
-                <a href="/sateiinfo/" class="list-group-item list-group-item-action sidebar-menu-link">査定申込一覧</a>
-                <a href="/admin/" class="list-group-item list-group-item-action sidebar-menu-link">管理画面</a>
+                <a href="/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-house me-2"></i>トップページ
+                </a>
+            </div>
+
+            <p class="text-muted small px-1 mb-1 mt-2">買取業務</p>
+            <div class="list-group list-group-flush mb-3">
+                <a href="/sateiinfo/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-inbox me-2"></i>査定申込一覧
+                </a>
+                <a href="/sateiinfo/new/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-plus-circle me-2"></i>査定申込 手動入力
+                </a>
+                <a href="/sateiinfo/cases/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-briefcase me-2"></i>案件一覧
+                </a>
+                <a href="/sateiinfo/contracts/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-file-earmark-text me-2"></i>契約一覧
+                </a>
+                <a href="/sateiinfo/approvals/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-check2-square me-2"></i>承認待ち
+                </a>
+            </div>
+
+            <p class="text-muted small px-1 mb-1 mt-2">システム</p>
+            <div class="list-group list-group-flush mb-3">
+                <a href="/admin/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-gear me-2"></i>管理画面
+                </a>
             </div>
         </div>
 
