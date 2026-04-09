@@ -219,11 +219,9 @@
         <div class="mb-3">
           <label class="form-label">連絡方法</label>
           <select id="historyMethod" class="form-select">
-            <option value="phone">電話</option>
-            <option value="email">メール</option>
-            <option value="sms">SMS</option>
-            <option value="visit">対面</option>
-            <option value="other">その他</option>
+            {% for val, label in contact_method_choices %}
+            <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
           </select>
         </div>
         <div class="mb-3">

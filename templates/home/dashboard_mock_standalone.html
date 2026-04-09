@@ -26,7 +26,7 @@
                             <path d="M8 16a2 2 0 0 0 1.985-1.75h-3.97A2 2 0 0 0 8 16Zm.104-14.804A1 1 0 0 0 7 2.196v.718C5.286 3.36 4 4.99 4 7v2.764l-.895 1.789A.5.5 0 0 0 3.553 12h8.894a.5.5 0 0 0 .448-.658L12 9.764V7c0-2.01-1.286-3.64-3-4.086v-.718a1 1 0 0 0-.896-1Z"></path>
                         </svg>
                     </span>
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">3</span>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">0</span>
                 </button>
                 <span class="text-white small">{{ current_user_display_name }}</span>
                 <a href="#" class="btn btn-sm btn-outline-light">ログアウト</a>
@@ -50,9 +50,9 @@
 
             <div class="mt-auto border-top pt-3">
                 <p class="mb-1 text-muted small">出勤時間</p>
-                <p class="mb-2">09:00</p>
+                <p class="mb-2">-</p>
                 <p class="mb-1 text-muted small">現在の勤務時間</p>
-                <p class="mb-3 fw-semibold">7時間 25分</p>
+                <p class="mb-3 fw-semibold">0時間 0分</p>
                 <a href="#" class="btn btn-warning w-100">退勤</a>
             </div>
         </div>
@@ -65,18 +65,7 @@
         </div>
         <div class="offcanvas-body">
             <div class="list-group">
-                <button type="button" class="list-group-item list-group-item-action">
-                    <div class="fw-semibold">新規査定申込を受信しました</div>
-                    <div class="small text-muted">A202603-1178 / 佐藤 一郎 / 東京都港区</div>
-                </button>
-                <button type="button" class="list-group-item list-group-item-action">
-                    <div class="fw-semibold">担当営業が確定しました</div>
-                    <div class="small text-muted">A202603-1169 / 高橋 美咲 / 担当: 山田 太郎</div>
-                </button>
-                <button type="button" class="list-group-item list-group-item-action">
-                    <div class="fw-semibold">対応ステータスが更新されました</div>
-                    <div class="small text-muted">A202603-1154 / 伊藤 健 / ステータス: 成約</div>
-                </button>
+                <div class="list-group-item text-muted">通知はまだありません</div>
             </div>
         </div>
     </div>

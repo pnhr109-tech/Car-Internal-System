@@ -492,6 +492,7 @@ def assessment_detail(request, pk):
         'linked_assessment': linked_assessment,
         'follow_status_choices': CarAssessmentRequest.FOLLOW_STATUS_CHOICES,
         'channel_choices': CarAssessmentRequest.CHANNEL_CHOICES,
+        'contact_method_choices': ContactHistory.METHOD_CHOICES,
     })
 
 
@@ -661,6 +662,7 @@ def case_detail(request, pk):
         'can_approve': can_approve,
         'assessment_status_choices': Assessment.STATUS_CHOICES,
         'contract_status_choices': PurchaseContract.STATUS_CHOICES if contract else [],
+        'contact_method_choices': ContactHistory.METHOD_CHOICES,
     })
 
 
