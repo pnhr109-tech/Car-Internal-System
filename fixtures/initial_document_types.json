@@ -1,0 +1,13 @@
+[
+  {"model": "leads.documenttypemaster", "pk": 1,  "fields": {"name": "委任状",             "required_flag": true,  "description": "所有権移転に必要な委任状"}},
+  {"model": "leads.documenttypemaster", "pk": 2,  "fields": {"name": "譲渡証明書",         "required_flag": true,  "description": "車両の譲渡を証明する書類"}},
+  {"model": "leads.documenttypemaster", "pk": 3,  "fields": {"name": "印鑑証明書",         "required_flag": true,  "description": "発行から3ヶ月以内のもの"}},
+  {"model": "leads.documenttypemaster", "pk": 4,  "fields": {"name": "車検証",             "required_flag": true,  "description": "車両検査証（原本）"}},
+  {"model": "leads.documenttypemaster", "pk": 5,  "fields": {"name": "自賠責保険証",       "required_flag": true,  "description": "自動車損害賠償責任保険証明書"}},
+  {"model": "leads.documenttypemaster", "pk": 6,  "fields": {"name": "リサイクル券",       "required_flag": true,  "description": "自動車リサイクル料金の預託済み確認書類"}},
+  {"model": "leads.documenttypemaster", "pk": 7,  "fields": {"name": "納税証明書",         "required_flag": false, "description": "自動車税納税証明書（必要な場合）"}},
+  {"model": "leads.documenttypemaster", "pk": 8,  "fields": {"name": "スペアキー",         "required_flag": false, "description": "スペアキーがある場合"}},
+  {"model": "leads.documenttypemaster", "pk": 9,  "fields": {"name": "取扱説明書",         "required_flag": false, "description": "車両の取扱説明書"}},
+  {"model": "leads.documenttypemaster", "pk": 10, "fields": {"name": "保証書",             "required_flag": false, "description": "ディーラー保証書等"}},
+  {"model": "leads.documenttypemaster", "pk": 11, "fields": {"name": "ローン残債完済証明", "required_flag": false, "description": "所有権解除がある場合に必要"}}
+]

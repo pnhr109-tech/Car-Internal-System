@@ -1,0 +1,9 @@
+[
+  {"model": "accounts.store", "pk": 1, "fields": {"code": "TSUKUBA",    "name": "つくば",             "is_active": true}},
+  {"model": "accounts.store", "pk": 2, "fields": {"code": "MITO",       "name": "水戸",               "is_active": true}},
+  {"model": "accounts.store", "pk": 3, "fields": {"code": "OYAMA",      "name": "小山",               "is_active": true}},
+  {"model": "accounts.store", "pk": 4, "fields": {"code": "UTSUNOMIYA", "name": "宇都宮",             "is_active": true}},
+  {"model": "accounts.store", "pk": 5, "fields": {"code": "CC",         "name": "コンタクトセンター", "is_active": true}},
+  {"model": "accounts.store", "pk": 6, "fields": {"code": "SUPPORT",    "name": "サポート",           "is_active": true}},
+  {"model": "accounts.store", "pk": 7, "fields": {"code": "HQ",         "name": "本社業務",           "is_active": true}}
+]
