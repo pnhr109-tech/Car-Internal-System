@@ -1,0 +1,172 @@
+{% extends 'base/internal_base.html' %}
+{% block title %}査定申込 手動入力{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{% url 'leads:assessment_list' %}">査定申込一覧</a></li>
+      <li class="breadcrumb-item active">手動入力</li>
+    </ol>
+  </nav>
+
+  <h4 class="mb-4"><i class="bi bi-plus-circle text-primary"></i> 査定申込 手動入力</h4>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="row g-4">
+
+      {# 左カラム #}
+      <div class="col-lg-6">
+
+        {# 申込情報 #}
+        <div class="card mb-4">
+          <div class="card-header"><h6 class="mb-0">申込情報</h6></div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">チャネル種別 <span class="text-danger">*</span></label>
+              <select name="channel_type" class="form-select" id="channelSelect" onchange="toggleReferral()">
+                {% for val, label in channel_choices %}
+                <option value="{{ val }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3" id="referralField" style="display:none">
+              <label class="form-label">紹介者名</label>
+              <input type="text" name="referral_name" class="form-control" placeholder="紹介者の氏名">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">査定予約日時</label>
+              <input type="datetime-local" name="reservation_datetime" class="form-control">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">希望売却時期</label>
+              <input type="text" name="desired_sale_timing" class="form-control" placeholder="例：3ヶ月以内">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">コメント（備考）</label>
+              <textarea name="sales_note" class="form-control" rows="3"></textarea>
+            </div>
+          </div>
+        </div>
+
+        {# 顧客情報 #}
+        <div class="card mb-4">
+          <div class="card-header"><h6 class="mb-0">顧客情報</h6></div>
+          <div class="card-body">
+            {# 顧客検索 #}
+            <div class="mb-3">
+              <label class="form-label">既存顧客検索（名前・電話番号）</label>
+              <div class="input-group">
+                <input type="text" id="customerSearch" class="form-control" placeholder="検索キーワード" value="{{ customer_search }}">
+                <button type="button" class="btn btn-outline-secondary" onclick="searchCustomer()">検索</button>
+              </div>
+            </div>
+            {% if found_customers %}
+            <div class="mb-3">
+              <label class="form-label">検索結果</label>
+              <div class="list-group">
+                {% for c in found_customers %}
+                <button type="button" class="list-group-item list-group-item-action"
+                  onclick="selectCustomer({{ c.pk }}, '{{ c.name|escapejs }}', '{{ c.phone_number|escapejs }}', '{{ c.email|escapejs }}', '{{ c.postal_code|escapejs }}', '{{ c.address|escapejs }}')">
+                  {{ c.name }}（{{ c.phone_number }}）{{ c.address }}
+                </button>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+            <input type="hidden" name="customer_id" id="customerId">
+            <div class="mb-3">
+              <label class="form-label">氏名 <span class="text-danger">*</span></label>
+              <input type="text" name="customer_name" id="customerName" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">電話番号 <span class="text-danger">*</span></label>
+              <input type="text" name="phone_number" id="phoneNumber" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">メールアドレス</label>
+              <input type="email" name="email" id="customerEmail" class="form-control">
+            </div>
+            <div class="row">
+              <div class="col-4">
+                <label class="form-label">郵便番号</label>
+                <input type="text" name="postal_code" id="postalCode" class="form-control">
+              </div>
+              <div class="col-8">
+                <label class="form-label">住所</label>
+                <input type="text" name="address" id="customerAddress" class="form-control">
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {# 右カラム #}
+      <div class="col-lg-6">
+
+        {# 車両情報 #}
+        <div class="card mb-4">
+          <div class="card-header"><h6 class="mb-0">車両情報</h6></div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-6">
+                <label class="form-label">メーカー <span class="text-danger">*</span></label>
+                <input type="text" name="maker" class="form-control" required placeholder="例：トヨタ">
+              </div>
+              <div class="col-6">
+                <label class="form-label">車種 <span class="text-danger">*</span></label>
+                <input type="text" name="car_model" class="form-control" required placeholder="例：プリウス">
+              </div>
+              <div class="col-6">
+                <label class="form-label">年式 <span class="text-danger">*</span></label>
+                <input type="text" name="year" class="form-control" required placeholder="例：2020年">
+              </div>
+              <div class="col-6">
+                <label class="form-label">走行距離 <span class="text-danger">*</span></label>
+                <input type="text" name="mileage" class="form-control" required placeholder="例：3万km">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {# 送信 #}
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save"></i> 登録する
+          </button>
+          <a href="{% url 'leads:assessment_list' %}" class="btn btn-secondary">キャンセル</a>
+        </div>
+
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleReferral() {
+  const val = document.getElementById('channelSelect').value;
+  document.getElementById('referralField').style.display = val === 'REFERRAL' ? '' : 'none';
+}
+
+function searchCustomer() {
+  const q = document.getElementById('customerSearch').value;
+  if (!q) return;
+  window.location.href = `?customer_search=${encodeURIComponent(q)}`;
+}
+
+function selectCustomer(id, name, phone, email, postal, address) {
+  document.getElementById('customerId').value = id;
+  document.getElementById('customerName').value = name;
+  document.getElementById('phoneNumber').value = phone;
+  document.getElementById('customerEmail').value = email;
+  document.getElementById('postalCode').value = postal;
+  document.getElementById('customerAddress').value = address;
+}
+</script>
+{% endblock %}

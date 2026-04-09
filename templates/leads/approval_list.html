@@ -1,0 +1,94 @@
+{% extends 'base/internal_base.html' %}
+{% block title %}承認待ち一覧{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <h4 class="mb-4"><i class="bi bi-check2-square text-primary"></i> 承認待ち一覧</h4>
+
+  {% for msg in messages %}
+  <div class="alert alert-{{ msg.tags }} alert-dismissible fade show">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <h6 class="text-muted mb-2">査定（商談）承認待ち — {{ pending_assessments.count }}件</h6>
+  <div class="card mb-4">
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr><th>顧客名</th><th>車両</th><th>査定額</th><th>担当者</th><th>申請日</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for a in pending_assessments %}
+          <tr>
+            <td><a href="{% url 'leads:case_detail' a.pk %}">{{ a.customer.name }}</a></td>
+            <td>{{ a.vehicle.maker }} {{ a.vehicle.car_model }}</td>
+            <td>{% if a.assessment_price %}{{ a.assessment_price|floatformat:0 }}円{% else %}-{% endif %}</td>
+            <td>{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}</td>
+            <td>{{ a.created_at|date:"Y-m-d" }}</td>
+            <td>
+              <button class="btn btn-sm btn-success" onclick="approveAssessment({{ a.pk }}, 'approve')">承認</button>
+              <button class="btn btn-sm btn-outline-danger ms-1" onclick="approveAssessment({{ a.pk }}, 'reject')">差し戻し</button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-3">承認待ちの査定はありません</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h6 class="text-muted mb-2">契約承認待ち — {{ pending_contracts.count }}件</h6>
+  <div class="card">
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr><th>顧客名</th><th>車両</th><th>買取価格</th><th>担当者</th><th>契約日</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for c in pending_contracts %}
+          <tr>
+            <td><a href="{% url 'leads:case_detail' c.assessment.pk %}?tab=contract">{{ c.customer.name }}</a></td>
+            <td>{{ c.vehicle.maker }} {{ c.vehicle.car_model }}</td>
+            <td>{{ c.purchase_price_incl_tax|floatformat:0 }}円</td>
+            <td>{{ c.assigned_to.get_full_name|default:c.assigned_to.username }}</td>
+            <td>{{ c.contract_date|date:"Y-m-d" }}</td>
+            <td>
+              <button class="btn btn-sm btn-success" onclick="approveContract({{ c.pk }}, 'approve')">承認</button>
+              <button class="btn btn-sm btn-outline-danger ms-1" onclick="approveContract({{ c.pk }}, 'reject')">差し戻し</button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-3">承認待ちの契約はありません</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF = '{{ csrf_token }}';
+function approveAssessment(id, action) {
+  const reason = action === 'reject' ? prompt('差し戻し理由') : '';
+  if (action === 'reject' && !reason) return;
+  fetch(`/sateiinfo/api/cases/${id}/approve/`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({action, reason}),
+  }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.message); });
+}
+function approveContract(id, action) {
+  const reason = action === 'reject' ? prompt('差し戻し理由') : '';
+  if (action === 'reject' && !reason) return;
+  fetch(`/sateiinfo/api/contracts/${id}/approve/`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({action, reason}),
+  }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.message); });
+}
+</script>
+{% endblock %}

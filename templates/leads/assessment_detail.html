@@ -1,0 +1,302 @@
+{% extends 'base/internal_base.html' %}
+{% block title %}査定申込詳細 - {{ req.application_number }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  {# パンくず #}
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{% url 'leads:assessment_list' %}">査定申込一覧</a></li>
+      <li class="breadcrumb-item active">{{ req.application_number }}</li>
+    </ol>
+  </nav>
+
+  {# フラッシュメッセージ #}
+  {% for msg in messages %}
+  <div class="alert alert-{{ msg.tags }} alert-dismissible fade show" role="alert">
+    {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-file-earmark-text text-primary"></i> 査定申込詳細</h4>
+    <div class="d-flex gap-2">
+      {% if can_promote %}
+      <button class="btn btn-success" onclick="promoteToCase()">
+        <i class="bi bi-arrow-up-circle"></i> 商談に進む
+      </button>
+      {% endif %}
+      {% if linked_assessment %}
+      <a href="{% url 'leads:case_detail' linked_assessment.pk %}" class="btn btn-primary">
+        <i class="bi bi-briefcase"></i> 案件詳細へ
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-4">
+    {# 左カラム: 申込情報 #}
+    <div class="col-lg-6">
+
+      {# 申込情報カード #}
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-info-circle"></i> 申込情報</h6>
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editRequestModal">
+            <i class="bi bi-pencil"></i> 編集
+          </button>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-5 text-muted">申込番号</dt>
+            <dd class="col-7">{{ req.application_number }}</dd>
+            <dt class="col-5 text-muted">チャネル</dt>
+            <dd class="col-7">{{ req.get_channel_type_display }}</dd>
+            <dt class="col-5 text-muted">申込日時</dt>
+            <dd class="col-7">{{ req.application_datetime|date:"Y-m-d H:i" }}</dd>
+            <dt class="col-5 text-muted">査定予約日時</dt>
+            <dd class="col-7">{{ req.reservation_datetime|date:"Y-m-d H:i"|default:"-" }}</dd>
+            <dt class="col-5 text-muted">希望売却時期</dt>
+            <dd class="col-7">{{ req.desired_sale_timing|default:"-" }}</dd>
+            {% if req.referral_name %}
+            <dt class="col-5 text-muted">紹介者</dt>
+            <dd class="col-7">{{ req.referral_name }}</dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+      {# 顧客情報カード #}
+      <div class="card mb-4">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-person"></i> 顧客情報</h6></div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-5 text-muted">氏名</dt>
+            <dd class="col-7">{{ req.customer_name }}</dd>
+            <dt class="col-5 text-muted">電話番号</dt>
+            <dd class="col-7">
+              <a href="tel:{{ req.phone_number }}">{{ req.phone_number }}</a>
+            </dd>
+            <dt class="col-5 text-muted">メール</dt>
+            <dd class="col-7">{{ req.email|default:"-" }}</dd>
+            <dt class="col-5 text-muted">住所</dt>
+            <dd class="col-7">{{ req.postal_code }} {{ req.address|default:"-" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      {# 車両情報カード #}
+      <div class="card mb-4">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-car-front"></i> 車両情報</h6></div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-5 text-muted">メーカー</dt>
+            <dd class="col-7">{{ req.maker|default:"-" }}</dd>
+            <dt class="col-5 text-muted">車種</dt>
+            <dd class="col-7">{{ req.car_model|default:"-" }}</dd>
+            <dt class="col-5 text-muted">年式</dt>
+            <dd class="col-7">{{ req.year|default:"-" }}</dd>
+            <dt class="col-5 text-muted">走行距離</dt>
+            <dd class="col-7">{{ req.mileage|default:"-" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+    </div>
+
+    {# 右カラム: 対応情報・履歴 #}
+    <div class="col-lg-6">
+
+      {# 対応ステータスカード #}
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-flag"></i> 対応状況</h6>
+          <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#statusModal">
+            <i class="bi bi-pencil"></i> ステータス更新
+          </button>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-5 text-muted">対応ステータス</dt>
+            <dd class="col-7">
+              <span class="badge bg-{% if req.follow_status == '未対応' %}secondary{% elif req.follow_status == '商談確定' %}primary{% elif req.follow_status == '商談昇格済' %}success{% elif req.follow_status == '見送り' %}danger{% elif req.follow_status == '不通' %}dark{% else %}warning text-dark{% endif %}">
+                {{ req.follow_status }}
+              </span>
+            </dd>
+            <dt class="col-5 text-muted">担当者</dt>
+            <dd class="col-7">{{ req.sales_owner_name|default:"-" }}</dd>
+            <dt class="col-5 text-muted">担当確定日時</dt>
+            <dd class="col-7">{{ req.sales_assigned_at|date:"Y-m-d H:i"|default:"-" }}</dd>
+            <dt class="col-5 text-muted">通話数</dt>
+            <dd class="col-7">{{ req.call_count }}回</dd>
+            <dt class="col-5 text-muted">最終更新</dt>
+            <dd class="col-7">{{ req.status_updated_at|date:"Y-m-d H:i"|default:"-" }} （{{ req.status_updated_by|default:"-" }}）</dd>
+          </dl>
+          {% if req.cancel_reason %}
+          <div class="mt-2 p-2 bg-light rounded">
+            <small class="text-muted">キャンセル理由：</small>{{ req.cancel_reason }}
+          </div>
+          {% endif %}
+          {% if req.sales_note %}
+          <div class="mt-2 p-2 bg-light rounded">
+            <small class="text-muted">コメント：</small><br>{{ req.sales_note|linebreaksbr }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# 取引・連絡履歴カード #}
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-chat-left-text"></i> 取引・連絡履歴</h6>
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#historyModal">
+            <i class="bi bi-plus"></i> 追記
+          </button>
+        </div>
+        <div class="card-body p-0">
+          {% if histories %}
+          <ul class="list-group list-group-flush" id="historyList">
+            {% for h in histories %}
+            <li class="list-group-item">
+              <div class="d-flex justify-content-between">
+                <small class="text-muted">{{ h.contacted_at|date:"Y-m-d H:i" }} / {{ h.get_contact_method_display }}</small>
+                <small class="text-muted">{{ h.recorded_by.get_full_name|default:h.recorded_by.username }}</small>
+              </div>
+              <div class="mt-1">{{ h.content|linebreaksbr }}</div>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-muted text-center py-3 mb-0" id="historyEmpty">履歴はありません</p>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{# ステータス更新モーダル #}
+<div class="modal fade" id="statusModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">対応ステータス更新</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">対応ステータス</label>
+          <select id="modalFollowStatus" class="form-select">
+            {% for val, label in follow_status_choices %}
+            <option value="{{ val }}" {% if val == req.follow_status %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">コメント</label>
+          <textarea id="modalSalesNote" class="form-control" rows="4">{{ req.sales_note }}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="saveStatus()">更新</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# 連絡履歴追記モーダル #}
+<div class="modal fade" id="historyModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">連絡履歴を追記</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">連絡方法</label>
+          <select id="historyMethod" class="form-select">
+            <option value="phone">電話</option>
+            <option value="email">メール</option>
+            <option value="sms">SMS</option>
+            <option value="visit">対面</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">連絡日時</label>
+          <input type="datetime-local" id="historyDate" class="form-control" value="{{ now|date:'Y-m-d' }}T{{ now|date:'H:i' }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">内容 <span class="text-danger">*</span></label>
+          <textarea id="historyContent" class="form-control" rows="4" placeholder="連絡内容を記録"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="saveHistory()">追記</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const ASSESSMENT_REQUEST_ID = {{ req.pk }};
+const CSRF = '{{ csrf_token }}';
+
+function getCsrf() { return CSRF; }
+
+function saveStatus() {
+  const status = document.getElementById('modalFollowStatus').value;
+  const note   = document.getElementById('modalSalesNote').value;
+  fetch(`/sateiinfo/api/assessments/${ASSESSMENT_REQUEST_ID}/update/`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+    body: JSON.stringify({follow_status: status, sales_note: note}),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) { location.reload(); }
+    else { alert(d.message || '更新に失敗しました'); }
+  });
+}
+
+function saveHistory() {
+  const content = document.getElementById('historyContent').value.trim();
+  if (!content) { alert('内容を入力してください'); return; }
+  fetch('/sateiinfo/api/history/add/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+    body: JSON.stringify({
+      assessment_request_id: ASSESSMENT_REQUEST_ID,
+      contact_method: document.getElementById('historyMethod').value,
+      contacted_at: document.getElementById('historyDate').value,
+      content: content,
+    }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) { location.reload(); }
+    else { alert(d.message || '追記に失敗しました'); }
+  });
+}
+
+function promoteToCase() {
+  if (!confirm('この申込を商談に昇格しますか？')) return;
+  fetch(`/sateiinfo/api/assessments/${ASSESSMENT_REQUEST_ID}/promote/`, {
+    method: 'POST',
+    headers: {'X-CSRFToken': getCsrf()},
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) { window.location.href = d.case_url; }
+    else { alert(d.message || '昇格に失敗しました'); }
+  });
+}
+</script>
+{% endblock %}

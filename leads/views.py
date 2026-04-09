@@ -1,22 +1,27 @@
-"""
-車査定申込一覧画面ビュー
-"""
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.db import transaction
-from django.db.models import F
-from django.db.models import Q, Max
+from django.db.models import F, Q, Max
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.core.cache import cache
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 from datetime import datetime
 import json
 import base64
 import logging
-from .models import CarAssessmentRequest
+
+from .models import (
+    Assessment,
+    CarAssessmentRequest,
+    ContactHistory,
+    Customer,
+    PurchaseContract,
+    Vehicle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +33,11 @@ def _current_user_display_name(user):
 
 @login_required
 def assessment_list(request):
-    """
-    車査定申込一覧画面
-    初期表示: 新しいレコード100件
-    """
+    """査定申込一覧"""
     return render(request, 'leads/assessment_list.html', {
         'current_user_display_name': _current_user_display_name(request.user),
         'follow_status_choices': [choice[0] for choice in CarAssessmentRequest.FOLLOW_STATUS_CHOICES],
+        'channel_choices': CarAssessmentRequest.CHANNEL_CHOICES,
     })
 
 
@@ -461,3 +464,415 @@ def gmail_push_notification(request):
     finally:
         if lock_acquired:
             cache.delete(lock_key)
+
+
+# ===========================================================================
+# 査定申込 詳細・新規作成
+# ===========================================================================
+
+@login_required
+def assessment_detail(request, pk):
+    """査定申込詳細・変更（S02）"""
+    req = get_object_or_404(CarAssessmentRequest, pk=pk)
+    histories = req.contact_histories.select_related('recorded_by').order_by('-contacted_at')
+    can_promote = (
+        req.follow_status == CarAssessmentRequest.STATUS_APPOINTMENT
+        and not hasattr(req, 'assessment')
+    )
+    # Assessment が存在するか safe に確認
+    try:
+        linked_assessment = req.assessment
+    except Assessment.DoesNotExist:
+        linked_assessment = None
+
+    return render(request, 'leads/assessment_detail.html', {
+        'req': req,
+        'histories': histories,
+        'can_promote': can_promote,
+        'linked_assessment': linked_assessment,
+        'follow_status_choices': CarAssessmentRequest.FOLLOW_STATUS_CHOICES,
+        'channel_choices': CarAssessmentRequest.CHANNEL_CHOICES,
+    })
+
+
+@login_required
+def assessment_create(request):
+    """査定申込手動入力（S03）"""
+    if request.method == 'POST':
+        # 顧客を取得 or 作成
+        customer_id = request.POST.get('customer_id')
+        if customer_id:
+            customer = get_object_or_404(Customer, pk=customer_id)
+        else:
+            customer = Customer.objects.create(
+                name=request.POST.get('customer_name', ''),
+                phone_number=request.POST.get('phone_number', ''),
+                email=request.POST.get('email', ''),
+                postal_code=request.POST.get('postal_code', ''),
+                address=request.POST.get('address', ''),
+                updated_by=request.user,
+            )
+
+        # 車両を作成
+        vehicle = Vehicle.objects.create(
+            maker=request.POST.get('maker', ''),
+            car_model=request.POST.get('car_model', ''),
+            year=request.POST.get('year', ''),
+            mileage=request.POST.get('mileage', ''),
+            updated_by=request.user,
+        )
+
+        # 申込番号を自動生成（MANUAL-YYYYMMDD-連番）
+        today_str = timezone.localdate(timezone.now()).strftime('%Y%m%d')
+        prefix = f'MANUAL-{today_str}-'
+        last = CarAssessmentRequest.objects.filter(
+            application_number__startswith=prefix
+        ).order_by('-application_number').first()
+        seq = int(last.application_number.split('-')[-1]) + 1 if last else 1
+        application_number = f'{prefix}{seq:04d}'
+
+        reservation_raw = request.POST.get('reservation_datetime', '')
+        reservation_dt = None
+        if reservation_raw:
+            try:
+                reservation_dt = datetime.strptime(reservation_raw, '%Y-%m-%dT%H:%M')
+                reservation_dt = timezone.make_aware(reservation_dt)
+            except ValueError:
+                pass
+
+        req = CarAssessmentRequest.objects.create(
+            application_number=application_number,
+            application_datetime=timezone.now(),
+            channel_type=request.POST.get('channel_type', CarAssessmentRequest.CHANNEL_MANUAL),
+            customer=customer,
+            vehicle=vehicle,
+            customer_name=customer.name,
+            phone_number=customer.phone_number,
+            email=customer.email,
+            postal_code=customer.postal_code,
+            address=customer.address,
+            maker=vehicle.maker,
+            car_model=vehicle.car_model,
+            year=vehicle.year,
+            mileage=vehicle.mileage,
+            assigned_to=request.user,
+            sales_owner_name=_current_user_display_name(request.user),
+            sales_assigned_at=timezone.now(),
+            referral_name=request.POST.get('referral_name', ''),
+            reservation_datetime=reservation_dt,
+            desired_sale_timing=request.POST.get('desired_sale_timing', ''),
+            sales_note=request.POST.get('sales_note', ''),
+            follow_status=CarAssessmentRequest.STATUS_UNTOUCHED,
+        )
+        messages.success(request, f'査定申込を登録しました（{application_number}）')
+        return redirect('leads:assessment_detail', pk=req.pk)
+
+    # GET: 顧客検索
+    customer_search = request.GET.get('customer_search', '').strip()
+    found_customers = []
+    if customer_search:
+        found_customers = Customer.objects.filter(
+            Q(name__icontains=customer_search) | Q(phone_number__icontains=customer_search)
+        )[:10]
+
+    return render(request, 'leads/assessment_create.html', {
+        'channel_choices': CarAssessmentRequest.CHANNEL_CHOICES,
+        'customer_search': customer_search,
+        'found_customers': found_customers,
+    })
+
+
+# ===========================================================================
+# 案件一覧・詳細（S04・S05）
+# ===========================================================================
+
+@login_required
+def case_list(request):
+    """案件一覧（S05）— 商談昇格済みの申込"""
+    qs = Assessment.objects.select_related(
+        'assessment_request', 'customer', 'vehicle', 'assigned_to', 'approved_by'
+    ).order_by('-created_at')
+
+    profile = getattr(request.user, 'profile', None)
+
+    # 権限によるフィルタリング
+    if profile and not profile.has_global_access:
+        if profile.role == profile.ROLE_GENERAL:
+            qs = qs.filter(assigned_to=request.user)
+        else:
+            store_users = profile.store.members.values_list('user_id', flat=True) if profile.store else []
+            qs = qs.filter(assigned_to__in=store_users)
+
+    # 検索
+    q = request.GET.get('q', '').strip()
+    status = request.GET.get('status', '').strip()
+    if q:
+        qs = qs.filter(Q(customer__name__icontains=q) | Q(customer__phone_number__icontains=q) | Q(vehicle__maker__icontains=q) | Q(vehicle__car_model__icontains=q))
+    if status:
+        qs = qs.filter(status=status)
+
+    paginator = Paginator(qs, 50)
+    page_obj = paginator.get_page(request.GET.get('page', 1))
+
+    return render(request, 'leads/case_list.html', {
+        'page_obj': page_obj,
+        'q': q,
+        'status': status,
+        'status_choices': Assessment.STATUS_CHOICES,
+    })
+
+
+@login_required
+def case_detail(request, pk):
+    """案件詳細（S04）— 商談・契約タブ一気通貫"""
+    assessment = get_object_or_404(
+        Assessment.objects.select_related(
+            'assessment_request', 'customer', 'vehicle', 'assigned_to', 'approved_by'
+        ),
+        pk=pk,
+    )
+    try:
+        contract = assessment.contract
+    except PurchaseContract.DoesNotExist:
+        contract = None
+
+    histories = assessment.assessment_request.contact_histories.select_related('recorded_by').order_by('-contacted_at')
+    check_items = assessment.check_items.all()
+    documents = contract.documents.select_related('document_type').all() if contract else []
+    identity_docs = contract.identity_documents.all() if contract else []
+    bank_accounts = assessment.customer.bank_accounts.all()
+    vehicle_images = assessment.vehicle.images.all()
+
+    active_tab = request.GET.get('tab', 'assessment')
+
+    profile = getattr(request.user, 'profile', None)
+    can_approve = profile.can_approve if profile else request.user.is_superuser
+
+    return render(request, 'leads/case_detail.html', {
+        'assessment': assessment,
+        'contract': contract,
+        'histories': histories,
+        'check_items': check_items,
+        'documents': documents,
+        'identity_docs': identity_docs,
+        'bank_accounts': bank_accounts,
+        'vehicle_images': vehicle_images,
+        'active_tab': active_tab,
+        'can_approve': can_approve,
+        'assessment_status_choices': Assessment.STATUS_CHOICES,
+        'contract_status_choices': PurchaseContract.STATUS_CHOICES if contract else [],
+    })
+
+
+# ===========================================================================
+# 契約一覧（S06）
+# ===========================================================================
+
+@login_required
+def contract_list(request):
+    """契約一覧（S06）"""
+    qs = PurchaseContract.objects.select_related(
+        'assessment', 'customer', 'vehicle', 'assigned_to'
+    ).order_by('-contract_date')
+
+    profile = getattr(request.user, 'profile', None)
+    if profile and not profile.has_global_access:
+        if profile.role == profile.ROLE_GENERAL:
+            qs = qs.filter(assigned_to=request.user)
+        else:
+            store_users = profile.store.members.values_list('user_id', flat=True) if profile.store else []
+            qs = qs.filter(assigned_to__in=store_users)
+
+    q = request.GET.get('q', '').strip()
+    status = request.GET.get('status', '').strip()
+    if q:
+        qs = qs.filter(Q(customer__name__icontains=q) | Q(customer__phone_number__icontains=q))
+    if status:
+        qs = qs.filter(status=status)
+
+    paginator = Paginator(qs, 50)
+    page_obj = paginator.get_page(request.GET.get('page', 1))
+
+    return render(request, 'leads/contract_list.html', {
+        'page_obj': page_obj,
+        'q': q,
+        'status': status,
+        'status_choices': PurchaseContract.STATUS_CHOICES,
+    })
+
+
+# ===========================================================================
+# 承認待ち一覧（S07）
+# ===========================================================================
+
+@login_required
+def approval_list(request):
+    """承認待ち一覧（S07）"""
+    profile = getattr(request.user, 'profile', None)
+    if not (profile and profile.can_approve) and not request.user.is_superuser:
+        messages.error(request, '承認権限がありません')
+        return redirect('leads:assessment_list')
+
+    pending_assessments = Assessment.objects.filter(
+        approved_by__isnull=True,
+        status=Assessment.STATUS_IN_PROGRESS,
+    ).select_related('customer', 'vehicle', 'assigned_to').order_by('-created_at')
+
+    pending_contracts = PurchaseContract.objects.filter(
+        approved_by__isnull=True,
+        status=PurchaseContract.STATUS_PENDING,
+    ).select_related('customer', 'vehicle', 'assigned_to').order_by('-contract_date')
+
+    return render(request, 'leads/approval_list.html', {
+        'pending_assessments': pending_assessments,
+        'pending_contracts': pending_contracts,
+    })
+
+
+# ===========================================================================
+# 新規 API
+# ===========================================================================
+
+@login_required
+@require_POST
+def promote_to_case(request, request_id):
+    """査定申込 → 案件（Assessment）昇格 API"""
+    req = get_object_or_404(CarAssessmentRequest, pk=request_id)
+
+    try:
+        _ = req.assessment
+        return JsonResponse({'success': False, 'message': 'すでに案件に昇格済みです'}, status=400)
+    except Assessment.DoesNotExist:
+        pass
+
+    if not req.customer or not req.vehicle:
+        return JsonResponse({'success': False, 'message': '顧客・車両情報を先に登録してください'}, status=400)
+
+    try:
+        with transaction.atomic():
+            assessment = Assessment.objects.create(
+                assessment_request=req,
+                customer=req.customer,
+                vehicle=req.vehicle,
+                assigned_to=req.assigned_to or request.user,
+                assessment_datetime=req.reservation_datetime,
+            )
+            req.follow_status = CarAssessmentRequest.STATUS_PROMOTED
+            req.save(update_fields=['follow_status', 'updated_at'])
+    except Exception as e:
+        logger.error(f'promote_to_case failed: {e}')
+        return JsonResponse({'success': False, 'message': '案件昇格に失敗しました'}, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'message': '案件に昇格しました',
+        'case_url': f'/sateiinfo/cases/{assessment.pk}/',
+    })
+
+
+@login_required
+@require_POST
+def approve_assessment(request, assessment_id):
+    """査定承認 API"""
+    profile = getattr(request.user, 'profile', None)
+    if not (profile and profile.can_approve) and not request.user.is_superuser:
+        return JsonResponse({'success': False, 'message': '承認権限がありません'}, status=403)
+
+    assessment = get_object_or_404(Assessment, pk=assessment_id)
+    try:
+        payload = json.loads(request.body)
+        action = payload.get('action')  # 'approve' or 'reject'
+        reason = payload.get('reason', '')
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    if action == 'approve':
+        assessment.approved_by = request.user
+        assessment.approved_at = timezone.now()
+        assessment.save(update_fields=['approved_by', 'approved_at', 'updated_at'])
+        return JsonResponse({'success': True, 'message': '承認しました'})
+    elif action == 'reject':
+        assessment.approved_by = None
+        assessment.cancel_reason = reason
+        assessment.save(update_fields=['cancel_reason', 'updated_at'])
+        return JsonResponse({'success': True, 'message': '差し戻しました'})
+
+    return JsonResponse({'success': False, 'message': 'action が不正です'}, status=400)
+
+
+@login_required
+@require_POST
+def approve_contract(request, contract_id):
+    """契約承認 API"""
+    profile = getattr(request.user, 'profile', None)
+    if not (profile and profile.can_approve) and not request.user.is_superuser:
+        return JsonResponse({'success': False, 'message': '承認権限がありません'}, status=403)
+
+    contract = get_object_or_404(PurchaseContract, pk=contract_id)
+    try:
+        payload = json.loads(request.body)
+        action = payload.get('action')
+        reason = payload.get('reason', '')
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    if action == 'approve':
+        contract.approved_by = request.user
+        contract.approved_at = timezone.now()
+        contract.status = PurchaseContract.STATUS_CONTRACTED
+        contract.save(update_fields=['approved_by', 'approved_at', 'status', 'updated_at'])
+        return JsonResponse({'success': True, 'message': '契約を承認しました'})
+    elif action == 'reject':
+        contract.cancel_reason = reason
+        contract.save(update_fields=['cancel_reason', 'updated_at'])
+        return JsonResponse({'success': True, 'message': '差し戻しました'})
+
+    return JsonResponse({'success': False, 'message': 'action が不正です'}, status=400)
+
+
+@login_required
+@require_POST
+def add_contact_history(request):
+    """連絡履歴追加 API"""
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    request_id = payload.get('assessment_request_id')
+    method = payload.get('contact_method', 'phone')
+    content = payload.get('content', '').strip()
+    contacted_at_raw = payload.get('contacted_at', '')
+
+    if not request_id or not content:
+        return JsonResponse({'success': False, 'message': '必須項目が不足しています'}, status=400)
+
+    req = get_object_or_404(CarAssessmentRequest, pk=request_id)
+
+    contacted_at = timezone.now()
+    if contacted_at_raw:
+        try:
+            contacted_at = timezone.make_aware(datetime.strptime(contacted_at_raw, '%Y-%m-%dT%H:%M'))
+        except ValueError:
+            pass
+
+    history = ContactHistory.objects.create(
+        assessment_request=req,
+        customer=req.customer,
+        recorded_by=request.user,
+        contacted_at=contacted_at,
+        contact_method=method,
+        content=content,
+    )
+
+    return JsonResponse({
+        'success': True,
+        'message': '履歴を追加しました',
+        'history': {
+            'id': history.pk,
+            'contacted_at': timezone.localtime(history.contacted_at).strftime('%Y-%m-%d %H:%M'),
+            'contact_method': history.get_contact_method_display(),
+            'content': history.content,
+            'recorded_by': _current_user_display_name(request.user),
+        }
+    })
