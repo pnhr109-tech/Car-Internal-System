@@ -19,11 +19,53 @@ from .models import (
     CarAssessmentRequest,
     ContactHistory,
     Customer,
+    NumberSequence,
     PurchaseContract,
     Vehicle,
 )
 
 logger = logging.getLogger(__name__)
+
+
+_CHANNEL_PREFIX = {
+    CarAssessmentRequest.CHANNEL_NAVIKURU:    'N',
+    CarAssessmentRequest.CHANNEL_MYCAR_SCOUT: 'M',
+    CarAssessmentRequest.CHANNEL_CARVIEW:     'C',
+    CarAssessmentRequest.CHANNEL_HP:          'H',
+    CarAssessmentRequest.CHANNEL_WALK_IN:     'W',
+    CarAssessmentRequest.CHANNEL_REFERRAL:    'R',
+    CarAssessmentRequest.CHANNEL_EMAIL:       'E',
+}
+
+
+def _next_seq(sequence_type: str, key: str) -> int:
+    """汎用連番発行（行ロックで重複防止）
+
+    使い方:
+        seq = _next_seq('application_number', 'NAVIKURU-20260410')  # → 1, 2, 3...
+        seq = _next_seq('contract_number', '20260410')              # 将来の契約番号など
+    """
+    with transaction.atomic():
+        NumberSequence.objects.get_or_create(
+            sequence_type=sequence_type,
+            key=key,
+            defaults={'last_seq': 0},
+        )
+        obj = NumberSequence.objects.select_for_update().get(
+            sequence_type=sequence_type,
+            key=key,
+        )
+        obj.last_seq += 1
+        obj.save(update_fields=['last_seq'])
+    return obj.last_seq
+
+
+def _generate_application_number(channel_type: str, today) -> str:
+    """査定申込番号を生成"""
+    ch_prefix = _CHANNEL_PREFIX.get(channel_type, 'X')
+    key = f'{channel_type}-{today.strftime("%Y%m%d")}'
+    seq = _next_seq('application_number', key)
+    return f'{ch_prefix}-{today.strftime("%Y%m%d")}-{seq:04d}'
 
 
 def _current_user_display_name(user):
@@ -515,22 +557,20 @@ def assessment_create(request):
             )
 
         # 車両を作成
+        mileage_raw = request.POST.get('mileage', '').strip()
+        mileage_val = f'{mileage_raw}万Km' if mileage_raw else ''
         vehicle = Vehicle.objects.create(
             maker=request.POST.get('maker', ''),
             car_model=request.POST.get('car_model', ''),
             year=request.POST.get('year', ''),
-            mileage=request.POST.get('mileage', ''),
+            mileage=mileage_val,
             updated_by=request.user,
         )
 
-        # 申込番号を自動生成（MANUAL-YYYYMMDD-連番）
-        today_str = timezone.localdate(timezone.now()).strftime('%Y%m%d')
-        prefix = f'MANUAL-{today_str}-'
-        last = CarAssessmentRequest.objects.filter(
-            application_number__startswith=prefix
-        ).order_by('-application_number').first()
-        seq = int(last.application_number.split('-')[-1]) + 1 if last else 1
-        application_number = f'{prefix}{seq:04d}'
+        # 申込番号を自動生成（チャネル頭文字-YYYYMMDD-連番）
+        channel_type = request.POST.get('channel_type', CarAssessmentRequest.CHANNEL_HP)
+        today = timezone.localdate(timezone.now())
+        application_number = _generate_application_number(channel_type, today)
 
         reservation_raw = request.POST.get('reservation_datetime', '')
         reservation_dt = None
@@ -576,10 +616,77 @@ def assessment_create(request):
             Q(name__icontains=customer_search) | Q(phone_number__icontains=customer_search)
         )[:10]
 
+    current_year = timezone.localdate(timezone.now()).year
+    year_choices = [f'{y}年' for y in range(current_year + 1, 1969, -1)]
+
+    # 手動入力対象チャネルのみ（外部連携チャネルは除外）
+    manual_channel_choices = [
+        (val, label) for val, label in CarAssessmentRequest.CHANNEL_CHOICES
+        if val != CarAssessmentRequest.CHANNEL_MANUAL
+    ]
+
     return render(request, 'leads/assessment_create.html', {
-        'channel_choices': CarAssessmentRequest.CHANNEL_CHOICES,
+        'channel_choices': manual_channel_choices,
         'customer_search': customer_search,
         'found_customers': found_customers,
+        'year_choices': year_choices,
+    })
+
+
+@login_required
+def assessment_edit(request, pk):
+    """査定申込編集"""
+    req = get_object_or_404(CarAssessmentRequest, pk=pk)
+
+    if request.method == 'POST':
+        mileage_raw = request.POST.get('mileage', '').strip()
+        mileage_val = f'{mileage_raw}万Km' if mileage_raw else ''
+
+        reservation_raw = request.POST.get('reservation_datetime', '')
+        reservation_dt = req.reservation_datetime
+        if reservation_raw:
+            try:
+                reservation_dt = timezone.make_aware(datetime.strptime(reservation_raw, '%Y-%m-%dT%H:%M'))
+            except ValueError:
+                pass
+        elif reservation_raw == '':
+            reservation_dt = None
+
+        req.channel_type = request.POST.get('channel_type', req.channel_type)
+        req.referral_name = request.POST.get('referral_name', '')
+        req.reservation_datetime = reservation_dt
+        req.desired_sale_timing = request.POST.get('desired_sale_timing', '')
+        req.customer_name = request.POST.get('customer_name', req.customer_name)
+        req.phone_number = request.POST.get('phone_number', req.phone_number)
+        req.email = request.POST.get('email', req.email)
+        req.postal_code = request.POST.get('postal_code', req.postal_code)
+        req.address = request.POST.get('address', req.address)
+        req.maker = request.POST.get('maker', req.maker)
+        req.car_model = request.POST.get('car_model', req.car_model)
+        req.year = request.POST.get('year', req.year)
+        req.mileage = mileage_val
+        req.sales_note = request.POST.get('sales_note', req.sales_note)
+        req.save()
+
+        messages.success(request, '査定申込を更新しました')
+        return redirect('leads:assessment_detail', pk=req.pk)
+
+    current_year = timezone.localdate(timezone.now()).year
+    year_choices = [f'{y}年' for y in range(current_year + 1, 1969, -1)]
+    mileage_num = req.mileage.replace('万Km', '').replace('万km', '').strip() if req.mileage else ''
+    reservation_str = timezone.localtime(req.reservation_datetime).strftime('%Y-%m-%dT%H:%M') if req.reservation_datetime else ''
+
+    manual_channel_choices = [
+        (val, label) for val, label in CarAssessmentRequest.CHANNEL_CHOICES
+        if val != CarAssessmentRequest.CHANNEL_MANUAL
+    ]
+
+    return render(request, 'leads/assessment_edit.html', {
+        'req': req,
+        'channel_choices': manual_channel_choices,
+        'year_choices': year_choices,
+        'mileage_num': mileage_num,
+        'reservation_str': reservation_str,
     })
 
 

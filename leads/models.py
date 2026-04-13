@@ -186,6 +186,32 @@ class VehicleImage(models.Model):
 
 
 # ---------------------------------------------------------------------------
+# 申込番号連番管理
+# ---------------------------------------------------------------------------
+
+class NumberSequence(models.Model):
+    """汎用連番管理テーブル
+
+    sequence_type : 番号の種類（例: 'application_number', 'contract_number'）
+    key           : 連番を区切る単位（例: 'NAVIKURU-20260410', '20260410'）
+    last_seq      : その sequence_type × key における最終発行連番
+    """
+
+    sequence_type = models.CharField(max_length=50, verbose_name='連番種別')
+    key           = models.CharField(max_length=100, verbose_name='キー')
+    last_seq      = models.PositiveIntegerField(default=0, verbose_name='最終連番')
+
+    class Meta:
+        db_table = 'number_sequences'
+        unique_together = [('sequence_type', 'key')]
+        verbose_name = '連番管理'
+        verbose_name_plural = '連番管理'
+
+    def __str__(self):
+        return f'{self.sequence_type} / {self.key} / {self.last_seq:04d}'
+
+
+# ---------------------------------------------------------------------------
 # 査定申込（既存 CarAssessmentRequest を拡張）
 # ---------------------------------------------------------------------------
 

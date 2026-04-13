@@ -8,6 +8,7 @@ urlpatterns = [
     path('',        views.assessment_list,   name='assessment_list'),
     path('new/',    views.assessment_create, name='assessment_create'),
     path('<int:pk>/', views.assessment_detail, name='assessment_detail'),
+    path('<int:pk>/edit/', views.assessment_edit, name='assessment_edit'),
 
     # ── 案件（商談・契約 一気通貫） ─────────────────────────────
     path('cases/',          views.case_list,   name='case_list'),

@@ -22,9 +22,14 @@
                         <i class="bi bi-car-front-fill text-primary"></i>
                         査定申込データ
                     </h4>
-                    <button class="btn btn-primary" onclick="resetAndLoad()">
-                        <i class="bi bi-arrow-clockwise"></i> 再読込
-                    </button>
+                    <div class="d-flex gap-2">
+                        <a href="/sateiinfo/new/" class="btn btn-success">
+                            <i class="bi bi-plus-circle"></i> 新規追加
+                        </a>
+                        <button class="btn btn-primary" onclick="resetAndLoad()">
+                            <i class="bi bi-arrow-clockwise"></i> 再読込
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -449,7 +454,7 @@
 
             tbody.innerHTML = data.map(item => `
                 <tr>
-                    <td class="application-number-cell"><a href="#" class="text-decoration-none fw-semibold" onclick="event.preventDefault(); openAssessmentDetailModal(${item.id})">${escapeHtml(item.application_number)}</a></td>
+                    <td class="application-number-cell"><a href="/sateiinfo/${item.id}/" class="text-decoration-none fw-semibold">${escapeHtml(item.application_number)}</a></td>
                     <td>${item.application_datetime}</td>
                     <td class="owner-name-cell">${formatOwnerName(item.sales_owner_name)}</td>
                     <td>${statusBadge(item.follow_status)}</td>

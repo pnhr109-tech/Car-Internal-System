@@ -1,5 +1,5 @@
 {% extends 'base/internal_base.html' %}
-{% block title %}査定申込 手動入力{% endblock %}
+{% block title %}査定申込編集 - {{ req.application_number }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -7,11 +7,12 @@
   <nav aria-label="breadcrumb" class="mb-3">
     <ol class="breadcrumb">
       <li class="breadcrumb-item"><a href="{% url 'leads:assessment_list' %}">査定申込一覧</a></li>
-      <li class="breadcrumb-item active">手動入力</li>
+      <li class="breadcrumb-item"><a href="{% url 'leads:assessment_detail' req.pk %}">{{ req.application_number }}</a></li>
+      <li class="breadcrumb-item active">編集</li>
     </ol>
   </nav>
 
-  <h4 class="mb-4"><i class="bi bi-plus-circle text-primary"></i> 査定申込 手動入力</h4>
+  <h4 class="mb-4"><i class="bi bi-pencil text-primary"></i> 査定申込編集</h4>
 
   <form method="post">
     {% csrf_token %}
@@ -27,27 +28,26 @@
             <div class="mb-3">
               <label class="form-label">チャネル種別 <span class="text-danger">*</span></label>
               <select name="channel_type" class="form-select" id="channelSelect" onchange="toggleReferral()">
-                <option value="" disabled selected>-- チャネルを選択してください --</option>
                 {% for val, label in channel_choices %}
-                <option value="{{ val }}">{{ label }}</option>
+                <option value="{{ val }}" {% if val == req.channel_type %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
               </select>
             </div>
-            <div class="mb-3" id="referralField" style="display:none">
+            <div class="mb-3" id="referralField" {% if req.channel_type != 'REFERRAL' %}style="display:none"{% endif %}>
               <label class="form-label">紹介者名</label>
-              <input type="text" name="referral_name" class="form-control" placeholder="紹介者の氏名">
+              <input type="text" name="referral_name" class="form-control" value="{{ req.referral_name }}">
             </div>
             <div class="mb-3">
               <label class="form-label">査定予約日時</label>
-              <input type="datetime-local" name="reservation_datetime" class="form-control">
+              <input type="datetime-local" name="reservation_datetime" class="form-control" value="{{ reservation_str }}">
             </div>
             <div class="mb-3">
               <label class="form-label">希望売却時期</label>
-              <input type="text" name="desired_sale_timing" class="form-control" placeholder="例：3ヶ月以内">
+              <input type="text" name="desired_sale_timing" class="form-control" value="{{ req.desired_sale_timing }}">
             </div>
             <div class="mb-3">
               <label class="form-label">コメント（備考）</label>
-              <textarea name="sales_note" class="form-control" rows="3"></textarea>
+              <textarea name="sales_note" class="form-control" rows="3">{{ req.sales_note }}</textarea>
             </div>
           </div>
         </div>
@@ -56,49 +56,26 @@
         <div class="card mb-4">
           <div class="card-header"><h6 class="mb-0">顧客情報</h6></div>
           <div class="card-body">
-            {# 顧客検索 #}
-            <div class="mb-3">
-              <label class="form-label">既存顧客検索（名前・電話番号）</label>
-              <div class="input-group">
-                <input type="text" id="customerSearch" class="form-control" placeholder="検索キーワード" value="{{ customer_search }}">
-                <button type="button" class="btn btn-outline-secondary" onclick="searchCustomer()">検索</button>
-              </div>
-            </div>
-            {% if found_customers %}
-            <div class="mb-3">
-              <label class="form-label">検索結果</label>
-              <div class="list-group">
-                {% for c in found_customers %}
-                <button type="button" class="list-group-item list-group-item-action"
-                  onclick="selectCustomer({{ c.pk }}, '{{ c.name|escapejs }}', '{{ c.phone_number|escapejs }}', '{{ c.email|escapejs }}', '{{ c.postal_code|escapejs }}', '{{ c.address|escapejs }}')">
-                  {{ c.name }}（{{ c.phone_number }}）{{ c.address }}
-                </button>
-                {% endfor %}
-              </div>
-            </div>
-            {% endif %}
-
-            <input type="hidden" name="customer_id" id="customerId">
             <div class="mb-3">
               <label class="form-label">氏名 <span class="text-danger">*</span></label>
-              <input type="text" name="customer_name" id="customerName" class="form-control" required>
+              <input type="text" name="customer_name" class="form-control" required value="{{ req.customer_name }}">
             </div>
             <div class="mb-3">
               <label class="form-label">電話番号 <span class="text-danger">*</span></label>
-              <input type="text" name="phone_number" id="phoneNumber" class="form-control" required>
+              <input type="text" name="phone_number" class="form-control" required value="{{ req.phone_number }}">
             </div>
             <div class="mb-3">
               <label class="form-label">メールアドレス</label>
-              <input type="email" name="email" id="customerEmail" class="form-control">
+              <input type="email" name="email" class="form-control" value="{{ req.email }}">
             </div>
             <div class="row">
               <div class="col-4">
                 <label class="form-label">郵便番号</label>
-                <input type="text" name="postal_code" id="postalCode" class="form-control">
+                <input type="text" name="postal_code" class="form-control" value="{{ req.postal_code }}">
               </div>
               <div class="col-8">
                 <label class="form-label">住所</label>
-                <input type="text" name="address" id="customerAddress" class="form-control">
+                <input type="text" name="address" class="form-control" value="{{ req.address }}">
               </div>
             </div>
           </div>
@@ -116,25 +93,25 @@
             <div class="row g-3">
               <div class="col-6">
                 <label class="form-label">メーカー <span class="text-danger">*</span></label>
-                <input type="text" name="maker" class="form-control" required placeholder="例：トヨタ">
+                <input type="text" name="maker" class="form-control" required value="{{ req.maker }}">
               </div>
               <div class="col-6">
                 <label class="form-label">車種 <span class="text-danger">*</span></label>
-                <input type="text" name="car_model" class="form-control" required placeholder="例：プリウス">
+                <input type="text" name="car_model" class="form-control" required value="{{ req.car_model }}">
               </div>
               <div class="col-6">
                 <label class="form-label">年式 <span class="text-danger">*</span></label>
                 <select name="year" class="form-select" required>
                   <option value="">選択してください</option>
                   {% for y in year_choices %}
-                  <option value="{{ y }}">{{ y }}</option>
+                  <option value="{{ y }}" {% if y == req.year %}selected{% endif %}>{{ y }}</option>
                   {% endfor %}
                 </select>
               </div>
               <div class="col-6">
                 <label class="form-label">走行距離 <span class="text-danger">*</span></label>
                 <div class="input-group">
-                  <input type="number" name="mileage" class="form-control" required min="0" step="0.1" placeholder="例：3">
+                  <input type="number" name="mileage" class="form-control" required min="0" step="0.1" value="{{ mileage_num }}">
                   <span class="input-group-text">万Km</span>
                 </div>
               </div>
@@ -145,9 +122,9 @@
         {# 送信 #}
         <div class="d-flex gap-2">
           <button type="submit" class="btn btn-primary">
-            <i class="bi bi-save"></i> 登録する
+            <i class="bi bi-save"></i> 更新する
           </button>
-          <a href="{% url 'leads:assessment_list' %}" class="btn btn-secondary">キャンセル</a>
+          <a href="{% url 'leads:assessment_detail' req.pk %}" class="btn btn-secondary">キャンセル</a>
         </div>
 
       </div>
@@ -161,21 +138,6 @@
 function toggleReferral() {
   const val = document.getElementById('channelSelect').value;
   document.getElementById('referralField').style.display = val === 'REFERRAL' ? '' : 'none';
-}
-
-function searchCustomer() {
-  const q = document.getElementById('customerSearch').value;
-  if (!q) return;
-  window.location.href = `?customer_search=${encodeURIComponent(q)}`;
-}
-
-function selectCustomer(id, name, phone, email, postal, address) {
-  document.getElementById('customerId').value = id;
-  document.getElementById('customerName').value = name;
-  document.getElementById('phoneNumber').value = phone;
-  document.getElementById('customerEmail').value = email;
-  document.getElementById('postalCode').value = postal;
-  document.getElementById('customerAddress').value = address;
 }
 </script>
 {% endblock %}
