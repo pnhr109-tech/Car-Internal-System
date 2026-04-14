@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse
 from django.db import transaction
-from django.db.models import F, Q, Max
+from django.db.models import F, Q, Max, Subquery, OuterRef, CharField
 from django.utils import timezone
 from django.core.paginator import Paginator
 from django.core.cache import cache
@@ -110,8 +110,15 @@ def get_assessments(request):
     # 検索条件の有無を判定
     has_search_conditions = bool(application_number or date_from or date_to or address)
     
+    # 案件ステータスをサブクエリで取得
+    case_status_subq = Assessment.objects.filter(
+        assessment_request_id=OuterRef('pk')
+    ).values('status')[:1]
+
     # ベースクエリ（新しい順）
-    queryset = CarAssessmentRequest.objects.all().order_by('-application_datetime')
+    queryset = CarAssessmentRequest.objects.annotate(
+        case_status=Subquery(case_status_subq, output_field=CharField())
+    ).order_by('-application_datetime')
     
     # 検索条件未設定の場合は100件に制限（DB負荷軽減）
     if not has_search_conditions:
@@ -160,6 +167,7 @@ def get_assessments(request):
         'phone_number',
         'call_count',
         'postal_code',
+        'case_status',
         'address',
         'email',
         'sales_owner_name',
@@ -199,6 +207,7 @@ def get_assessments(request):
             'status_updated_at': timezone.localtime(status_updated_at).strftime('%Y-%m-%d %H:%M') if status_updated_at else '',
             'status_updated_by': row['status_updated_by'],
             'created_at': timezone.localtime(created_at).strftime('%Y-%m-%d %H:%M:%S') if created_at else '',
+            'case_status': row.get('case_status') or '',
         })
     
     return JsonResponse({
@@ -877,6 +886,58 @@ def promote_to_case(request, request_id):
         'message': '案件に昇格しました',
         'case_url': f'/sateiinfo/cases/{assessment.pk}/',
     })
+
+
+@login_required
+@require_POST
+def update_assessment_info(request, assessment_id):
+    """案件（査定）情報更新 API"""
+    assessment = get_object_or_404(Assessment, pk=assessment_id)
+
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    allowed_statuses = {s for s, _ in Assessment.STATUS_CHOICES}
+    status = payload.get('status', '').strip()
+    if status and status not in allowed_statuses:
+        return JsonResponse({'success': False, 'message': 'ステータスが不正です'}, status=400)
+
+    update_fields = ['updated_at']
+
+    if status:
+        assessment.status = status
+        update_fields.append('status')
+
+    assessment_datetime_raw = payload.get('assessment_datetime', '')
+    if assessment_datetime_raw:
+        try:
+            assessment.assessment_datetime = timezone.make_aware(
+                datetime.strptime(assessment_datetime_raw, '%Y-%m-%dT%H:%M')
+            )
+            update_fields.append('assessment_datetime')
+        except ValueError:
+            pass
+
+    for field in ('assessment_price', 'market_price'):
+        val = payload.get(field)
+        if val is not None and val != '':
+            setattr(assessment, field, val)
+            update_fields.append(field)
+
+    overall_rating = payload.get('overall_rating')
+    if overall_rating is not None and overall_rating != '':
+        assessment.overall_rating = int(overall_rating)
+        update_fields.append('overall_rating')
+
+    remarks = payload.get('remarks')
+    if remarks is not None:
+        assessment.remarks = remarks
+        update_fields.append('remarks')
+
+    assessment.save(update_fields=list(set(update_fields)))
+    return JsonResponse({'success': True, 'message': '案件情報を更新しました'})
 
 
 @login_required

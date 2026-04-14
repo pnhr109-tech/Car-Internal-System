@@ -414,16 +414,38 @@
                 return;
             }
 
-            const statusBadge = (status) => {
-                const clsMap = {
-                    '未対応': 'secondary',
-                    '不通': 'dark',
-                    '再コール予定': 'warning text-dark',
-                    '商談確定': 'primary',
-                    '成約': 'success',
-                    '見送り': 'danger',
-                };
-                return `<span class="badge bg-${clsMap[status] || 'secondary'}">${escapeHtml(status || '未対応')}</span>`;
+            const followStatusClsMap = {
+                '未対応': 'secondary',
+                '不通': 'dark',
+                '再コール予定': 'warning text-dark',
+                '商談確定': 'primary',
+                '商談昇格済': 'info text-dark',
+                '成約': 'success',
+                '見送り': 'danger',
+            };
+            const caseStatusClsMap = {
+                'in_progress': 'primary',
+                'contracted':  'success',
+                'lost':        'danger',
+                'pre_cancel':  'danger',
+                'managed':     'secondary',
+            };
+            const caseStatusLabelMap = {
+                'in_progress': '査定中',
+                'contracted':  '成約',
+                'lost':        '没',
+                'pre_cancel':  '査定前キャンセル',
+                'managed':     '管理',
+            };
+            const statusBadge = (item) => {
+                const follow = item.follow_status || '未対応';
+                if (follow === '商談昇格済' && item.case_status) {
+                    const cls = caseStatusClsMap[item.case_status] || 'secondary';
+                    const label = caseStatusLabelMap[item.case_status] || item.case_status;
+                    return `<span class="badge bg-${cls}">${escapeHtml(label)}</span>`;
+                }
+                const cls = followStatusClsMap[follow] || 'secondary';
+                return `<span class="badge bg-${cls}">${escapeHtml(follow)}</span>`;
             };
 
             const renderAction = (item) => {
@@ -457,7 +479,7 @@
                     <td class="application-number-cell"><a href="/sateiinfo/${item.id}/" class="text-decoration-none fw-semibold">${escapeHtml(item.application_number)}</a></td>
                     <td>${item.application_datetime}</td>
                     <td class="owner-name-cell">${formatOwnerName(item.sales_owner_name)}</td>
-                    <td>${statusBadge(item.follow_status)}</td>
+                    <td>${statusBadge(item)}</td>
                     <td>${item.customer_name}</td>
                     <td>${renderPhoneLink(item.id, item.phone_number)}</td>
                     <td id="call-count-${item.id}" class="call-count-cell">${item.call_count || 0}</td>

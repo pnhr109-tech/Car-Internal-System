@@ -26,7 +26,7 @@
           <span class="text-muted">{{ assessment.vehicle.maker }} {{ assessment.vehicle.car_model }}（{{ assessment.vehicle.year }} / {{ assessment.vehicle.mileage }}）</span>
         </div>
         <div class="col-md-4 text-md-end mt-2 mt-md-0">
-          <span class="badge bg-{% if assessment.status == 'contracted' %}success{% elif assessment.status == 'lost' %}danger{% else %}secondary{% endif %} fs-6">
+          <span class="badge bg-{% if assessment.status == 'contracted' %}success{% elif assessment.status == 'lost' or assessment.status == 'pre_cancel' %}danger{% elif assessment.status == 'managed' %}secondary{% else %}primary{% endif %} fs-6">
             {{ assessment.get_status_display }}
           </span>
           <div class="text-muted small mt-1">担当：{{ assessment.assigned_to.get_full_name|default:assessment.assigned_to.username }}</div>
@@ -70,9 +70,20 @@
   <div class="row g-4">
     <div class="col-lg-6">
       <div class="card">
-        <div class="card-header"><h6 class="mb-0">査定内容</h6></div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0">査定内容</h6>
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editAssessmentModal">
+            <i class="bi bi-pencil"></i> 編集
+          </button>
+        </div>
         <div class="card-body">
           <dl class="row mb-0">
+            <dt class="col-5 text-muted">ステータス</dt>
+            <dd class="col-7">
+              <span class="badge bg-{% if assessment.status == 'contracted' %}success{% elif assessment.status == 'lost' or assessment.status == 'pre_cancel' %}danger{% elif assessment.status == 'managed' %}secondary{% else %}primary{% endif %}">
+                {{ assessment.get_status_display }}
+              </span>
+            </dd>
             <dt class="col-5 text-muted">査定日時</dt>
             <dd class="col-7">{{ assessment.assessment_datetime|date:"Y-m-d H:i"|default:"-" }}</dd>
             <dt class="col-5 text-muted">査定額</dt>
@@ -81,8 +92,6 @@
             <dd class="col-7">{% if assessment.market_price %}{{ assessment.market_price|floatformat:0 }}円{% else %}-{% endif %}</dd>
             <dt class="col-5 text-muted">総合評価</dt>
             <dd class="col-7">{% if assessment.overall_rating %}{{ assessment.overall_rating }} / 5{% else %}-{% endif %}</dd>
-            <dt class="col-5 text-muted">ステータス</dt>
-            <dd class="col-7">{{ assessment.get_status_display }}</dd>
             <dt class="col-5 text-muted">承認</dt>
             <dd class="col-7">
               {% if assessment.approved_by %}
@@ -313,6 +322,60 @@
 
 </div>
 
+{# 査定情報編集モーダル #}
+<div class="modal fade" id="editAssessmentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">査定情報を編集</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">ステータス</label>
+          <select id="editStatus" class="form-select">
+            {% for val, label in assessment_status_choices %}
+            <option value="{{ val }}" {% if val == assessment.status %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">査定日時</label>
+          <input type="datetime-local" id="editAssessmentDatetime" class="form-control"
+            value="{{ assessment.assessment_datetime|date:'Y-m-d' }}{% if assessment.assessment_datetime %}T{{ assessment.assessment_datetime|date:'H:i' }}{% endif %}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">査定額（円）</label>
+          <input type="number" id="editAssessmentPrice" class="form-control" min="0"
+            value="{{ assessment.assessment_price|default:'' }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">市場相場価格（円）</label>
+          <input type="number" id="editMarketPrice" class="form-control" min="0"
+            value="{{ assessment.market_price|default:'' }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">総合評価</label>
+          <select id="editOverallRating" class="form-select">
+            <option value="">-</option>
+            {% for i in "12345" %}
+            <option value="{{ i }}" {% if assessment.overall_rating|stringformat:"s" == i %}selected{% endif %}>{{ i }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">備考</label>
+          <textarea id="editRemarks" class="form-control" rows="3">{{ assessment.remarks }}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="saveAssessmentInfo()">更新する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {# 連絡履歴モーダル #}
 <div class="modal fade" id="historyModal" tabindex="-1">
   <div class="modal-dialog">
@@ -381,6 +444,26 @@ function saveHistory() {
   .then(d => {
     if (d.success) location.reload();
     else alert(d.message || '追記に失敗しました');
+  });
+}
+
+function saveAssessmentInfo() {
+  fetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/update/`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({
+      status:              document.getElementById('editStatus').value,
+      assessment_datetime: document.getElementById('editAssessmentDatetime').value,
+      assessment_price:    document.getElementById('editAssessmentPrice').value,
+      market_price:        document.getElementById('editMarketPrice').value,
+      overall_rating:      document.getElementById('editOverallRating').value,
+      remarks:             document.getElementById('editRemarks').value,
+    }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) location.reload();
+    else alert(d.message || '更新に失敗しました');
   });
 }
 

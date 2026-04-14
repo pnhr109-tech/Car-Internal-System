@@ -31,6 +31,7 @@ urlpatterns = [
 
     # ── 新規 API ─────────────────────────────────────────────
     path('api/assessments/<int:request_id>/promote/',           views.promote_to_case,                  name='promote_to_case'),
+    path('api/cases/<int:assessment_id>/update/',              views.update_assessment_info,            name='update_assessment_info'),
     path('api/cases/<int:assessment_id>/approve/',              views.approve_assessment,               name='approve_assessment'),
     path('api/contracts/<int:contract_id>/approve/',            views.approve_contract,                 name='approve_contract'),
     path('api/history/add/',                                    views.add_contact_history,              name='add_contact_history'),

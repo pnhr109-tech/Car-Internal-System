@@ -329,12 +329,14 @@ class Assessment(models.Model):
     STATUS_IN_PROGRESS = 'in_progress'
     STATUS_CONTRACTED  = 'contracted'
     STATUS_LOST        = 'lost'
+    STATUS_PRE_CANCEL  = 'pre_cancel'
     STATUS_MANAGED     = 'managed'
 
     STATUS_CHOICES = [
         (STATUS_IN_PROGRESS, '査定中'),
         (STATUS_CONTRACTED,  '成約'),
-        (STATUS_LOST,        '不成約'),
+        (STATUS_LOST,        '没'),
+        (STATUS_PRE_CANCEL,  '査定前キャンセル'),
         (STATUS_MANAGED,     '管理'),
     ]
 
