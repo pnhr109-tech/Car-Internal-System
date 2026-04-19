@@ -244,10 +244,10 @@ EMAIL          = メール          （申込番号プレフィックス: E）
 | customer_id | BIGINT FK→customers | NO | |
 | vehicle_id | BIGINT FK→vehicles | NO | |
 | assigned_to_id | BIGINT FK→User | NO | 担当者 |
-| assessment_datetime | DATETIME | NO | 査定日時 |
-| assessment_price | DECIMAL(12,0) | YES | 査定額 |
-| market_price | DECIMAL(12,0) | YES | 市場相場価格 |
-| overall_rating | SMALLINT | YES | 総合評価（1〜5） |
+| assessment_datetime | DATETIME | YES | 査定日時（商談昇格後に入力） |
+| assessment_price | DECIMAL(12,0) | YES | 査定額（単位: 万円） |
+| market_price | DECIMAL(12,0) | YES | 市場相場価格（単位: 万円） |
+| overall_rating | DECIMAL(3,1) | YES | 総合評価（1.0〜5.0、0.5刻み） |
 | status | VARCHAR(20) | NO | 査定中/成約/没/査定前キャンセル/管理（default:査定中） |
 | management_status | VARCHAR(20) | YES | 管理時の方針（契約/没/再アプローチ） |
 | cancel_reason | VARCHAR(255) | YES | キャンセル理由 |
@@ -295,6 +295,8 @@ EMAIL          = メール          （申込番号プレフィックス: E）
 | cancelled_at | DATETIME | YES | キャンセル日時 |
 | amount_correction_flag | BOOLEAN | NO | 金額訂正フラグ（default:False） |
 | corrected_price | DECIMAL(12,0) | YES | 訂正後買取価格 |
+| correction_approved_by_id | BIGINT FK→User | YES | 金額訂正承認者（社長のみ） |
+| correction_approved_at | DATETIME | YES | 金額訂正承認日時 |
 | repair_flag | BOOLEAN | NO | 加修フラグ（default:False） |
 | repair_notes | TEXT | YES | 加修内容 |
 | ownership_release_flag | BOOLEAN | NO | 所有権解除フラグ（default:False） |

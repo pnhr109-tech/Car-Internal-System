@@ -1,0 +1,517 @@
+{% load static humanize %}<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>買取契約書 - {{ customer.name }}</title>
+  <style>
+    @page { size: A4 portrait; margin: 10mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'MS PGothic', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+      font-size: 8pt;
+      color: #000;
+      background: #fff;
+    }
+    .page { width: 100%; }
+    .page-break { page-break-before: always; }
+
+    /* 印刷ツールバー（画面表示のみ） */
+    .print-toolbar {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: #1e3a5f; color: #fff;
+      padding: 8px 16px;
+      display: flex; align-items: center; gap: 12px;
+      z-index: 9999;
+    }
+    .print-toolbar button {
+      background: #28a745; color: #fff;
+      border: none; padding: 6px 20px;
+      border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;
+    }
+    .print-toolbar a { color: #adf; text-decoration: none; font-size: 13px; }
+    @media print  { .print-toolbar { display: none; } body { padding-top: 0; } }
+    @media screen {
+      body { padding-top: 50px; }
+      .page { max-width: 210mm; margin: 10px auto; padding: 10mm; border: 1px solid #ccc; }
+    }
+
+    /* テーブル共通 */
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #333; padding: 2px 4px; vertical-align: middle; font-size: 8pt; }
+
+    /* 色 */
+    .bg-yellow { background-color: #FFE000; }   /* 黄色 */
+    .bg-pink   { background-color: #FFCCCC; }   /* ピンク */
+
+    /* 赤文字（金額） */
+    .red { color: #CC0000; font-weight: bold; }
+
+    /* 外枠なし */
+    .no-border { border: none !important; }
+
+    /* ある・なし 表示ヘルパー */
+    .marked   { font-weight: bold; text-decoration: underline; }
+    .unmarked { color: #555; }
+
+    /* 会社スタンプ風 */
+    .company-stamp {
+      border: 2px solid #CC0000;
+      color: #CC0000;
+      font-weight: bold;
+      font-size: 6pt;
+      text-align: center;
+      line-height: 1.3;
+      padding: 2px 3px;
+      display: inline-block;
+    }
+
+    /* 条項ページ */
+    .terms-title { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 6mm; }
+    .terms-body  { border: 1px solid #333; padding: 5mm; }
+    .terms-art   { margin-bottom: 3.5mm; }
+    .terms-art-h { font-weight: bold; font-size: 8.5pt; }
+    .terms-art-b { font-size: 8pt; line-height: 1.6; margin-left: 1mm; }
+  </style>
+</head>
+<body>
+
+<div class="print-toolbar">
+  <span>買取契約書プレビュー — {{ customer.name }} 様</span>
+  <button onclick="window.print()">印刷・PDF出力</button>
+  <a href="{% url 'leads:case_detail' assessment.pk %}?tab=contract">← 案件詳細に戻る</a>
+</div>
+
+{# ═══════════════════ PAGE 1 ═══════════════════ #}
+<div class="page">
+
+  {# ── 上部2カラム ── #}
+  <table style="border:none; margin-bottom:2mm">
+    <colgroup><col style="width:52%"><col style="width:48%"></colgroup>
+    <tr>
+
+      {# 左：タイトル＋売主＋振込金額＋注意事項 #}
+      <td class="no-border" style="vertical-align:top; padding-right:4mm">
+
+        {# タイトル行 #}
+        <div style="margin-bottom:2mm">
+          <span style="font-size:11pt">{{ contract.contract_date.year }}年&nbsp;&nbsp;{{ contract.contract_date.month }}月&nbsp;&nbsp;{{ contract.contract_date.day }}日</span>
+          &emsp;
+          <span style="font-size:17pt; font-weight:bold; text-decoration:underline">買取契約書</span>
+        </div>
+
+        {# 売主（甲） / 買主（乙）行 #}
+        <table style="border:none; margin-bottom:1mm">
+          <colgroup><col style="width:50%"><col style="width:50%"></colgroup>
+          <tr>
+            <td class="no-border" style="font-size:8pt; font-weight:bold">売主（甲）</td>
+            <td class="no-border" style="font-size:8pt; font-weight:bold">買主（乙）</td>
+          </tr>
+        </table>
+
+        {# 売主名 #}
+        <div style="border-bottom:1px solid #333; min-height:11mm; display:flex; align-items:flex-end; padding-bottom:1mm; margin-bottom:2mm">
+          <span style="font-size:13pt; font-weight:bold">{{ customer.name }}&emsp;様</span>
+        </div>
+
+        {# ④振込金額 #}
+        <table style="margin-bottom:2mm">
+          <tr>
+            <td class="bg-yellow" style="width:30%; text-align:center; font-weight:bold; line-height:1.5">④振込金額<br>（税込）</td>
+            <td style="font-size:12pt; font-weight:bold; text-align:right; padding-right:6px">{{ total_transfer|floatformat:0|intcomma }}&nbsp;&nbsp;円</td>
+          </tr>
+        </table>
+
+        {# 注意事項（ヘッダ黄色・内容ピンク） #}
+        <table>
+          <tr>
+            <td class="bg-yellow" style="text-align:center; font-weight:bold">注意事項</td>
+          </tr>
+          <tr>
+            <td class="bg-pink">【① <span class="red">{% if contract.recycle_amount %}{{ contract.recycle_amount|floatformat:0|intcomma }}{% endif %}</span>&nbsp;&nbsp;円】&nbsp;※リサイクル券</td>
+          </tr>
+          <tr>
+            <td class="bg-pink">【② <span class="red">{{ contract.purchase_price_excl_tax|floatformat:0|intcomma }}</span>&nbsp;&nbsp;円】&nbsp;※車両買取金額（税抜）</td>
+          </tr>
+          <tr>
+            <td class="bg-pink">【③ <span class="red">{{ contract.tax_amount|floatformat:0|intcomma }}</span>&nbsp;&nbsp;円】&nbsp;※消費税</td>
+          </tr>
+          <tr>
+            <td class="bg-pink">【④ <span class="red">{{ total_transfer|floatformat:0|intcomma }}</span>&nbsp;&nbsp;円】&nbsp;※①＋②＋③（振込金額）</td>
+          </tr>
+          <tr>
+            <td style="font-size:7pt">※自賠責未経過、自動車税未経過相当額も含まれるものとする</td>
+          </tr>
+        </table>
+
+      </td>
+
+      {# 右：買主（乙）会社情報＋担当者 #}
+      <td class="no-border" style="vertical-align:top">
+
+        {# 会社ロゴ・スタンプ #}
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1mm">
+          <img src="{% static 'images/brand/gigicompany_logo.png' %}" style="height:18mm; max-width:55mm; object-fit:contain; object-position:left top">
+          <div class="company-stamp">株式会社<br>gigico<br>mpany</div>
+        </div>
+
+        <div style="font-size:7pt; margin-bottom:0.3mm">適格請求書発行事業者登録T-2050001049807</div>
+        <div style="font-size:9pt; font-weight:bold; margin-bottom:0.3mm">株式会社gigicompany</div>
+        <div style="font-size:7pt">住所：茨城県つくば市竹園2-16-17</div>
+        <div style="font-size:7pt">tel：0298-93-3318&nbsp;&nbsp;fax：0298-60-1119</div>
+        <div style="font-size:7pt; margin-bottom:2mm">mail：tsukuba@gigicompany.jp</div>
+
+        {# 担当者・責任者テーブル #}
+        <table style="text-align:center">
+          <colgroup><col style="width:33%"><col style="width:33%"><col style="width:34%"></colgroup>
+          <tr>
+            <td class="bg-yellow" style="font-weight:bold">担当者</td>
+            <td class="bg-yellow" style="font-weight:bold">責任者</td>
+            <td class="bg-yellow" style="font-weight:bold">責任者</td>
+          </tr>
+          <tr style="height:12mm; font-size:12pt; font-weight:bold">
+            <td>{{ assessment.assigned_to.get_full_name|default:assessment.assigned_to.username }}</td>
+            <td>{% if contract.manager1 %}{{ contract.manager1.get_full_name|default:contract.manager1.username }}{% endif %}</td>
+            <td>{% if contract.manager2 %}{{ contract.manager2.get_full_name|default:contract.manager2.username }}{% endif %}</td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
+
+  {# ── 車両情報（ラベル行黄色＋値行） ── #}
+  <table style="margin-bottom:2mm">
+    <colgroup>
+      <col style="width:25%"><col style="width:25%">
+      <col style="width:25%"><col style="width:25%">
+    </colgroup>
+    <tr>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">車名</td>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">年式</td>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">車検日</td>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">距離</td>
+    </tr>
+    <tr style="height:9mm">
+      <td>{{ vehicle.maker }} {{ vehicle.car_model }}</td>
+      <td>{{ vehicle.year }}</td>
+      <td>{{ vehicle.inspection_expiry|date:"Y/m/d"|default:"" }}</td>
+      <td>{{ vehicle.mileage }}</td>
+    </tr>
+    <tr>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">グレード</td>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">カラー</td>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">車体番号</td>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">駆動</td>
+    </tr>
+    <tr style="height:9mm">
+      <td>{{ vehicle.grade }}</td>
+      <td>{{ vehicle.color }}</td>
+      <td>{{ vehicle.chassis_number }}</td>
+      <td>{{ vehicle.drive_type }}</td>
+    </tr>
+    <tr>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">登録番号</td>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">人数</td>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">排気</td>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">ボディタイプ</td>
+    </tr>
+    <tr style="height:9mm">
+      <td>{{ vehicle.registration_number }}</td>
+      <td>{{ vehicle.passenger_count }}</td>
+      <td>{{ vehicle.displacement }}</td>
+      <td>{{ vehicle.body_type }}</td>
+    </tr>
+  </table>
+
+  {# ── 車両状況・事業者登録申告 ── #}
+  {# ある/なし 列幅を全行で統一するため colgroup で固定 #}
+  <table style="margin-bottom:2mm">
+    <colgroup>
+      <col style="width:26%">
+      <col style="width:7%">   {# ある #}
+      <col style="width:7%">   {# なし #}
+      <col style="width:26%">
+      <col style="width:7%">   {# ある #}
+      <col style="width:27%">  {# なし / 値 #}
+    </colgroup>
+    <tr>
+      <td colspan="6" class="bg-yellow" style="text-align:center; font-weight:bold">車両状況・事業者登録申告</td>
+    </tr>
+
+    {# 修復歴（vehicle.repair_history_flag） #}
+    <tr>
+      <td>事故による修復歴</td>
+      <td style="text-align:center">
+        {% if vehicle.repair_history_flag is not None and vehicle.repair_history_flag %}<span class="marked">ある</span>{% else %}<span class="unmarked">ある</span>{% endif %}
+      </td>
+      <td style="text-align:center">
+        {% if vehicle.repair_history_flag is not None and not vehicle.repair_history_flag %}<span class="marked">なし</span>{% else %}<span class="unmarked">なし</span>{% endif %}
+      </td>
+      <td>メーター戻し・改ざん等</td>
+      <td style="text-align:center">
+        {% if contract.meter_tampering %}<span class="marked">ある</span>{% else %}<span class="unmarked">ある</span>{% endif %}
+      </td>
+      <td style="text-align:center">
+        {% if contract.meter_tampering is not None and not contract.meter_tampering %}<span class="marked">なし</span>{% else %}<span class="unmarked">なし</span>{% endif %}
+      </td>
+    </tr>
+
+    <tr>
+      <td>冠水車・雹害</td>
+      <td style="text-align:center">
+        {% if contract.flood_hail_damage %}<span class="marked">ある</span>{% else %}<span class="unmarked">ある</span>{% endif %}
+      </td>
+      <td style="text-align:center">
+        {% if contract.flood_hail_damage is not None and not contract.flood_hail_damage %}<span class="marked">なし</span>{% else %}<span class="unmarked">なし</span>{% endif %}
+      </td>
+      <td>故障箇所</td>
+      <td style="text-align:center">
+        {% if contract.malfunction %}<span class="marked">ある</span>{% else %}<span class="unmarked">ある</span>{% endif %}
+      </td>
+      <td style="text-align:center">
+        {% if contract.malfunction is not None and not contract.malfunction %}<span class="marked">なし</span>{% else %}<span class="unmarked">なし</span>{% endif %}
+      </td>
+    </tr>
+
+    <tr>
+      <td>駐車違反放置反則金未納</td>
+      <td style="text-align:center">
+        {% if contract.parking_violation %}<span class="marked">ある</span>{% else %}<span class="unmarked">ある</span>{% endif %}
+      </td>
+      <td style="text-align:center">
+        {% if contract.parking_violation is not None and not contract.parking_violation %}<span class="marked">なし</span>{% else %}<span class="unmarked">なし</span>{% endif %}
+      </td>
+      <td>自動車税未納</td>
+      <td style="text-align:center">
+        {% if contract.automobile_tax_unpaid %}<span class="marked">ある</span>{% else %}<span class="unmarked">ある</span>{% endif %}
+      </td>
+      <td style="text-align:center">
+        {% if contract.automobile_tax_unpaid is not None and not contract.automobile_tax_unpaid %}<span class="marked">なし</span>{% else %}<span class="unmarked">なし</span>{% endif %}
+      </td>
+    </tr>
+
+    <tr>
+      <td>適格請求書発行事業者登録</td>
+      <td style="text-align:center">
+        {% if contract.qualified_invoice_registered %}<span class="marked">ある</span>{% else %}<span class="unmarked">ある</span>{% endif %}
+      </td>
+      <td style="text-align:center">
+        {% if contract.qualified_invoice_registered is not None and not contract.qualified_invoice_registered %}<span class="marked">なし</span>{% else %}<span class="unmarked">なし</span>{% endif %}
+      </td>
+      <td>登録番号※ある場合</td>
+      <td colspan="2">T-{{ contract.invoice_registration_number }}</td>
+    </tr>
+
+    {# 申告文＋売主署名欄 #}
+    <tr>
+      <td colspan="4" style="font-size:7.5pt; line-height:1.5; vertical-align:top; padding:3px">
+        この車両状況及び申告について上記の事を確認し、この申告に相違があった場合は<br>
+        契約解除及び代金返済、損害賠償などの請求を受けても異議はありません
+      </td>
+      <td colspan="2" style="text-align:center; font-weight:bold; vertical-align:middle; height:14mm">売主署名</td>
+    </tr>
+  </table>
+
+  {# ── 契約文 ── #}
+  <div style="font-size:8pt; margin-bottom:0.5mm; padding-left:2mm">
+    甲は乙に対して、下記の規定で上記車両を売り渡す事を約し、乙はこれを了承し売買契約を締結した
+  </div>
+  <div style="font-size:8pt; margin-bottom:1.5mm; padding-left:10mm">
+    但し、②車両買取金額は&nbsp;&nbsp;<strong>{{ contract.purchase_price_excl_tax|floatformat:0|intcomma }}</strong>&nbsp;&nbsp;円とする
+  </div>
+
+  <table style="margin-bottom:2mm">
+    <colgroup>
+      <col style="width:20%"><col style="width:30%">
+      <col style="width:20%"><col style="width:30%">
+    </colgroup>
+    <tr>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">車両引渡日</td>
+      <td>{{ contract.vehicle_handover_date|date:"Y年m月d日"|default:"" }}</td>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">書類引渡日</td>
+      <td>{{ contract.document_handover_date|date:"Y年m月d日"|default:"" }}</td>
+    </tr>
+    <tr>
+      <td class="bg-yellow" style="text-align:center; font-weight:bold">お振込予定日</td>
+      <td colspan="3">{{ contract.payment_scheduled_date|date:"Y年m月d日"|default:"" }}</td>
+    </tr>
+  </table>
+
+  {# ── 振込口座 ── #}
+  {% with inst=bank_account.bank_institution_type %}
+  <table style="margin-bottom:2mm">
+    <colgroup>
+      <col style="width:4%">
+      <col style="width:15%">
+      <col style="width:36%">
+      <col style="width:13%">
+      <col style="width:32%">
+    </colgroup>
+    <tr>
+      <td colspan="5" class="bg-yellow" style="text-align:center; font-weight:bold">振込口座</td>
+    </tr>
+    <tr>
+      <td class="no-border" style="border-right:1px solid #333 !important; border-bottom:1px solid #333 !important">
+        {% if bank_account and inst == 'bank' %}●{% endif %}
+      </td>
+      <td>銀行</td>
+      <td>{% if bank_account and inst == 'bank' %}{{ bank_account.bank_name }}{% endif %}</td>
+      <td style="text-align:center">支店</td>
+      <td>{% if bank_account and inst == 'bank' %}{{ bank_account.branch_name }}{% endif %}</td>
+    </tr>
+    <tr>
+      <td class="no-border" style="border-right:1px solid #333 !important; border-bottom:1px solid #333 !important">
+        {% if bank_account and inst == 'shinkin' %}●{% endif %}
+      </td>
+      <td>信用金庫</td>
+      <td>{% if bank_account and inst == 'shinkin' %}{{ bank_account.bank_name }}{% endif %}</td>
+      <td style="text-align:center">出張所</td>
+      <td>{% if bank_account and inst == 'shinkin' %}{{ bank_account.branch_name }}{% endif %}</td>
+    </tr>
+    <tr>
+      <td class="no-border" style="border-right:1px solid #333 !important; border-bottom:1px solid #333 !important">
+        {% if bank_account and inst == 'nokyo' %}●{% endif %}
+      </td>
+      <td>農協</td>
+      <td>{% if bank_account and inst == 'nokyo' %}{{ bank_account.bank_name }}{% endif %}</td>
+      <td></td>
+      <td>{% if bank_account and inst == 'nokyo' %}{{ bank_account.branch_name }}{% endif %}</td>
+    </tr>
+    <tr>
+      <td colspan="2">ゆうちょの場合{% if bank_account and inst == 'yucho' %}&nbsp;●{% endif %}</td>
+      <td>{% if bank_account and inst == 'yucho' %}{{ bank_account.bank_name }}{% endif %}</td>
+      <td>口座情報</td>
+      <td>
+        {% if bank_account %}
+          {% if bank_account.account_type == '普通' %}<span class="marked">普通</span>&nbsp;&nbsp;当座
+          {% else %}普通&nbsp;&nbsp;<span class="marked">当座</span>{% endif %}
+        {% else %}普通&nbsp;&nbsp;当座{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td colspan="5" style="border-left:none; border-right:none; text-align:center; font-size:9pt; height:5mm">
+        {% if bank_account %}{{ bank_account.account_number }}{% else %}ー{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2">口座名義人&nbsp;&nbsp;カナ</td>
+      <td colspan="3">{% if bank_account %}{{ bank_account.account_holder }}{% endif %}</td>
+    </tr>
+  </table>
+  {% endwith %}
+
+  {# ── お客様情報 ── #}
+  <table style="margin-bottom:2mm">
+    <colgroup>
+      <col style="width:12%">
+      <col style="width:38%">
+      <col style="width:10%">
+      <col style="width:40%">
+    </colgroup>
+    <tr>
+      <td colspan="4" class="bg-yellow" style="text-align:center; font-weight:bold">お客様情報</td>
+    </tr>
+    <tr>
+      <td class="bg-yellow" style="text-align:center; font-size:7.5pt">氏名<br>（フリガナ）</td>
+      <td style="font-size:9pt">{{ customer.furigana }}</td>
+      <td class="bg-yellow" style="text-align:center; font-size:7.5pt">職業</td>
+      <td>{{ customer.occupation }}</td>
+    </tr>
+    <tr style="height:14mm">
+      <td class="bg-yellow" style="text-align:center; font-size:7.5pt">氏名<br>（署名）</td>
+      <td style="font-size:11pt; font-weight:bold">{{ customer.name }}</td>
+      <td class="bg-yellow" style="text-align:center; font-size:7.5pt">生年月日</td>
+      <td>{{ customer.birth_date|date:"Y年m月d日"|default:"" }}</td>
+    </tr>
+    <tr>
+      <td class="bg-yellow" style="text-align:center; font-size:7.5pt">住所</td>
+      <td>〒{{ customer.postal_code }}&nbsp;&nbsp;{{ customer.address }}</td>
+      <td class="bg-yellow" style="text-align:center; font-size:7.5pt">免許証番号</td>
+      <td>{{ customer.license_number }}</td>
+    </tr>
+    <tr>
+      <td class="bg-yellow" style="text-align:center; font-size:7.5pt">電話番号</td>
+      <td>{{ customer.phone_number }}</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </table>
+
+  {# ── 備考・必要書類 ── #}
+  <div style="font-size:8pt; margin-bottom:1mm">
+    【備考】筑波銀行&nbsp;&nbsp;岩瀬支店&nbsp;&nbsp;普通&nbsp;&nbsp;1092552&nbsp;&nbsp;カ)ジジカンパニー
+  </div>
+  <div style="font-size:8pt">
+    【必要書類】<br>
+    印鑑証明（&nbsp;&nbsp;&nbsp;&nbsp;通）&nbsp;&nbsp;住民票（&nbsp;&nbsp;&nbsp;&nbsp;通）&nbsp;&nbsp;除票（&nbsp;&nbsp;&nbsp;&nbsp;通）&nbsp;&nbsp;委任状（&nbsp;&nbsp;&nbsp;&nbsp;通）&nbsp;&nbsp;譲渡書（&nbsp;&nbsp;&nbsp;&nbsp;通）&nbsp;&nbsp;還付（&nbsp;&nbsp;&nbsp;&nbsp;通）
+  </div>
+
+</div>{# end page 1 #}
+
+{# ═══════════════════ PAGE 2 ═══════════════════ #}
+<div class="page page-break">
+  <div class="terms-title">契約条項</div>
+
+  <div class="terms-body">
+    <div class="terms-art">
+      <div class="terms-art-h">【第1条】</div>
+      <div class="terms-art-b">甲は、車両所有者の印鑑証明、委任状、譲渡証明書、還付請求権譲渡通知書、有効期限内の自動車納税証明書、リサイクル券、その他車両の登録名義の変更手続きに必要な書類を、甲の責任において完備し、本契約書記載の書類引渡日迄に乙に引渡すものとする。</div>
+    </div>
+    <div class="terms-art">
+      <div class="terms-art-h">【第2条】</div>
+      <div class="terms-art-b">車両の自賠責保険は甲の責任において当該年度分まで完納されていることを前提とする。万一完納されていないときは未払い分甲の負担とする。</div>
+    </div>
+    <div class="terms-art">
+      <div class="terms-art-h">【第3条】</div>
+      <div class="terms-art-b">車両の自動車税は甲の責任において当該年度分まで完納されていることを前提とする。万一完納されていないときは未払い分甲の負担とする。</div>
+    </div>
+    <div class="terms-art">
+      <div class="terms-art-h">【第4条】</div>
+      <div class="terms-art-b">甲が乙に対して、第1条記載の名義変更に必要な書類の引渡しを完了した後は車両の名義変更については、乙が一切の責任を負うものとする。</div>
+    </div>
+    <div class="terms-art">
+      <div class="terms-art-h">【第5条】</div>
+      <div class="terms-art-b">
+        1,甲は車両につき、その使用状況、品質、修復の有無及び程度を誠実に申告しなければならない。<br>
+        2,甲は売買契約書に所要を正確に記載、申告し、虚偽の記載及び誤記入、記入漏れ等無い様に注意すること。万一、虚偽の記載、誤記入、記入漏れ等により発生した問題の責任は甲が負うものとする。<br>
+        3,特に、修復歴の有無の記入欄は、そのいずれかであるか正確に○印をつけることを要するものとする。尚、事故による修復歴の定義には財団法人自動車公正取引協議会の規約に準する。<br>
+        4,甲は売買契約書に誤記入等を発見した場合は直ちにその旨を乙に報告し訂正しなければならない。
+      </div>
+    </div>
+    <div class="terms-art">
+      <div class="terms-art-h">【第6条】</div>
+      <div class="terms-art-b">甲が、乙に対して、車両の引渡しをせず、又は第1条記載の名義変更に必要な書類の引渡しを完了しない場合は、乙は、甲に対し事前に通知・催告等をすることなく直ちに本契約を解除でき、甲は、乙から損害賠償請求されても一切の異議を申し立てないものとする。</div>
+    </div>
+    <div class="terms-art">
+      <div class="terms-art-h">【第7条】</div>
+      <div class="terms-art-b">本契約締結日から契約車輛引渡日までの間に契約車輛に破損等変化が生じた場合は、乙は本契約を解除できるものとする。</div>
+    </div>
+    <div class="terms-art">
+      <div class="terms-art-h">【第8条】</div>
+      <div class="terms-art-b">この契約に定めのない事項又はこの契約の解釈に疑義が生じた事項がある場合には、民法その他関係法令を適用して、甲・乙は誠実に協議し、解決するものとする。</div>
+    </div>
+    <div class="terms-art">
+      <div class="terms-art-h">【第9条】</div>
+      <div class="terms-art-b">甲は一方的な理由による本契約の解除はできないものとする。万一、一方的な理由又は半強制的に契約解除を求め、乙に損害が生じた場合は、甲は、乙から損害賠償請求されても一切の異議を申し立てないものとする。</div>
+    </div>
+    <div class="terms-art">
+      <div class="terms-art-h">【第10条】</div>
+      <div class="terms-art-b">甲が乙に対し事業者登録申告について虚偽の申告をおこない、乙に損害が生じた場合、甲が損害を賠償するものとする、それにより甲は乙より損害賠償請求をされても一切の異議を申し立てないものとする</div>
+    </div>
+
+    {# 署名欄 #}
+    <div style="margin-top:10mm; text-align:center">
+      <table style="width:65%; margin:0 auto; border:2px solid #333">
+        <tr style="height:22mm">
+          <td style="border:none; text-align:center; vertical-align:middle">
+            <div style="font-size:10pt; font-weight:bold">売主（甲）署名</div>
+            <div style="font-size:7.5pt; color:#555; margin-top:3mm">※契約条項を確認し署名をして下さい</div>
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</div>{# end page 2 #}
+
+</body>
+</html>

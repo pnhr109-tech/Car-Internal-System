@@ -1,4 +1,5 @@
 {% extends 'base/internal_base.html' %}
+{% load static %}
 {% block title %}案件詳細 - {{ assessment.customer.name }}{% endblock %}
 
 {% block content %}
@@ -87,9 +88,9 @@
             <dt class="col-5 text-muted">査定日時</dt>
             <dd class="col-7">{{ assessment.assessment_datetime|date:"Y-m-d H:i"|default:"-" }}</dd>
             <dt class="col-5 text-muted">査定額</dt>
-            <dd class="col-7">{% if assessment.assessment_price %}{{ assessment.assessment_price|floatformat:0 }}円{% else %}-{% endif %}</dd>
+            <dd class="col-7">{% if assessment.assessment_price %}{{ assessment.assessment_price|floatformat:"-1" }}万円{% else %}-{% endif %}</dd>
             <dt class="col-5 text-muted">市場相場価格</dt>
-            <dd class="col-7">{% if assessment.market_price %}{{ assessment.market_price|floatformat:0 }}円{% else %}-{% endif %}</dd>
+            <dd class="col-7">{% if assessment.market_price %}{{ assessment.market_price|floatformat:"-1" }}万円{% else %}-{% endif %}</dd>
             <dt class="col-5 text-muted">総合評価</dt>
             <dd class="col-7">{% if assessment.overall_rating %}{{ assessment.overall_rating }} / 5{% else %}-{% endif %}</dd>
             <dt class="col-5 text-muted">承認</dt>
@@ -113,20 +114,28 @@
     </div>
     <div class="col-lg-6">
       <div class="card">
-        <div class="card-header"><h6 class="mb-0">査定チェック項目</h6></div>
-        <div class="card-body">
-          {% if check_items %}
-          <ul class="list-group list-group-flush">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0">査定チェック項目</h6>
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#addCheckItemModal">
+            <i class="bi bi-plus"></i> 追加
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <ul class="list-group list-group-flush" id="checkItemList">
             {% for item in check_items %}
-            <li class="list-group-item">
-              <span class="badge bg-secondary me-2">{{ item.get_check_type_display }}</span>
-              {{ item.description|default:"-" }}
+            <li class="list-group-item d-flex justify-content-between align-items-center" id="check-item-{{ item.pk }}">
+              <div>
+                <span class="badge bg-secondary me-2">{{ item.get_check_type_display }}</span>
+                {{ item.description|default:"-" }}
+              </div>
+              <button class="btn btn-sm btn-link text-danger p-0" onclick="deleteCheckItem({{ item.pk }})">
+                <i class="bi bi-trash"></i>
+              </button>
             </li>
+            {% empty %}
+            <li class="list-group-item text-muted" id="check-item-empty">チェック項目なし</li>
             {% endfor %}
           </ul>
-          {% else %}
-          <p class="text-muted mb-0">チェック項目なし</p>
-          {% endif %}
         </div>
       </div>
     </div>
@@ -145,6 +154,20 @@
   {# ── タブ②: 契約 ────────────────────────────────────── #}
   {% elif active_tab == 'contract' %}
   {% if contract %}
+  <div class="d-flex justify-content-end gap-2 mb-3">
+    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editContractModal">
+      <i class="bi bi-pencil"></i> 編集
+    </button>
+    {% if contract.approved_by %}
+    <a href="{% url 'leads:contract_print' assessment.pk %}" target="_blank" class="btn btn-outline-primary">
+      <i class="bi bi-printer"></i> 契約書を印刷
+    </a>
+    {% else %}
+    <button class="btn btn-outline-secondary" disabled title="承認後に印刷可能になります">
+      <i class="bi bi-printer"></i> 契約書を印刷（承認待ち）
+    </button>
+    {% endif %}
+  </div>
   <div class="row g-4">
     <div class="col-lg-6">
       <div class="card">
@@ -167,6 +190,20 @@
             <dd class="col-6">{% if contract.repair_flag %}<span class="badge bg-warning text-dark">あり</span>{% else %}なし{% endif %}</dd>
             <dt class="col-6 text-muted">所有権解除</dt>
             <dd class="col-6">{% if contract.ownership_release_flag %}<span class="badge bg-warning text-dark">あり</span>{% else %}なし{% endif %}</dd>
+            <dt class="col-6 text-muted">金額訂正</dt>
+            <dd class="col-6">
+              {% if contract.amount_correction_flag %}
+              <span class="badge bg-warning text-dark">あり</span>
+              {% if contract.corrected_price %} → {{ contract.corrected_price|floatformat:0 }}円{% endif %}
+              {% if contract.correction_approved_by %}
+              <span class="badge bg-success ms-1"><i class="bi bi-check-circle"></i> 承認済</span>
+              {% else %}
+              <span class="badge bg-danger ms-1"><i class="bi bi-clock"></i> 承認待</span>
+              {% endif %}
+              {% else %}
+              なし
+              {% endif %}
+            </dd>
             <dt class="col-6 text-muted">ステータス</dt>
             <dd class="col-6">{{ contract.get_status_display }}</dd>
             <dt class="col-6 text-muted">承認</dt>
@@ -187,9 +224,17 @@
     </div>
   </div>
   {% else %}
+  {% if assessment.status == 'contracted' and assessment.approved_by %}
+  <div class="d-flex justify-content-end mb-3">
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createContractModal">
+      <i class="bi bi-file-earmark-plus"></i> 契約を作成する
+    </button>
+  </div>
+  {% else %}
   <div class="alert alert-info">
     <i class="bi bi-info-circle"></i> 契約はまだ作成されていません。査定が「成約・承認済み」になると契約を作成できます。
   </div>
+  {% endif %}
   {% endif %}
 
   {# ── タブ③: 書類 ────────────────────────────────────── #}
@@ -225,37 +270,62 @@
   <div class="row g-4">
     <div class="col-md-6">
       <div class="card">
-        <div class="card-header"><h6 class="mb-0"><i class="bi bi-person"></i> 顧客情報</h6></div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-person"></i> 顧客情報</h6>
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editCustomerModal">
+            <i class="bi bi-pencil"></i> 編集
+          </button>
+        </div>
         <div class="card-body">
           <dl class="row mb-0">
             <dt class="col-5 text-muted">氏名</dt><dd class="col-7">{{ assessment.customer.name }}</dd>
             <dt class="col-5 text-muted">電話番号</dt><dd class="col-7">{{ assessment.customer.phone_number }}</dd>
             <dt class="col-5 text-muted">メール</dt><dd class="col-7">{{ assessment.customer.email|default:"-" }}</dd>
-            <dt class="col-5 text-muted">住所</dt><dd class="col-7">{{ assessment.customer.postal_code }} {{ assessment.customer.address|default:"-" }}</dd>
+            <dt class="col-5 text-muted">郵便番号</dt><dd class="col-7">{{ assessment.customer.postal_code|default:"-" }}</dd>
+            <dt class="col-5 text-muted">住所</dt><dd class="col-7">{{ assessment.customer.address|default:"-" }}</dd>
+            <dt class="col-5 text-muted">生年月日</dt><dd class="col-7">{{ assessment.customer.birth_date|date:"Y-m-d"|default:"-" }}</dd>
             <dt class="col-5 text-muted">年齢</dt><dd class="col-7">{{ assessment.customer.age|default:"-" }}</dd>
             <dt class="col-5 text-muted">職業</dt><dd class="col-7">{{ assessment.customer.occupation|default:"-" }}</dd>
+            <dt class="col-5 text-muted">免許証番号</dt><dd class="col-7">{{ assessment.customer.license_number|default:"-" }}</dd>
           </dl>
         </div>
       </div>
-      {% if bank_accounts %}
       <div class="card mt-3">
-        <div class="card-header"><h6 class="mb-0"><i class="bi bi-bank"></i> 口座情報</h6></div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-bank"></i> 口座情報</h6>
+          <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#addBankAccountModal">
+            <i class="bi bi-plus"></i> 追加
+          </button>
+        </div>
         <div class="card-body p-0">
-          <ul class="list-group list-group-flush">
+          {% if bank_accounts %}
+          <ul class="list-group list-group-flush" id="bankAccountList">
             {% for acc in bank_accounts %}
-            <li class="list-group-item">
-              {% if acc.is_primary %}<span class="badge bg-primary me-1">優先</span>{% endif %}
-              {{ acc.bank_name }} {{ acc.branch_name }} / {{ acc.account_type }} {{ acc.account_number }} / {{ acc.account_holder }}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                {% if acc.is_primary %}<span class="badge bg-primary me-1">優先</span>{% endif %}
+                {{ acc.bank_name }} {{ acc.branch_name }} / {{ acc.account_type }} {{ acc.account_number }} / {{ acc.account_holder }}
+              </div>
+              <button class="btn btn-sm btn-outline-danger" onclick="deleteBankAccount({{ acc.pk }}, this)">
+                <i class="bi bi-trash"></i>
+              </button>
             </li>
             {% endfor %}
           </ul>
+          {% else %}
+          <p class="text-muted text-center py-3 mb-0 small" id="bankAccountEmpty">口座情報が登録されていません</p>
+          {% endif %}
         </div>
       </div>
-      {% endif %}
     </div>
     <div class="col-md-6">
       <div class="card">
-        <div class="card-header"><h6 class="mb-0"><i class="bi bi-car-front"></i> 車両情報</h6></div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-car-front"></i> 車両情報</h6>
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editVehicleModal">
+            <i class="bi bi-pencil"></i> 編集
+          </button>
+        </div>
         <div class="card-body">
           <dl class="row mb-0">
             <dt class="col-5 text-muted">メーカー</dt><dd class="col-7">{{ assessment.vehicle.maker }}</dd>
@@ -264,11 +334,15 @@
             <dt class="col-5 text-muted">走行距離</dt><dd class="col-7">{{ assessment.vehicle.mileage }}</dd>
             <dt class="col-5 text-muted">グレード</dt><dd class="col-7">{{ assessment.vehicle.grade|default:"-" }}</dd>
             <dt class="col-5 text-muted">カラー</dt><dd class="col-7">{{ assessment.vehicle.color|default:"-" }}</dd>
+            <dt class="col-5 text-muted">排気量</dt><dd class="col-7">{{ assessment.vehicle.displacement|default:"-" }}</dd>
             <dt class="col-5 text-muted">車台番号</dt><dd class="col-7">{{ assessment.vehicle.chassis_number|default:"-" }}</dd>
             <dt class="col-5 text-muted">修復歴</dt><dd class="col-7">{% if assessment.vehicle.repair_history_flag is not None %}{% if assessment.vehicle.repair_history_flag %}あり{% else %}なし{% endif %}{% else %}-{% endif %}</dd>
             <dt class="col-5 text-muted">車検有効期限</dt><dd class="col-7">{{ assessment.vehicle.inspection_expiry|date:"Y-m-d"|default:"-" }}</dd>
             <dt class="col-5 text-muted">ミッション</dt><dd class="col-7">{{ assessment.vehicle.transmission_type|default:"-" }}</dd>
             <dt class="col-5 text-muted">ナンバー</dt><dd class="col-7">{{ assessment.vehicle.registration_number|default:"-" }}</dd>
+            <dt class="col-5 text-muted">乗車定員</dt><dd class="col-7">{{ assessment.vehicle.passenger_count|default:"-" }}</dd>
+            <dt class="col-5 text-muted">ボディタイプ</dt><dd class="col-7">{{ assessment.vehicle.body_type|default:"-" }}</dd>
+            <dt class="col-5 text-muted">駆動方式</dt><dd class="col-7">{{ assessment.vehicle.drive_type|default:"-" }}</dd>
           </dl>
         </div>
       </div>
@@ -345,21 +419,27 @@
             value="{{ assessment.assessment_datetime|date:'Y-m-d' }}{% if assessment.assessment_datetime %}T{{ assessment.assessment_datetime|date:'H:i' }}{% endif %}">
         </div>
         <div class="mb-3">
-          <label class="form-label">査定額（円）</label>
-          <input type="number" id="editAssessmentPrice" class="form-control" min="0"
-            value="{{ assessment.assessment_price|default:'' }}">
+          <label class="form-label">査定額（万円）</label>
+          <div class="input-group">
+            <input type="number" id="editAssessmentPrice" class="form-control" min="0" step="0.1"
+              value="{{ assessment.assessment_price|default:'' }}">
+            <span class="input-group-text">万円</span>
+          </div>
         </div>
         <div class="mb-3">
-          <label class="form-label">市場相場価格（円）</label>
-          <input type="number" id="editMarketPrice" class="form-control" min="0"
-            value="{{ assessment.market_price|default:'' }}">
+          <label class="form-label">市場相場価格（万円）</label>
+          <div class="input-group">
+            <input type="number" id="editMarketPrice" class="form-control" min="0" step="0.1"
+              value="{{ assessment.market_price|default:'' }}">
+            <span class="input-group-text">万円</span>
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label">総合評価</label>
           <select id="editOverallRating" class="form-select">
             <option value="">-</option>
-            {% for i in "12345" %}
-            <option value="{{ i }}" {% if assessment.overall_rating|stringformat:"s" == i %}selected{% endif %}>{{ i }}</option>
+            {% for rating in rating_choices %}
+            <option value="{{ rating }}" {% if assessment.overall_rating == rating %}selected{% endif %}>{{ rating }}</option>
             {% endfor %}
           </select>
         </div>
@@ -409,92 +489,617 @@
     </div>
   </div>
 </div>
+{# 契約作成モーダル #}
+<div class="modal fade" id="createContractModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-file-earmark-text"></i> 買取契約を作成</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+
+          {# ── 基本情報 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">基本情報</h6></div>
+          <div class="col-md-4">
+            <label class="form-label">契約日 <span class="text-danger">*</span></label>
+            <input type="date" id="contractDate" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">買取価格（税抜）<span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="number" id="contractPriceExcl" class="form-control" min="0" step="1" placeholder="0">
+              <span class="input-group-text">円</span>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">消費税率</label>
+            <select id="contractTaxRate" class="form-select">
+              <option value="10">10%</option>
+              <option value="8">8%</option>
+              <option value="0">非課税（0%）</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">リサイクル券金額</label>
+            <div class="input-group">
+              <input type="number" id="contractRecycleAmount" class="form-control" min="0" step="1" placeholder="0">
+              <span class="input-group-text">円</span>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">支払い予定日</label>
+            <input type="date" id="contractPaymentDate" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">オークション出品予定日</label>
+            <input type="date" id="contractAuctionDate" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">車両引渡日</label>
+            <input type="date" id="contractVehicleHandover" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">書類引渡日</label>
+            <input type="date" id="contractDocumentHandover" class="form-control">
+          </div>
+          <div class="col-md-4 d-flex align-items-end gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="contractRepairFlag">
+              <label class="form-check-label" for="contractRepairFlag">加修あり</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="contractOwnershipFlag">
+              <label class="form-check-label" for="contractOwnershipFlag">所有権解除あり</label>
+            </div>
+          </div>
+          <div class="col-12" id="repairNotesArea" style="display:none">
+            <label class="form-label">加修内容</label>
+            <textarea id="contractRepairNotes" class="form-control" rows="2"></textarea>
+          </div>
+
+          {# ── 責任者 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">担当者・責任者</h6></div>
+          <div class="col-md-6">
+            <label class="form-label">責任者1</label>
+            <select id="contractManager1" class="form-select">
+              <option value="">— 選択してください —</option>
+              {% for u in all_users %}
+              <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">責任者2</label>
+            <select id="contractManager2" class="form-select">
+              <option value="">— 選択してください —</option>
+              {% for u in all_users %}
+              <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          {# ── 車両状況・事業者登録申告 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">車両状況・事業者登録申告</h6></div>
+          <div class="col-12">
+            <p class="text-muted small mb-2">チェックなし＝未回答（印刷時に空欄）、チェックあり＝「ある」、チェックなし（明示）＝「なし」</p>
+            <table class="table table-sm table-bordered mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>項目</th>
+                  <th class="text-center" style="width:80px">ある</th>
+                  <th class="text-center" style="width:80px">なし</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>メーター戻し・改ざん等</td>
+                  <td class="text-center"><input type="radio" name="meter_tampering" value="true" id="mt_yes"></td>
+                  <td class="text-center"><input type="radio" name="meter_tampering" value="false" id="mt_no"></td>
+                </tr>
+                <tr>
+                  <td>冠水車・雹害</td>
+                  <td class="text-center"><input type="radio" name="flood_hail_damage" value="true"></td>
+                  <td class="text-center"><input type="radio" name="flood_hail_damage" value="false"></td>
+                </tr>
+                <tr>
+                  <td>故障箇所</td>
+                  <td class="text-center"><input type="radio" name="malfunction" value="true"></td>
+                  <td class="text-center"><input type="radio" name="malfunction" value="false"></td>
+                </tr>
+                <tr>
+                  <td>駐車違反放置反則金未納</td>
+                  <td class="text-center"><input type="radio" name="parking_violation" value="true"></td>
+                  <td class="text-center"><input type="radio" name="parking_violation" value="false"></td>
+                </tr>
+                <tr>
+                  <td>自動車税未納</td>
+                  <td class="text-center"><input type="radio" name="automobile_tax_unpaid" value="true"></td>
+                  <td class="text-center"><input type="radio" name="automobile_tax_unpaid" value="false"></td>
+                </tr>
+                <tr>
+                  <td>適格請求書発行事業者登録</td>
+                  <td class="text-center"><input type="radio" name="qualified_invoice_registered" value="true" id="qir_yes"></td>
+                  <td class="text-center"><input type="radio" name="qualified_invoice_registered" value="false"></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="mt-2" id="invoiceNumberArea" style="display:none">
+              <label class="form-label small">適格請求書登録番号（T-）</label>
+              <input type="text" id="invoiceRegNumber" class="form-control form-control-sm" placeholder="登録番号を入力">
+            </div>
+          </div>
+
+          {# ── 顧客情報（契約時収集） ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">顧客情報（未入力の場合のみ入力・自動反映されます）</h6></div>
+          <div class="col-md-4">
+            <label class="form-label">フリガナ</label>
+            <input type="text" id="contractCustFurigana" class="form-control"
+              value="{{ assessment.customer.furigana }}" placeholder="例：ヤマダ タロウ">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">生年月日</label>
+            <input type="date" id="contractCustBirthDate" class="form-control"
+              value="{{ assessment.customer.birth_date|date:'Y-m-d'|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">免許証番号</label>
+            <input type="text" id="contractCustLicense" class="form-control"
+              value="{{ assessment.customer.license_number }}" placeholder="例：123456789012">
+          </div>
+
+          {# ── 備考 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">備考</h6></div>
+          <div class="col-12">
+            <textarea id="contractRemarks" class="form-control" rows="2"></textarea>
+          </div>
+
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-success" onclick="saveContract()">
+          <i class="bi bi-check-lg"></i> 契約を作成する
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# 顧客情報編集モーダル #}
+<div class="modal fade" id="editCustomerModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person"></i> 顧客情報を編集</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">氏名</label>
+            <input type="text" id="custName" class="form-control" value="{{ assessment.customer.name }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">フリガナ</label>
+            <input type="text" id="custFurigana" class="form-control" value="{{ assessment.customer.furigana }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">電話番号</label>
+            <input type="text" id="custPhone" class="form-control" value="{{ assessment.customer.phone_number }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">メールアドレス</label>
+            <input type="email" id="custEmail" class="form-control" value="{{ assessment.customer.email }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">郵便番号</label>
+            <input type="text" id="custPostal" class="form-control" value="{{ assessment.customer.postal_code }}">
+          </div>
+          <div class="col-12">
+            <label class="form-label">住所</label>
+            <input type="text" id="custAddress" class="form-control" value="{{ assessment.customer.address }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">生年月日</label>
+            <input type="date" id="custBirthDate" class="form-control" value="{{ assessment.customer.birth_date|date:'Y-m-d'|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">年齢</label>
+            <input type="number" id="custAge" class="form-control" value="{{ assessment.customer.age|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">職業</label>
+            <input type="text" id="custOccupation" class="form-control" value="{{ assessment.customer.occupation }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">免許証番号</label>
+            <input type="text" id="custLicense" class="form-control" value="{{ assessment.customer.license_number }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">性別</label>
+            <input type="text" id="custGender" class="form-control" value="{{ assessment.customer.gender }}">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="saveCustomer()"><i class="bi bi-save"></i> 保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# 口座情報追加モーダル #}
+<div class="modal fade" id="addBankAccountModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-bank"></i> 口座情報を追加</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">金融機関種別</label>
+            <select id="bankInstitutionType" class="form-select">
+              {% for val, label in bank_institution_type_choices %}
+              <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">銀行名 <span class="text-danger">*</span></label>
+            <input type="text" id="bankName" class="form-control" placeholder="例：筑波銀行">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">支店名</label>
+            <input type="text" id="bankBranch" class="form-control" placeholder="例：岩瀬支店">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">口座種別</label>
+            <select id="bankAccountType" class="form-select">
+              <option value="普通">普通</option>
+              <option value="当座">当座</option>
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">口座番号 <span class="text-danger">*</span></label>
+            <input type="text" id="bankNumber" class="form-control" placeholder="例：1234567">
+          </div>
+          <div class="col-12">
+            <label class="form-label">口座名義（カナ）<span class="text-danger">*</span></label>
+            <input type="text" id="bankHolder" class="form-control" placeholder="例：ヤマダ タロウ">
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bankIsPrimary">
+              <label class="form-check-label" for="bankIsPrimary">優先口座として設定</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-success" onclick="saveBankAccount()"><i class="bi bi-save"></i> 保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# 車両情報編集モーダル #}
+<div class="modal fade" id="editVehicleModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-car-front"></i> 車両情報を編集</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">メーカー</label>
+            <input type="text" id="vehMaker" class="form-control" value="{{ assessment.vehicle.maker }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">車種</label>
+            <input type="text" id="vehModel" class="form-control" value="{{ assessment.vehicle.car_model }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">年式</label>
+            <input type="text" id="vehYear" class="form-control" value="{{ assessment.vehicle.year }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">走行距離</label>
+            <input type="text" id="vehMileage" class="form-control" value="{{ assessment.vehicle.mileage }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">グレード</label>
+            <input type="text" id="vehGrade" class="form-control" value="{{ assessment.vehicle.grade }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">カラー</label>
+            <input type="text" id="vehColor" class="form-control" value="{{ assessment.vehicle.color }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">型式</label>
+            <input type="text" id="vehModelType" class="form-control" value="{{ assessment.vehicle.model_type }}" placeholder="例：ZVW30">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">排気量</label>
+            <input type="text" id="vehDisplacement" class="form-control" value="{{ assessment.vehicle.displacement }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">燃料種別</label>
+            <select id="vehFuelType" class="form-select">
+              <option value="">—</option>
+              {% for val, label in fuel_type_choices %}
+              <option value="{{ val }}" {% if assessment.vehicle.fuel_type == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">車台番号</label>
+            <input type="text" id="vehChassis" class="form-control" value="{{ assessment.vehicle.chassis_number }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">登録番号（ナンバー）</label>
+            <input type="text" id="vehRegNumber" class="form-control" value="{{ assessment.vehicle.registration_number }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">車検有効期限</label>
+            <input type="date" id="vehInspection" class="form-control" value="{{ assessment.vehicle.inspection_expiry|date:'Y-m-d'|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">ミッション</label>
+            <select id="vehTransmission" class="form-select">
+              <option value="">—</option>
+              {% for val, label in transmission_choices %}
+              <option value="{{ val }}" {% if assessment.vehicle.transmission_type == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">乗車定員</label>
+            <input type="text" id="vehPassenger" class="form-control" value="{{ assessment.vehicle.passenger_count }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">ボディタイプ</label>
+            <input type="text" id="vehBodyType" class="form-control" value="{{ assessment.vehicle.body_type }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">駆動方式</label>
+            <input type="text" id="vehDriveType" class="form-control" value="{{ assessment.vehicle.drive_type }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">修復歴</label>
+            <select id="vehRepairHistory" class="form-select">
+              <option value="" {% if assessment.vehicle.repair_history_flag is None %}selected{% endif %}>—（未回答）</option>
+              <option value="true"  {% if assessment.vehicle.repair_history_flag == True %}selected{% endif %}>あり</option>
+              <option value="false" {% if assessment.vehicle.repair_history_flag == False %}selected{% endif %}>なし</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="saveVehicle()"><i class="bi bi-save"></i> 保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# 査定チェック項目追加モーダル #}
+<div class="modal fade" id="addCheckItemModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">査定チェック項目を追加</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">チェック種別 <span class="text-danger">*</span></label>
+          <select id="checkItemType" class="form-select">
+            {% for val, label in check_type_choices %}
+            <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">詳細説明</label>
+          <textarea id="checkItemDescription" class="form-control" rows="3" placeholder="例：左ドア下部に擦り傷あり（3cm程度）"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="saveCheckItem()">追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% if contract %}
+{# 契約編集モーダル（既存契約データを初期値として表示） #}
+<div class="modal fade" id="editContractModal" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil-square"></i> 契約情報を編集</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+
+          {# ── 基本情報 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">基本情報</h6></div>
+          <div class="col-md-4">
+            <label class="form-label">契約日 <span class="text-danger">*</span></label>
+            <input type="date" id="editContractDate" class="form-control" value="{{ contract.contract_date|date:'Y-m-d' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">買取価格（税抜）<span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="number" id="editContractPriceExcl" class="form-control" min="0" step="1" value="{{ contract.purchase_price_excl_tax|floatformat:0 }}">
+              <span class="input-group-text">円</span>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">消費税率</label>
+            <select id="editContractTaxRate" class="form-select">
+              <option value="10" {% if contract_tax_rate == 10 %}selected{% endif %}>10%</option>
+              <option value="8"  {% if contract_tax_rate == 8  %}selected{% endif %}>8%</option>
+              <option value="0"  {% if contract_tax_rate == 0  %}selected{% endif %}>非課税（0%）</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">リサイクル券金額</label>
+            <div class="input-group">
+              <input type="number" id="editContractRecycleAmount" class="form-control" min="0" step="1" value="{{ contract.recycle_amount|default:'' }}">
+              <span class="input-group-text">円</span>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">支払い予定日</label>
+            <input type="date" id="editContractPaymentDate" class="form-control" value="{{ contract.payment_scheduled_date|date:'Y-m-d'|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">オークション出品予定日</label>
+            <input type="date" id="editContractAuctionDate" class="form-control" value="{{ contract.auction_scheduled_date|date:'Y-m-d'|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">車両引渡日</label>
+            <input type="date" id="editContractVehicleHandover" class="form-control" value="{{ contract.vehicle_handover_date|date:'Y-m-d'|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">書類引渡日</label>
+            <input type="date" id="editContractDocumentHandover" class="form-control" value="{{ contract.document_handover_date|date:'Y-m-d'|default:'' }}">
+          </div>
+          <div class="col-md-4 d-flex align-items-end gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="editContractRepairFlag" {% if contract.repair_flag %}checked{% endif %}>
+              <label class="form-check-label" for="editContractRepairFlag">加修あり</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="editContractOwnershipFlag" {% if contract.ownership_release_flag %}checked{% endif %}>
+              <label class="form-check-label" for="editContractOwnershipFlag">所有権解除あり</label>
+            </div>
+          </div>
+          <div class="col-12" id="editRepairNotesArea" style="{% if not contract.repair_flag %}display:none{% endif %}">
+            <label class="form-label">加修内容</label>
+            <textarea id="editContractRepairNotes" class="form-control" rows="2">{{ contract.repair_notes }}</textarea>
+          </div>
+
+          {# ── 責任者 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">担当者・責任者</h6></div>
+          <div class="col-md-6">
+            <label class="form-label">責任者1</label>
+            <select id="editContractManager1" class="form-select">
+              <option value="">— 選択してください —</option>
+              {% for u in all_users %}
+              <option value="{{ u.pk }}" {% if contract.manager1_id == u.pk %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">責任者2</label>
+            <select id="editContractManager2" class="form-select">
+              <option value="">— 選択してください —</option>
+              {% for u in all_users %}
+              <option value="{{ u.pk }}" {% if contract.manager2_id == u.pk %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          {# ── 車両状況・事業者登録申告 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">車両状況・事業者登録申告</h6></div>
+          <div class="col-12">
+            <table class="table table-sm table-bordered mb-0">
+              <thead class="table-light">
+                <tr><th>項目</th><th class="text-center" style="width:80px">ある</th><th class="text-center" style="width:80px">なし</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>メーター戻し・改ざん等</td>
+                  <td class="text-center"><input type="radio" name="edit_meter_tampering" value="true"  {% if contract.meter_tampering == True %}checked{% endif %}></td>
+                  <td class="text-center"><input type="radio" name="edit_meter_tampering" value="false" {% if contract.meter_tampering == False %}checked{% endif %}></td>
+                </tr>
+                <tr>
+                  <td>冠水車・雹害</td>
+                  <td class="text-center"><input type="radio" name="edit_flood_hail_damage" value="true"  {% if contract.flood_hail_damage == True %}checked{% endif %}></td>
+                  <td class="text-center"><input type="radio" name="edit_flood_hail_damage" value="false" {% if contract.flood_hail_damage == False %}checked{% endif %}></td>
+                </tr>
+                <tr>
+                  <td>故障箇所</td>
+                  <td class="text-center"><input type="radio" name="edit_malfunction" value="true"  {% if contract.malfunction == True %}checked{% endif %}></td>
+                  <td class="text-center"><input type="radio" name="edit_malfunction" value="false" {% if contract.malfunction == False %}checked{% endif %}></td>
+                </tr>
+                <tr>
+                  <td>駐車違反放置反則金未納</td>
+                  <td class="text-center"><input type="radio" name="edit_parking_violation" value="true"  {% if contract.parking_violation == True %}checked{% endif %}></td>
+                  <td class="text-center"><input type="radio" name="edit_parking_violation" value="false" {% if contract.parking_violation == False %}checked{% endif %}></td>
+                </tr>
+                <tr>
+                  <td>自動車税未納</td>
+                  <td class="text-center"><input type="radio" name="edit_automobile_tax_unpaid" value="true"  {% if contract.automobile_tax_unpaid == True %}checked{% endif %}></td>
+                  <td class="text-center"><input type="radio" name="edit_automobile_tax_unpaid" value="false" {% if contract.automobile_tax_unpaid == False %}checked{% endif %}></td>
+                </tr>
+                <tr>
+                  <td>適格請求書発行事業者登録</td>
+                  <td class="text-center"><input type="radio" name="edit_qualified_invoice_registered" value="true"  id="edit_qir_yes" {% if contract.qualified_invoice_registered == True %}checked{% endif %}></td>
+                  <td class="text-center"><input type="radio" name="edit_qualified_invoice_registered" value="false" {% if contract.qualified_invoice_registered == False %}checked{% endif %}></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="mt-2" id="editInvoiceNumberArea" style="{% if not contract.qualified_invoice_registered %}display:none{% endif %}">
+              <label class="form-label small">適格請求書登録番号（T-）</label>
+              <input type="text" id="editInvoiceRegNumber" class="form-control form-control-sm" value="{{ contract.invoice_registration_number }}">
+            </div>
+          </div>
+
+          {# ── 顧客情報（契約時収集） ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">顧客情報（未入力の場合のみ入力・自動反映されます）</h6></div>
+          <div class="col-md-4">
+            <label class="form-label">フリガナ</label>
+            <input type="text" id="editContractCustFurigana" class="form-control"
+              value="{{ assessment.customer.furigana }}" placeholder="例：ヤマダ タロウ">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">生年月日</label>
+            <input type="date" id="editContractCustBirthDate" class="form-control"
+              value="{{ assessment.customer.birth_date|date:'Y-m-d'|default:'' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">免許証番号</label>
+            <input type="text" id="editContractCustLicense" class="form-control"
+              value="{{ assessment.customer.license_number }}" placeholder="例：123456789012">
+          </div>
+
+          {# ── 備考 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">備考</h6></div>
+          <div class="col-12">
+            <textarea id="editContractRemarks" class="form-control" rows="2">{{ contract.remarks }}</textarea>
+          </div>
+
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="updateContract()">
+          <i class="bi bi-save"></i> 保存する
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-const ASSESSMENT_ID   = {{ assessment.pk }};
-const REQUEST_ID      = {{ assessment.assessment_request.pk }};
+const ASSESSMENT_ID = {{ assessment.pk }};
+const REQUEST_ID    = {{ assessment.assessment_request.pk }};
 {% if contract %}const CONTRACT_ID = {{ contract.pk }};{% endif %}
-const CSRF = '{{ csrf_token }}';
-
-// 日時の初期値
-document.addEventListener('DOMContentLoaded', () => {
-  const now = new Date();
-  const pad = n => String(n).padStart(2, '0');
-  const local = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  const el = document.getElementById('historyDate');
-  if (el) el.value = local;
-});
-
-function saveHistory() {
-  const content = document.getElementById('historyContent').value.trim();
-  if (!content) { alert('内容を入力してください'); return; }
-  fetch('/sateiinfo/api/history/add/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({
-      assessment_request_id: REQUEST_ID,
-      contact_method: document.getElementById('historyMethod').value,
-      contacted_at: document.getElementById('historyDate').value,
-      content,
-    }),
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (d.success) location.reload();
-    else alert(d.message || '追記に失敗しました');
-  });
-}
-
-function saveAssessmentInfo() {
-  fetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/update/`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({
-      status:              document.getElementById('editStatus').value,
-      assessment_datetime: document.getElementById('editAssessmentDatetime').value,
-      assessment_price:    document.getElementById('editAssessmentPrice').value,
-      market_price:        document.getElementById('editMarketPrice').value,
-      overall_rating:      document.getElementById('editOverallRating').value,
-      remarks:             document.getElementById('editRemarks').value,
-    }),
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (d.success) location.reload();
-    else alert(d.message || '更新に失敗しました');
-  });
-}
-
-function approveAssessment(action) {
-  const reason = action === 'reject' ? prompt('差し戻し理由を入力してください') : '';
-  if (action === 'reject' && !reason) return;
-  fetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/approve/`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({action, reason}),
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (d.success) location.reload();
-    else alert(d.message);
-  });
-}
-
-function approveContract(action) {
-  const reason = action === 'reject' ? prompt('差し戻し理由を入力してください') : '';
-  if (action === 'reject' && !reason) return;
-  fetch(`/sateiinfo/api/contracts/${CONTRACT_ID}/approve/`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({action, reason}),
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (d.success) location.reload();
-    else alert(d.message);
-  });
-}
 </script>
+<script src="{% static 'js/case_detail.js' %}"></script>
 {% endblock %}

@@ -1,0 +1,313 @@
+{% extends 'base/internal_base.html' %}
+{% load static %}
+{% block title %}顧客詳細 — {{ customer.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center mb-3 gap-2">
+    <a href="{% url 'leads:customer_list' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> 一覧へ
+    </a>
+    <h4 class="mb-0"><i class="bi bi-person text-primary"></i> {{ customer.name }}</h4>
+  </div>
+
+  <div class="row g-3">
+    <!-- 顧客基本情報 -->
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">基本情報</span>
+          <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editCustomerModal">
+            <i class="bi bi-pencil"></i> 編集
+          </button>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0 small">
+            <dt class="col-sm-4 text-muted">氏名</dt>
+            <dd class="col-sm-8" id="dispName">{{ customer.name }}</dd>
+
+            <dt class="col-sm-4 text-muted">フリガナ</dt>
+            <dd class="col-sm-8" id="dispFurigana">{{ customer.furigana|default:"-" }}</dd>
+
+            <dt class="col-sm-4 text-muted">電話番号</dt>
+            <dd class="col-sm-8" id="dispPhone">{{ customer.phone_number }}</dd>
+
+            <dt class="col-sm-4 text-muted">メールアドレス</dt>
+            <dd class="col-sm-8" id="dispEmail">{{ customer.email|default:"-" }}</dd>
+
+            <dt class="col-sm-4 text-muted">郵便番号</dt>
+            <dd class="col-sm-8" id="dispPostal">{{ customer.postal_code|default:"-" }}</dd>
+
+            <dt class="col-sm-4 text-muted">住所</dt>
+            <dd class="col-sm-8" id="dispAddress">{{ customer.address|default:"-" }}</dd>
+
+            <dt class="col-sm-4 text-muted">生年月日</dt>
+            <dd class="col-sm-8" id="dispBirthDate">{{ customer.birth_date|default:"-" }}</dd>
+
+            <dt class="col-sm-4 text-muted">年齢</dt>
+            <dd class="col-sm-8" id="dispAge">{% if customer.age %}{{ customer.age }}歳{% else %}-{% endif %}</dd>
+
+            <dt class="col-sm-4 text-muted">性別</dt>
+            <dd class="col-sm-8" id="dispGender">{{ customer.gender|default:"-" }}</dd>
+
+            <dt class="col-sm-4 text-muted">職業</dt>
+            <dd class="col-sm-8" id="dispOccupation">{{ customer.occupation|default:"-" }}</dd>
+
+            <dt class="col-sm-4 text-muted">免許証番号</dt>
+            <dd class="col-sm-8" id="dispLicense">{{ customer.license_number|default:"-" }}</dd>
+
+            <dt class="col-sm-4 text-muted">家族構成</dt>
+            <dd class="col-sm-8" id="dispFamily">{{ customer.family_structure|default:"-" }}</dd>
+
+            <dt class="col-sm-4 text-muted">課税事業者</dt>
+            <dd class="col-sm-8" id="dispTaxable">
+              {% if customer.is_taxable_business is None %}-
+              {% elif customer.is_taxable_business %}はい
+              {% else %}いいえ{% endif %}
+            </dd>
+
+            <dt class="col-sm-4 text-muted">インボイス登録番号</dt>
+            <dd class="col-sm-8" id="dispInvoiceNum">{{ customer.invoice_registration_number|default:"-" }}</dd>
+
+            <dt class="col-sm-4 text-muted">最終更新</dt>
+            <dd class="col-sm-8">{{ customer.updated_at|date:"Y/m/d H:i" }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <!-- 口座情報 -->
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span class="fw-semibold">口座情報</span>
+          <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addBankModal">
+            <i class="bi bi-plus"></i> 追加
+          </button>
+        </div>
+        <div class="card-body p-0" id="bankAccountList">
+          {% if bank_accounts %}
+          <table class="table table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>銀行名</th>
+                <th>支店名</th>
+                <th>種別</th>
+                <th>口座番号</th>
+                <th>名義</th>
+                <th>優先</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for acc in bank_accounts %}
+              <tr>
+                <td>{{ acc.bank_name }}</td>
+                <td>{{ acc.branch_name|default:"-" }}</td>
+                <td>{{ acc.account_type }}</td>
+                <td>{{ acc.account_number }}</td>
+                <td>{{ acc.account_holder }}</td>
+                <td>{% if acc.is_primary %}<span class="badge bg-success">優先</span>{% endif %}</td>
+                <td>
+                  <button class="btn btn-sm btn-outline-danger"
+                    onclick="deleteBankAccount({{ acc.pk }}, this)"
+                    data-account-id="{{ acc.pk }}">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="text-muted small p-3 mb-0">口座情報がありません</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- 査定・案件履歴 -->
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header fw-semibold">査定・案件履歴</div>
+        <div class="card-body p-0">
+          {% if assessments %}
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>申込番号</th>
+                <th>車両</th>
+                <th>ステータス</th>
+                <th>担当者</th>
+                <th>申込日</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in assessments %}
+              <tr>
+                <td>{{ a.assessment_request.application_number|default:"-" }}</td>
+                <td>
+                  {% if a.vehicle %}{{ a.vehicle.maker }} {{ a.vehicle.car_model }}{% else %}-{% endif %}
+                </td>
+                <td>{{ a.get_status_display }}</td>
+                <td>{% if a.assigned_to %}{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}{% else %}-{% endif %}</td>
+                <td>{{ a.created_at|date:"Y/m/d" }}</td>
+                <td>
+                  <a href="{% url 'leads:case_detail' a.pk %}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="text-muted small p-3 mb-0">査定・案件履歴がありません</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 顧客情報編集モーダル -->
+<div class="modal fade" id="editCustomerModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">顧客情報編集</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">氏名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="custName" value="{{ customer.name }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">フリガナ</label>
+            <input type="text" class="form-control" id="custFurigana" value="{{ customer.furigana }}" placeholder="例：ヤマダ タロウ">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">電話番号 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="custPhone" value="{{ customer.phone_number }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">メールアドレス</label>
+            <input type="email" class="form-control" id="custEmail" value="{{ customer.email }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">郵便番号</label>
+            <input type="text" class="form-control" id="custPostal" value="{{ customer.postal_code }}">
+          </div>
+          <div class="col-md-9">
+            <label class="form-label">住所</label>
+            <input type="text" class="form-control" id="custAddress" value="{{ customer.address }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">生年月日</label>
+            <input type="date" class="form-control" id="custBirthDate" value="{{ customer.birth_date|default:'' }}">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">年齢</label>
+            <input type="number" class="form-control" id="custAge" value="{{ customer.age|default:'' }}" min="0" max="150">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">性別</label>
+            <select class="form-select" id="custGender">
+              <option value="">選択</option>
+              <option value="男性" {% if customer.gender == '男性' %}selected{% endif %}>男性</option>
+              <option value="女性" {% if customer.gender == '女性' %}selected{% endif %}>女性</option>
+              <option value="その他" {% if customer.gender == 'その他' %}selected{% endif %}>その他</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">職業</label>
+            <input type="text" class="form-control" id="custOccupation" value="{{ customer.occupation }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">免許証番号</label>
+            <input type="text" class="form-control" id="custLicense" value="{{ customer.license_number }}">
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">家族構成</label>
+            <input type="text" class="form-control" id="custFamily" value="{{ customer.family_structure }}" placeholder="例: 配偶者・子2人">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">課税事業者</label>
+            <select class="form-select" id="custTaxable">
+              <option value="" {% if customer.is_taxable_business is None %}selected{% endif %}>未設定</option>
+              <option value="true" {% if customer.is_taxable_business %}selected{% endif %}>はい</option>
+              <option value="false" {% if customer.is_taxable_business == False %}selected{% endif %}>いいえ</option>
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">インボイス登録番号</label>
+            <input type="text" class="form-control" id="custInvoiceNum" value="{{ customer.invoice_registration_number }}" placeholder="例: T1234567890123">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+        <button type="button" class="btn btn-primary" onclick="saveCustomer()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 口座追加モーダル -->
+<div class="modal fade" id="addBankModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">口座情報追加</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">銀行名 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="bankName" placeholder="例: ○○銀行">
+          </div>
+          <div class="col-12">
+            <label class="form-label">支店名</label>
+            <input type="text" class="form-control" id="bankBranch" placeholder="例: 渋谷支店">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">口座種別</label>
+            <select class="form-select" id="bankType">
+              <option value="普通">普通</option>
+              <option value="当座">当座</option>
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">口座番号 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="bankNumber">
+          </div>
+          <div class="col-12">
+            <label class="form-label">口座名義 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="bankHolder" placeholder="例: ヤマダ タロウ">
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="bankIsPrimary">
+              <label class="form-check-label" for="bankIsPrimary">優先口座に設定する</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+        <button type="button" class="btn btn-primary" onclick="saveBankAccount()">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>const CUSTOMER_ID = {{ customer.pk }};</script>
+<script src="{% static 'js/customer_detail.js' %}"></script>
+{% endblock %}

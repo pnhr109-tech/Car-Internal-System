@@ -42,14 +42,19 @@ class Customer(models.Model):
     """顧客"""
 
     name             = models.CharField(max_length=100, verbose_name='氏名')
+    furigana         = models.CharField(max_length=100, blank=True, verbose_name='フリガナ')
     phone_number     = models.CharField(max_length=20, verbose_name='電話番号')
     email            = models.EmailField(max_length=255, blank=True, verbose_name='メールアドレス')
     postal_code      = models.CharField(max_length=10, blank=True, verbose_name='郵便番号')
     address          = models.CharField(max_length=255, blank=True, verbose_name='住所')
     age              = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='年齢')
+    birth_date       = models.DateField(null=True, blank=True, verbose_name='生年月日')
     occupation       = models.CharField(max_length=100, blank=True, verbose_name='職業')
     gender           = models.CharField(max_length=10, blank=True, verbose_name='性別')
     family_structure = models.CharField(max_length=100, blank=True, verbose_name='家族構成')
+    license_number               = models.CharField(max_length=20, blank=True, verbose_name='免許証番号')
+    is_taxable_business          = models.BooleanField(null=True, blank=True, verbose_name='課税事業者')
+    invoice_registration_number  = models.CharField(max_length=50, blank=True, verbose_name='インボイス登録番号')
     created_at       = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
     updated_at       = models.DateTimeField(auto_now=True, verbose_name='更新日時')
     updated_by       = models.ForeignKey(
@@ -82,7 +87,20 @@ class CustomerBankAccount(models.Model):
         ('当座', '当座'),
     ]
 
+    INSTITUTION_TYPE_CHOICES = [
+        ('bank',         '銀行'),
+        ('shinkin',      '信用金庫'),
+        ('nokyo',        '農協'),
+        ('yucho',        'ゆうちょ'),
+    ]
+
     customer       = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='bank_accounts', verbose_name='顧客')
+    bank_institution_type = models.CharField(
+        max_length=20,
+        choices=INSTITUTION_TYPE_CHOICES,
+        default='bank',
+        verbose_name='金融機関種別',
+    )
     bank_name      = models.CharField(max_length=100, verbose_name='銀行名')
     branch_name    = models.CharField(max_length=100, verbose_name='支店名')
     account_type   = models.CharField(max_length=10, choices=ACCOUNT_TYPE_CHOICES, verbose_name='口座種別')
@@ -122,6 +140,16 @@ class Vehicle(models.Model):
         ('その他', 'その他'),
     ]
 
+    FUEL_TYPE_CHOICES = [
+        ('gasoline',   'ガソリン'),
+        ('diesel',     'ディーゼル'),
+        ('hybrid',     'ハイブリッド（HV）'),
+        ('phev',       'プラグインハイブリッド（PHEV）'),
+        ('ev',         '電気自動車（EV）'),
+        ('lpg',        'LPG'),
+        ('other',      'その他'),
+    ]
+
     # ①アポイント時に登録
     maker    = models.CharField(max_length=100, verbose_name='メーカー')
     car_model = models.CharField(max_length=100, verbose_name='車種')
@@ -133,12 +161,17 @@ class Vehicle(models.Model):
     remarks  = models.TextField(blank=True, verbose_name='備考')
 
     # ②商談時に追加
+    model_type            = models.CharField(max_length=50, blank=True, verbose_name='型式')
+    fuel_type             = models.CharField(max_length=20, choices=FUEL_TYPE_CHOICES, blank=True, verbose_name='燃料種別')
     chassis_number        = models.CharField(max_length=50, blank=True, verbose_name='車台番号')
     first_registration_date = models.DateField(null=True, blank=True, verbose_name='初年度登録年月')
     repair_history_flag   = models.BooleanField(null=True, blank=True, verbose_name='修復歴')
     inspection_expiry     = models.DateField(null=True, blank=True, verbose_name='車検有効期限')
     transmission_type     = models.CharField(max_length=10, choices=TRANSMISSION_CHOICES, blank=True, verbose_name='ミッション種別')
     registration_number   = models.CharField(max_length=20, blank=True, verbose_name='登録番号（ナンバー）')
+    passenger_count       = models.CharField(max_length=5, blank=True, verbose_name='乗車定員')
+    body_type             = models.CharField(max_length=50, blank=True, verbose_name='ボディタイプ')
+    drive_type            = models.CharField(max_length=10, blank=True, verbose_name='駆動方式')
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新日時')
@@ -363,7 +396,7 @@ class Assessment(models.Model):
     assessment_datetime = models.DateTimeField(null=True, blank=True, verbose_name='査定日時')
     assessment_price    = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='査定額')
     market_price        = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='市場相場価格')
-    overall_rating      = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='総合評価（1〜5）')
+    overall_rating      = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True, verbose_name='総合評価（1〜5、0.5刻み）')
     status              = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_PROGRESS, verbose_name='ステータス')
     management_status   = models.CharField(max_length=20, choices=MANAGEMENT_STATUS_CHOICES, blank=True, verbose_name='管理方針')
     cancel_reason       = models.CharField(max_length=255, blank=True, verbose_name='キャンセル理由')
@@ -477,11 +510,48 @@ class PurchaseContract(models.Model):
     status                     = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, verbose_name='ステータス')
     cancel_reason              = models.CharField(max_length=255, blank=True, verbose_name='キャンセル理由')
     cancelled_at               = models.DateTimeField(null=True, blank=True, verbose_name='破棄日時')
+    recycle_amount             = models.DecimalField(max_digits=10, decimal_places=0, null=True, blank=True, verbose_name='リサイクル券金額①')
+    vehicle_handover_date      = models.DateField(null=True, blank=True, verbose_name='車両引渡日')
+    document_handover_date     = models.DateField(null=True, blank=True, verbose_name='書類引渡日')
     amount_correction_flag     = models.BooleanField(default=False, verbose_name='金額訂正フラグ')
     corrected_price            = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='訂正後買取価格')
+    correction_approved_by     = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='correction_approved_contracts',
+        verbose_name='金額訂正承認者（社長）',
+    )
+    correction_approved_at     = models.DateTimeField(null=True, blank=True, verbose_name='金額訂正承認日時')
     repair_flag                = models.BooleanField(default=False, verbose_name='加修フラグ')
     repair_notes               = models.TextField(blank=True, verbose_name='加修内容')
     ownership_release_flag     = models.BooleanField(default=False, verbose_name='所有権解除フラグ')
+
+    # ── 車両状況・事業者登録申告（契約書記載） ──────────────────────
+    meter_tampering              = models.BooleanField(null=True, blank=True, verbose_name='メーター戻し・改ざん等')
+    flood_hail_damage            = models.BooleanField(null=True, blank=True, verbose_name='冠水車・雹害')
+    malfunction                  = models.BooleanField(null=True, blank=True, verbose_name='故障箇所')
+    parking_violation            = models.BooleanField(null=True, blank=True, verbose_name='駐車違反放置反則金未納')
+    automobile_tax_unpaid        = models.BooleanField(null=True, blank=True, verbose_name='自動車税未納')
+    qualified_invoice_registered = models.BooleanField(null=True, blank=True, verbose_name='適格請求書発行事業者登録')
+    invoice_registration_number  = models.CharField(max_length=50, blank=True, verbose_name='適格請求書登録番号')
+
+    # ── 担当者・責任者（契約書表示用） ─────────────────────────────
+    manager1 = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='managed_contracts_1',
+        verbose_name='責任者1',
+    )
+    manager2 = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='managed_contracts_2',
+        verbose_name='責任者2',
+    )
+
     approved_by                = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
