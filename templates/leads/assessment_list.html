@@ -102,8 +102,8 @@
             </div>
         </div>
 
-        <!-- データテーブル -->
-        <div class="card">
+        <!-- データテーブル（PC: md以上） -->
+        <div class="card d-none d-md-block">
             <div class="card-body p-0 table-container">
                 <table class="table table-hover table-striped mb-0 assessment-table">
                     <thead class="table-dark sticky-top">
@@ -134,6 +134,14 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- データカード（スマホ: md未満） -->
+        <div class="d-md-none" id="assessmentCardContainer">
+            <div class="text-center text-muted py-3">
+                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                データを読み込んでいます...
             </div>
         </div>
 

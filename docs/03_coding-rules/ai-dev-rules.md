@@ -4,6 +4,7 @@
 - docs/ui-style-guide.md
 - static/ui/tokens.css
 - static/ui/bootstrap-overrides.css
+- static/ui/responsive.css
 
 ## Must follow
 - Use Bootstrap layout/components (container, row, col, table, form-control, btn)
@@ -15,6 +16,62 @@
 ## When coding templates
 - Prefer Bootstrap classes for layout
 - For status labels use: ui-badge + ui-badge--(success|warning|danger|info)
+
+---
+
+## レスポンシブ対応ルール
+
+このシステムは PC・スマホ両方に対応する。新機能追加時も必ずPC・スマホ両方で動作するよう実装すること。
+
+### ブレークポイント
+| 幅 | 対象 | Bootstrap プレフィックス |
+|---|---|---|
+| ≦ 767.98px | スマホ・小型タブレット | （無印 / `d-md-none`） |
+| ≧ 768px | タブレット〜PC | `md`, `lg`, `xl` |
+
+### タッチターゲット
+- ボタン最小高さ: `44px`（`btn` クラスで自動適用済）
+- フォーム入力最小高さ: `44px`、`font-size: 16px`（iOS zoom 防止。`responsive.css` で自動適用済）
+
+### 一覧画面（テーブル）
+- テーブルには必ず `mobile-card-table` クラスを追加する
+- `<tbody>` の各 `<td>` に `data-label="列名"` を付ける（スマホでラベルとして表示される）
+- 先頭 `<td>` には `card-title` クラスを付ける（カードのタイトル行になる）
+- スマホで非表示にしたい列の `<td>` には `d-mobile-none` クラスを付ける
+- 行クリックで詳細遷移する場合は `<tr style="cursor:pointer" onclick="location.href='...'">` を付ける
+
+```html
+<table class="table table-hover mb-0 mobile-card-table">
+  <thead>...</thead>
+  <tbody>
+    <tr style="cursor:pointer" onclick="location.href='/path/'">
+      <td class="card-title">顧客名（タイトル）</td>
+      <td data-label="電話">090-xxxx-xxxx</td>
+      <td data-label="ステータス"><span class="badge ...">...</span></td>
+      <td class="d-mobile-none">PCのみ表示する列</td>
+    </tr>
+  </tbody>
+</table>
+```
+
+### JS 動的テーブル（assessment_list など）
+- デスクトップ用 `<table>` に `d-none d-md-block` でラップ
+- スマホ用カードコンテナ `<div class="d-md-none" id="...CardContainer">` を追加
+- `renderTable` 関数内でデスクトップ（tbody）・スマホ（cardContainer）両方を描画する
+- モバイルカードは `assessment-card-item` クラスを使う
+
+### モーダル
+- スマホでは CSS により全モーダルが自動的に全画面表示になる（`responsive.css` が自動適用）
+- 追加の対応は不要
+
+### ナビタブ
+- `nav-tabs` は `responsive.css` により自動的に横スクロール対応になる
+
+### サイドバー
+- offcanvas は `responsive.css` により自動的にスマホで全画面になる
+
+### 電話番号
+- スマホでタップ発信できるよう `<a href="tel:xxx">` でリンクにする
 
 ---
 

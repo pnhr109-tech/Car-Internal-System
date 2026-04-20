@@ -192,10 +192,12 @@ function formatOwnerName(value) {
 }
 
 function renderTable(data) {
-  const tbody = document.getElementById('assessmentTableBody');
+  const tbody     = document.getElementById('assessmentTableBody');
+  const cardContainer = document.getElementById('assessmentCardContainer');
 
   if (data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="15" class="text-center text-muted">データがありません</td></tr>';
+    tbody.innerHTML       = '<tr><td colspan="15" class="text-center text-muted">データがありません</td></tr>';
+    cardContainer.innerHTML = '<p class="text-center text-muted py-3">データがありません</p>';
     return;
   }
 
@@ -251,6 +253,7 @@ function renderTable(data) {
     return `<a href="tel:${tel}" class="text-decoration-none" onclick="recordCallAndDial(event, ${assessmentId})">${escapeHtml(raw)}</a>`;
   };
 
+  // ── デスクトップ: テーブル行 ──────────────────────────────
   tbody.innerHTML = data.map(item => `
     <tr>
       <td class="application-number-cell"><a href="/sateiinfo/${item.id}/" class="text-decoration-none fw-semibold">${escapeHtml(item.application_number)}</a></td>
@@ -269,6 +272,37 @@ function renderTable(data) {
       <td>${item.email}</td>
       <td>${renderAction(item)}</td>
     </tr>`).join('');
+
+  // ── モバイル: カード ─────────────────────────────────────
+  cardContainer.innerHTML = data.map(item => {
+    const encodedStatus = encodeURIComponent(item.follow_status || '未対応');
+    const encodedNote   = encodeURIComponent(item.sales_note || '');
+    const owner = (item.sales_owner_name || '').trim();
+    const canUpdate = !owner || owner === currentUserDisplayName;
+    const phoneRaw = (item.phone_number || '').replace(/[^0-9+]/g, '');
+    const phoneHtml = phoneRaw
+      ? `<a href="tel:${phoneRaw}" class="btn btn-outline-secondary btn-sm" onclick="recordCallAndDial(event, ${item.id})"><i class="bi bi-telephone"></i> ${escapeHtml(item.phone_number)}</a>`
+      : `<span class="text-muted">電話番号なし</span>`;
+
+    return `
+    <div class="assessment-card-item">
+      <div class="card-row">
+        <a href="/sateiinfo/${item.id}/" class="card-title text-decoration-none">${escapeHtml(item.customer_name)}</a>
+        ${statusBadge(item)}
+      </div>
+      <div class="card-meta">${escapeHtml(item.maker)} ${escapeHtml(item.car_model)} / ${escapeHtml(item.year)}</div>
+      <div class="card-meta">${escapeHtml(item.application_number)} &nbsp;·&nbsp; ${escapeHtml(item.application_datetime)}</div>
+      ${owner ? `<div class="card-meta">担当: ${escapeHtml(owner)}</div>` : ''}
+      <div class="card-divider"></div>
+      <div class="card-action">
+        ${phoneHtml}
+        ${canUpdate
+          ? `<button class="btn btn-outline-success btn-sm" onclick="openStatusModal(${item.id}, '${encodedStatus}', '${encodedNote}')"><i class="bi bi-pencil-square"></i> ステータス更新</button>`
+          : `<span class="text-muted small align-self-center">担当確定済</span>`
+        }
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── 通話記録 ─────────────────────────────────────────────────────────────

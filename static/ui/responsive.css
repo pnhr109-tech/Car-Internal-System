@@ -1,0 +1,274 @@
+/*
+ * responsive.css — モバイルファースト対応スタイル
+ * ブレークポイント: 767.98px (Bootstrap md 未満 = スマホ〜小型タブレット)
+ */
+
+/* ================================================================
+   タッチターゲット / フォームサイズ
+================================================================ */
+@media (max-width: 767.98px) {
+  /* Apple HIG 推奨 44px 最小タップ領域 */
+  .btn {
+    min-height: 44px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .btn-sm {
+    min-height: 36px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  /* iOS で 16px 未満だとフォーカス時に自動ズームが発生するため固定 */
+  .form-control,
+  .form-select {
+    font-size: 16px !important;
+    min-height: 44px;
+  }
+  textarea.form-control {
+    min-height: unset;
+    font-size: 16px !important;
+  }
+
+  /* コンテナ余白をコンパクトに */
+  .container-fluid {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  /* ページネーションをタップしやすく */
+  .page-link {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* パンくずリストを小さく */
+  .breadcrumb { font-size: 12px; }
+}
+
+/* ================================================================
+   サイドバー（offcanvas）: スマホで全画面
+================================================================ */
+@media (max-width: 767.98px) {
+  #appSidebar {
+    width: 100% !important;
+  }
+  /* 通知パネルも全画面 */
+  #globalNotificationPanel {
+    width: 100% !important;
+  }
+}
+
+/* ================================================================
+   ナビタブ: スマホで横スクロール
+================================================================ */
+@media (max-width: 767.98px) {
+  .nav-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 1px;
+  }
+  .nav-tabs::-webkit-scrollbar { display: none; }
+  .nav-tabs .nav-link {
+    white-space: nowrap;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 4px;
+  }
+}
+
+/* ================================================================
+   モーダル: スマホで全画面
+================================================================ */
+@media (max-width: 767.98px) {
+  .modal-dialog {
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100vw !important;
+  }
+  .modal-content {
+    border-radius: 0 !important;
+    border: none !important;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: inherit;
+  }
+  .modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: var(--bs-modal-footer-bg, #fff);
+  }
+}
+
+/* ================================================================
+   カードリスト変換パターン (.mobile-card-table)
+   テーブルを<td data-label="ラベル名">で定義しておくと
+   モバイル時にカード形式で表示される
+================================================================ */
+@media (max-width: 767.98px) {
+  .mobile-card-table {
+    display: block;
+  }
+  .mobile-card-table thead {
+    display: none;
+  }
+  .mobile-card-table tbody {
+    display: block;
+  }
+  .mobile-card-table tbody tr {
+    display: block;
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+    background: var(--c-white);
+    padding: 12px 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
+    cursor: pointer;
+  }
+  .mobile-card-table tbody tr:active {
+    background: var(--c-secondary-hover-bg);
+  }
+  .mobile-card-table tbody td {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    border: none !important;
+    padding: 3px 0;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+  .mobile-card-table tbody td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--c-text-muted);
+    min-width: 76px;
+    flex-shrink: 0;
+    padding-top: 2px;
+  }
+  /* カードタイトル行: ラベルなし・太字 */
+  .mobile-card-table tbody td.card-title {
+    font-size: 15px;
+    font-weight: 700;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--c-border) !important;
+    display: block;
+  }
+  .mobile-card-table tbody td.card-title::before {
+    display: none;
+  }
+  /* モバイルで非表示にしたい列 */
+  .mobile-card-table tbody td.d-mobile-none {
+    display: none !important;
+  }
+}
+
+/* ================================================================
+   査定申込一覧: モバイルカード専用コンテナ
+================================================================ */
+.assessment-card-item {
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  background: var(--c-white);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
+}
+.assessment-card-item:active {
+  background: var(--c-secondary-hover-bg);
+}
+.assessment-card-item .card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2px;
+}
+.assessment-card-item .card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--c-text);
+}
+.assessment-card-item .card-meta {
+  font-size: 12px;
+  color: var(--c-text-muted);
+  margin-top: 4px;
+}
+.assessment-card-item .card-divider {
+  border-top: 1px solid var(--c-border);
+  margin: 8px 0;
+}
+.assessment-card-item .card-action {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+.assessment-card-item .card-action .btn {
+  flex: 1;
+}
+
+/* ================================================================
+   ヘッダー: スマホでユーザー名を非表示
+================================================================ */
+@media (max-width: 575.98px) {
+  .header-username { display: none; }
+}
+
+/* ================================================================
+   ページヘッダーのアクションボタン群: 折り返し対応
+================================================================ */
+@media (max-width: 767.98px) {
+  .page-header-actions {
+    flex-wrap: wrap;
+  }
+  .page-header-actions .btn {
+    font-size: 13px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* ================================================================
+   定義リスト (dl.row) のスマホ調整
+================================================================ */
+@media (max-width: 575.98px) {
+  .card-body dl.row > dt { font-size: 13px; }
+  .card-body dl.row > dd { font-size: 14px; }
+}
+
+/* ================================================================
+   ダッシュボード: スマホ向けグリッド調整
+================================================================ */
+@media (max-width: 767.98px) {
+  .sales-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sales-hero-feed-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+  .sales-hero-rank-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .store-mq-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -87,7 +87,7 @@
         </div>
         <div class="card-body p-0" id="bankAccountList">
           {% if bank_accounts %}
-          <table class="table table-sm mb-0">
+          <table class="table table-sm mb-0 mobile-card-table">
             <thead class="table-light">
               <tr>
                 <th>銀行名</th>
@@ -102,13 +102,13 @@
             <tbody>
               {% for acc in bank_accounts %}
               <tr>
-                <td>{{ acc.bank_name }}</td>
-                <td>{{ acc.branch_name|default:"-" }}</td>
-                <td>{{ acc.account_type }}</td>
-                <td>{{ acc.account_number }}</td>
-                <td>{{ acc.account_holder }}</td>
-                <td>{% if acc.is_primary %}<span class="badge bg-success">優先</span>{% endif %}</td>
-                <td>
+                <td class="card-title">{{ acc.bank_name }}</td>
+                <td data-label="支店名">{{ acc.branch_name|default:"-" }}</td>
+                <td data-label="種別">{{ acc.account_type }}</td>
+                <td data-label="口座番号">{{ acc.account_number }}</td>
+                <td data-label="名義">{{ acc.account_holder }}</td>
+                <td data-label="優先">{% if acc.is_primary %}<span class="badge bg-success">優先</span>{% endif %}</td>
+                <td data-label="操作">
                   <button class="btn btn-sm btn-outline-danger"
                     onclick="deleteBankAccount({{ acc.pk }}, this)"
                     data-account-id="{{ acc.pk }}">
@@ -132,7 +132,7 @@
         <div class="card-header fw-semibold">査定・案件履歴</div>
         <div class="card-body p-0">
           {% if assessments %}
-          <table class="table table-sm table-hover mb-0">
+          <table class="table table-sm table-hover mb-0 mobile-card-table">
             <thead class="table-light">
               <tr>
                 <th>申込番号</th>
@@ -145,15 +145,15 @@
             </thead>
             <tbody>
               {% for a in assessments %}
-              <tr>
-                <td>{{ a.assessment_request.application_number|default:"-" }}</td>
-                <td>
+              <tr style="cursor:pointer" onclick="location.href='{% url 'leads:case_detail' a.pk %}'">
+                <td class="card-title">{{ a.assessment_request.application_number|default:"-" }}</td>
+                <td data-label="車両">
                   {% if a.vehicle %}{{ a.vehicle.maker }} {{ a.vehicle.car_model }}{% else %}-{% endif %}
                 </td>
-                <td>{{ a.get_status_display }}</td>
-                <td>{% if a.assigned_to %}{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}{% else %}-{% endif %}</td>
-                <td>{{ a.created_at|date:"Y/m/d" }}</td>
-                <td>
+                <td data-label="ステータス">{{ a.get_status_display }}</td>
+                <td data-label="担当者">{% if a.assigned_to %}{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}{% else %}-{% endif %}</td>
+                <td data-label="申込日">{{ a.created_at|date:"Y/m/d" }}</td>
+                <td class="d-mobile-none">
                   <a href="{% url 'leads:case_detail' a.pk %}" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-eye"></i>
                   </a>

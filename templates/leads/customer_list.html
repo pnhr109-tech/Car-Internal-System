@@ -24,7 +24,7 @@
 
   <div class="card">
     <div class="card-body p-0">
-      <table class="table table-hover table-striped mb-0">
+      <table class="table table-hover table-striped mb-0 mobile-card-table">
         <thead class="table-dark sticky-top">
           <tr>
             <th>氏名</th>
@@ -38,14 +38,14 @@
         </thead>
         <tbody>
           {% for customer in page_obj %}
-          <tr>
-            <td>{{ customer.name }}</td>
-            <td>{{ customer.phone_number }}</td>
-            <td>{{ customer.email|default:"-" }}</td>
-            <td>{{ customer.address|default:"-"|truncatechars:30 }}</td>
-            <td>{{ customer.birth_date|default:"-" }}</td>
-            <td>{{ customer.created_at|date:"Y/m/d" }}</td>
-            <td>
+          <tr style="cursor:pointer" onclick="location.href='{% url 'leads:customer_detail' customer.pk %}'">
+            <td class="card-title">{{ customer.name }}</td>
+            <td data-label="電話">{{ customer.phone_number }}</td>
+            <td data-label="メール">{{ customer.email|default:"-" }}</td>
+            <td data-label="住所">{{ customer.address|default:"-"|truncatechars:30 }}</td>
+            <td data-label="生年月日">{{ customer.birth_date|default:"-" }}</td>
+            <td data-label="登録日">{{ customer.created_at|date:"Y/m/d" }}</td>
+            <td class="d-mobile-none">
               <a href="{% url 'leads:customer_detail' customer.pk %}" class="btn btn-sm btn-outline-primary">
                 <i class="bi bi-pencil"></i> 詳細
               </a>

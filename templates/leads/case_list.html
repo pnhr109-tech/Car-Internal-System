@@ -36,7 +36,7 @@
 
   <div class="card">
     <div class="card-body p-0">
-      <table class="table table-hover table-striped mb-0">
+      <table class="table table-hover table-striped mb-0 mobile-card-table">
         <thead class="table-dark sticky-top">
           <tr>
             <th>顧客名</th>
@@ -52,18 +52,18 @@
         <tbody>
           {% for a in page_obj %}
           <tr style="cursor:pointer" onclick="location.href='{% url 'leads:case_detail' a.pk %}'">
-            <td>{{ a.customer.name }}</td>
-            <td>{{ a.customer.phone_number }}</td>
-            <td>{{ a.vehicle.maker }} {{ a.vehicle.car_model }}（{{ a.vehicle.year }}）</td>
-            <td>{{ a.assessment_datetime|date:"Y-m-d H:i"|default:"-" }}</td>
-            <td>{% if a.assessment_price %}{{ a.assessment_price|floatformat:0 }}円{% else %}-{% endif %}</td>
-            <td>
+            <td class="card-title">{{ a.customer.name }}</td>
+            <td data-label="電話">{{ a.customer.phone_number }}</td>
+            <td data-label="車両">{{ a.vehicle.maker }} {{ a.vehicle.car_model }}（{{ a.vehicle.year }}）</td>
+            <td data-label="査定日時">{{ a.assessment_datetime|date:"Y-m-d H:i"|default:"-" }}</td>
+            <td data-label="査定額">{% if a.assessment_price %}{{ a.assessment_price|floatformat:0 }}円{% else %}-{% endif %}</td>
+            <td data-label="ステータス">
               <span class="badge bg-{% if a.status == 'contracted' %}success{% elif a.status == 'lost' %}danger{% elif a.status == 'managed' %}warning text-dark{% else %}secondary{% endif %}">
                 {{ a.get_status_display }}
               </span>
             </td>
-            <td>{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}</td>
-            <td>
+            <td data-label="担当者">{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}</td>
+            <td data-label="承認">
               {% if a.approved_by %}
               <span class="badge bg-success"><i class="bi bi-check-circle"></i> 承認済</span>
               {% else %}
