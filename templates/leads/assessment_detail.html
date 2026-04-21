@@ -5,12 +5,10 @@
 <div class="container-fluid py-4">
 
   {# パンくず #}
-  <nav aria-label="breadcrumb" class="mb-3">
-    <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="{% url 'leads:assessment_list' %}">査定申込一覧</a></li>
-      <li class="breadcrumb-item active">{{ req.application_number }}</li>
-    </ol>
-  </nav>
+  <div class="page-nav">
+    <a href="{% url 'leads:assessment_list' %}" class="page-back-link"><i class="bi bi-arrow-left"></i> 査定申込一覧</a>
+    <h4 class="page-nav-title"><i class="bi bi-file-earmark-text text-primary"></i> {{ req.application_number }}</h4>
+  </div>
 
   {# フラッシュメッセージ #}
   {% for msg in messages %}
@@ -19,8 +17,7 @@
   </div>
   {% endfor %}
 
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h4 class="mb-0"><i class="bi bi-file-earmark-text text-primary"></i> 査定申込詳細</h4>
+  <div class="d-flex justify-content-end mb-3 flex-wrap gap-2">
     <div class="d-flex gap-2 page-header-actions">
       {% if can_promote %}
       <button class="btn btn-success" onclick="promoteToCase()">

@@ -273,81 +273,62 @@
                         <span>査定申込一覧（最新100件）</span>
                         <a href="/sateiinfo/" class="btn btn-sm btn-outline-primary">一覧へ</a>
                     </div>
-                    <div class="card-body p-0 d-flex flex-column dashboard-assessment-card-body">
-                        <div class="table-responsive dashboard-table-wrapper flex-grow-1">
-                            <table class="table table-striped table-hover table-sm mb-0 dashboard-assessment-table mobile-card-table">
-                                <thead class="sticky-top dashboard-table-head">
-                                    <tr>
-                                        <th class="col-application-number">お申込番号</th>
-                                        <th class="col-application-datetime">お申込日時</th>
-                                        <th class="col-owner">担当営業</th>
-                                        <th class="col-status">対応ステータス</th>
-                                        <th class="col-customer">お名前</th>
-                                        <th class="col-phone">電話番号</th>
-                                        <th class="col-call-count">通話数</th>
-                                        <th class="col-sale-timing">希望売却時期</th>
-                                        <th class="col-maker">メーカー</th>
-                                        <th class="col-model">車種</th>
-                                        <th class="col-year">年式</th>
-                                        <th class="col-mileage">走行距離</th>
-                                        <th class="col-address">住所</th>
-                                        <th class="col-action">操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for item in latest_assessments %}
-                                    <tr>
-                                        <td class="application-number-cell card-title"><a href="#" class="text-decoration-none fw-semibold" onclick="event.preventDefault(); openTopDetailModal({{ item.id }})">{{ item.customer_name }} — {{ item.application_number }}</a></td>
-                                        <td class="application-datetime-cell" data-label="申込日時">
-                                            <span class="date-part">{{ item.application_datetime|date:'Y-m-d' }}</span>
-                                            <span class="time-part">{{ item.application_datetime|date:'H:i' }}</span>
-                                        </td>
-                                        <td class="owner-name-cell" data-label="担当">{{ item.sales_owner_name }}</td>
-                                        <td data-label="ステータス">
-                                            {% if item.follow_status == '成約' %}
-                                            <span class="ui-badge ui-badge--success">{{ item.follow_status }}</span>
-                                            {% elif item.follow_status == '商談確定' %}
-                                            <span class="ui-badge ui-badge--info">{{ item.follow_status }}</span>
-                                            {% elif item.follow_status == '見送り' %}
-                                            <span class="ui-badge ui-badge--danger">{{ item.follow_status }}</span>
-                                            {% elif item.follow_status == '再コール予定' %}
-                                            <span class="ui-badge ui-badge--warning">{{ item.follow_status }}</span>
-                                            {% else %}
-                                            <span class="ui-badge ui-badge--warning">{{ item.follow_status }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="d-mobile-none">{{ item.customer_name }}</td>
-                                        <td data-label="電話">
-                                            {% if item.phone_number %}
-                                            <a href="tel:{{ item.phone_number }}" class="text-decoration-none" onclick="recordTopCallAndDial(event, {{ item.id }})">{{ item.phone_number }}</a>
-                                            {% else %}
-                                            -
-                                            {% endif %}
-                                        </td>
-                                        <td id="top-call-count-{{ item.id }}" class="call-count-cell d-mobile-none">{{ item.call_count }}</td>
-                                        <td class="d-mobile-none">{{ item.desired_sale_timing }}</td>
-                                        <td class="d-mobile-none">{{ item.maker }}</td>
-                                        <td data-label="車種">{{ item.car_model }}</td>
-                                        <td data-label="年式">{{ item.year }}</td>
-                                        <td class="d-mobile-none">{{ item.mileage }}</td>
-                                        <td class="d-mobile-none">{{ item.address }}</td>
-                                        <td class="action-cell" data-label="操作">
-                                            {% if not item.sales_owner_name %}
-                                            <button class="btn btn-sm btn-outline-success" onclick="openTopStatusModal({{ item.id }}, '{{ item.follow_status|urlencode }}', '{{ item.sales_note|urlencode }}')">更新</button>
-                                            {% elif item.sales_owner_name == current_user_display_name %}
-                                            <button class="btn btn-sm btn-outline-success" onclick="openTopStatusModal({{ item.id }}, '{{ item.follow_status|urlencode }}', '{{ item.sales_note|urlencode }}')">更新</button>
-                                            {% else %}
-                                            <span class="text-muted small">担当確定済</span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% empty %}
-                                    <tr>
-                                        <td colspan="14" class="text-center text-muted py-4">最新データがありません</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                    <div class="card-body p-0 dashboard-assessment-card-body">
+                        <div class="dash-feed-list">
+                            {% for item in latest_assessments %}
+                            <div class="dash-feed-item" onclick="openTopDetailModal({{ item.id }})">
+
+                                {# 1行目: 顧客名 + ステータス + 担当状況 #}
+                                <div class="dash-feed-main">
+                                    <span class="dash-feed-name">{{ item.customer_name }}</span>
+                                    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                        {% if item.follow_status == '成約' %}
+                                        <span class="ui-badge ui-badge--success">{{ item.follow_status }}</span>
+                                        {% elif item.follow_status == '商談確定' %}
+                                        <span class="ui-badge ui-badge--info">{{ item.follow_status }}</span>
+                                        {% elif item.follow_status == '見送り' %}
+                                        <span class="ui-badge ui-badge--danger">{{ item.follow_status }}</span>
+                                        {% else %}
+                                        <span class="ui-badge ui-badge--warning">{{ item.follow_status }}</span>
+                                        {% endif %}
+                                        {% if item.sales_owner_name %}
+                                        <span class="dash-feed-owner">{{ item.sales_owner_name }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                {# 2行目: 車両情報（利益判断） #}
+                                <div class="dash-feed-vehicle">
+                                    <i class="bi bi-car-front"></i>
+                                    {{ item.maker }} {{ item.car_model }}
+                                    {% if item.year %}<span class="dash-feed-chip">{{ item.year }}</span>{% endif %}
+                                    {% if item.mileage %}<span class="dash-feed-chip">{{ item.mileage }}</span>{% endif %}
+                                </div>
+
+                                {# 3行目: 住所 + 申込日時 #}
+                                <div class="dash-feed-meta">
+                                    {% if item.address %}<i class="bi bi-geo-alt"></i> {{ item.address }} &nbsp;·&nbsp; {% endif %}
+                                    <i class="bi bi-clock"></i> {{ item.application_datetime|date:'m/d H:i' }}
+                                </div>
+
+                                {# アクション: 直接発信 + ステータス更新 #}
+                                <div class="dash-feed-actions">
+                                    {% if item.phone_number %}
+                                    <a href="tel:{{ item.phone_number }}" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); recordTopCallAndDial(event, {{ item.id }})">
+                                        <i class="bi bi-telephone-fill"></i> {{ item.phone_number }}
+                                    </a>
+                                    {% endif %}
+                                    {% if not item.sales_owner_name or item.sales_owner_name == current_user_display_name %}
+                                    <button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); openTopStatusModal({{ item.id }}, '{{ item.follow_status|urlencode }}', '{{ item.sales_note|urlencode }}')">
+                                        <i class="bi bi-pencil-square"></i> 更新
+                                    </button>
+                                    {% endif %}
+                                </div>
+
+                            </div>
+                            {% empty %}
+                            <p class="text-center text-muted py-4 mb-0">最新データがありません</p>
+                            {% endfor %}
                         </div>
                     </div>
                 </div>

@@ -247,7 +247,7 @@ def update_customer_info(request, assessment_id):
         return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
 
     str_fields = [
-        'name', 'phone_number', 'email', 'postal_code', 'address',
+        'name', 'furigana', 'phone_number', 'email', 'postal_code', 'address',
         'occupation', 'gender', 'family_structure', 'license_number',
     ]
     update_fields = ['updated_at']

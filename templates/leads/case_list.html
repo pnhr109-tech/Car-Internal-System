@@ -1,13 +1,13 @@
 {% extends 'base/internal_base.html' %}
+{% load humanize %}
 {% block title %}案件一覧{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h4 class="mb-0"><i class="bi bi-briefcase text-primary"></i> 案件一覧</h4>
   </div>
 
-  {# 検索 #}
   <div class="card search-card mb-3">
     <div class="card-body">
       <form method="get" class="row g-2 align-items-end">
@@ -32,54 +32,45 @@
     </div>
   </div>
 
-  <p class="text-muted small">{{ page_obj.paginator.count }}件</p>
+  <p class="text-muted small mb-2">{{ page_obj.paginator.count }}件</p>
 
   <div class="card">
     <div class="card-body p-0">
-      <table class="table table-hover table-striped mb-0 mobile-card-table">
-        <thead class="table-dark sticky-top">
-          <tr>
-            <th>顧客名</th>
-            <th>電話番号</th>
-            <th>車両</th>
-            <th>査定日時</th>
-            <th>査定額</th>
-            <th>ステータス</th>
-            <th>担当者</th>
-            <th>承認</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for a in page_obj %}
-          <tr style="cursor:pointer" onclick="location.href='{% url 'leads:case_detail' a.pk %}'">
-            <td class="card-title">{{ a.customer.name }}</td>
-            <td data-label="電話">{{ a.customer.phone_number }}</td>
-            <td data-label="車両">{{ a.vehicle.maker }} {{ a.vehicle.car_model }}（{{ a.vehicle.year }}）</td>
-            <td data-label="査定日時">{{ a.assessment_datetime|date:"Y-m-d H:i"|default:"-" }}</td>
-            <td data-label="査定額">{% if a.assessment_price %}{{ a.assessment_price|floatformat:0 }}円{% else %}-{% endif %}</td>
-            <td data-label="ステータス">
-              <span class="badge bg-{% if a.status == 'contracted' %}success{% elif a.status == 'lost' %}danger{% elif a.status == 'managed' %}warning text-dark{% else %}secondary{% endif %}">
-                {{ a.get_status_display }}
-              </span>
-            </td>
-            <td data-label="担当者">{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}</td>
-            <td data-label="承認">
-              {% if a.approved_by %}
-              <span class="badge bg-success"><i class="bi bi-check-circle"></i> 承認済</span>
-              {% else %}
-              <span class="badge bg-warning text-dark">未承認</span>
-              {% endif %}
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="8" class="text-center text-muted py-4">案件はありません</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      {% for a in page_obj %}
+      {% with owner=a.assigned_to.get_full_name|default:a.assigned_to.username %}
+      <div class="dash-feed-item" onclick="location.href='{% url 'leads:case_detail' a.pk %}'">
+        <div class="dash-feed-main">
+          <span class="dash-feed-name">{{ a.customer.name }}</span>
+          <div class="d-flex align-items-center gap-1 flex-shrink-0">
+            <span class="ui-badge {% if a.status == 'contracted' %}ui-badge--success{% elif a.status == 'lost' or a.status == 'pre_cancel' %}ui-badge--danger{% elif a.status == 'managed' %}ui-badge--warning{% else %}ui-badge--info{% endif %}">
+              {{ a.get_status_display }}
+            </span>
+            {% if owner %}<span class="dash-feed-owner">{{ owner }}</span>{% endif %}
+          </div>
+        </div>
+        {% with vehicle=a.vehicle %}
+        {% if vehicle.maker or vehicle.car_model %}
+        <div class="dash-feed-vehicle">
+          <i class="bi bi-car-front"></i>
+          {{ vehicle.maker }} {{ vehicle.car_model }}
+          {% if vehicle.year %}<span class="dash-feed-chip">{{ vehicle.year }}</span>{% endif %}
+          {% if vehicle.mileage %}<span class="dash-feed-chip">{{ vehicle.mileage }}</span>{% endif %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        <div class="dash-feed-meta">
+          {% if a.assessment_datetime %}<i class="bi bi-clock"></i> {{ a.assessment_datetime|date:"Y-m-d H:i" }}{% endif %}
+          {% if a.assessment_price %} &nbsp;·&nbsp; <i class="bi bi-currency-yen"></i> {{ a.assessment_price|floatformat:0|intcomma }}円{% endif %}
+          {% if a.approved_by %} &nbsp;·&nbsp; <span class="text-success"><i class="bi bi-check-circle-fill"></i> 承認済</span>{% else %} &nbsp;·&nbsp; <span class="text-warning"><i class="bi bi-hourglass"></i> 未承認</span>{% endif %}
+        </div>
+      </div>
+      {% endwith %}
+      {% empty %}
+      <p class="text-center text-muted py-4 mb-0">案件はありません</p>
+      {% endfor %}
     </div>
   </div>
 
-  {# ページネーション #}
   {% if page_obj.has_other_pages %}
   <nav class="mt-3">
     <ul class="pagination justify-content-end">

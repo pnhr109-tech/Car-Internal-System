@@ -12,6 +12,7 @@
     min-height: 44px;
     padding-left: 16px;
     padding-right: 16px;
+    white-space: nowrap;
   }
   .btn-sm {
     min-height: 36px;
@@ -134,20 +135,48 @@
   .mobile-card-table tbody {
     display: block;
   }
+  /* mobile-table-outer: テーブルを包む .card を透明化して二重カードを防ぐ */
+  .mobile-table-outer {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  .mobile-table-outer.card-body,
+  .mobile-table-outer > .card-body {
+    padding: 0 !important;
+  }
+
+  /* table 本体と tbody の Bootstrap CSS 変数を全リセット */
+  .mobile-card-table,
+  .mobile-card-table > tbody {
+    background: transparent !important;
+    --bs-table-bg: transparent;
+    --bs-table-striped-bg: rgba(0, 0, 0, 0);
+    --bs-table-hover-bg: rgba(0, 0, 0, 0);
+    --bs-table-active-bg: rgba(0, 0, 0, 0);
+    --bs-table-bg-state: rgba(0, 0, 0, 0);
+    --bs-table-bg-type: rgba(0, 0, 0, 0);
+  }
+
   .mobile-card-table tbody tr {
     display: block;
     border: 1px solid var(--c-border);
     border-radius: var(--radius);
     margin-bottom: 10px;
-    background: var(--c-white);
+    background-color: #ffffff !important;
+    background-image: none !important;
     padding: 12px 14px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
     cursor: pointer;
+    --bs-table-bg-state: rgba(0, 0, 0, 0);
+    --bs-table-bg-type: rgba(0, 0, 0, 0);
   }
   .mobile-card-table tbody tr:active {
-    background: var(--c-secondary-hover-bg);
+    background-color: #f0f4ff !important;
   }
-  .mobile-card-table tbody td {
+  .mobile-card-table > tbody > tr > td,
+  .mobile-card-table > tbody > tr > th {
     display: flex;
     align-items: flex-start;
     gap: 8px;
@@ -155,6 +184,11 @@
     padding: 3px 0;
     font-size: 14px;
     line-height: 1.4;
+    background-color: transparent !important;
+    background-image: none !important;
+    --bs-table-bg: transparent;
+    --bs-table-bg-state: rgba(0, 0, 0, 0);
+    --bs-table-bg-type: rgba(0, 0, 0, 0);
   }
   .mobile-card-table tbody td::before {
     content: attr(data-label);
@@ -181,49 +215,6 @@
   .mobile-card-table tbody td.d-mobile-none {
     display: none !important;
   }
-}
-
-/* ================================================================
-   査定申込一覧: モバイルカード専用コンテナ
-================================================================ */
-.assessment-card-item {
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius);
-  background: var(--c-white);
-  padding: 12px 14px;
-  margin-bottom: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
-}
-.assessment-card-item:active {
-  background: var(--c-secondary-hover-bg);
-}
-.assessment-card-item .card-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 2px;
-}
-.assessment-card-item .card-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--c-text);
-}
-.assessment-card-item .card-meta {
-  font-size: 12px;
-  color: var(--c-text-muted);
-  margin-top: 4px;
-}
-.assessment-card-item .card-divider {
-  border-top: 1px solid var(--c-border);
-  margin: 8px 0;
-}
-.assessment-card-item .card-action {
-  margin-top: 8px;
-  display: flex;
-  gap: 8px;
-}
-.assessment-card-item .card-action .btn {
-  flex: 1;
 }
 
 /* ================================================================

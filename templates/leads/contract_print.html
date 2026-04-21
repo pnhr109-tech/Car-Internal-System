@@ -99,14 +99,8 @@
           <span style="font-size:17pt; font-weight:bold; text-decoration:underline">買取契約書</span>
         </div>
 
-        {# 売主（甲） / 買主（乙）行 #}
-        <table style="border:none; margin-bottom:1mm">
-          <colgroup><col style="width:50%"><col style="width:50%"></colgroup>
-          <tr>
-            <td class="no-border" style="font-size:8pt; font-weight:bold">売主（甲）</td>
-            <td class="no-border" style="font-size:8pt; font-weight:bold">買主（乙）</td>
-          </tr>
-        </table>
+        {# 売主（甲）行 #}
+        <div style="font-size:8pt; font-weight:bold; margin-bottom:1mm">売主（甲）</div>
 
         {# 売主名 #}
         <div style="border-bottom:1px solid #333; min-height:11mm; display:flex; align-items:flex-end; padding-bottom:1mm; margin-bottom:2mm">
@@ -148,10 +142,15 @@
       {# 右：買主（乙）会社情報＋担当者 #}
       <td class="no-border" style="vertical-align:top">
 
+        {# 買主（乙）ラベル #}
+        <div style="font-size:8pt; font-weight:bold; margin-bottom:1mm">買主（乙）</div>
+
         {# 会社ロゴ・スタンプ #}
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1mm">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1mm">
           <img src="{% static 'images/brand/gigicompany_logo.png' %}" style="height:18mm; max-width:55mm; object-fit:contain; object-position:left top">
-          <div class="company-stamp">株式会社<br>gigico<br>mpany</div>
+          <div style="flex:1; display:flex; justify-content:center; align-items:center">
+            <img src="{% static 'images/brand/gigi_sing.png' %}" style="height:22mm; object-fit:contain">
+          </div>
         </div>
 
         <div style="font-size:7pt; margin-bottom:0.3mm">適格請求書発行事業者登録T-2050001049807</div>
@@ -308,7 +307,10 @@
         この車両状況及び申告について上記の事を確認し、この申告に相違があった場合は<br>
         契約解除及び代金返済、損害賠償などの請求を受けても異議はありません
       </td>
-      <td colspan="2" style="text-align:center; font-weight:bold; vertical-align:middle; height:14mm">売主署名</td>
+      <td colspan="2" style="vertical-align:bottom; height:22mm; padding:3px 6px">
+        <div style="font-size:7.5pt; font-weight:bold; color:#555; margin-bottom:2mm; text-align:center">売主署名</div>
+        <div style="border-bottom:1.5px solid #333; height:12mm"></div>
+      </td>
     </tr>
   </table>
 
@@ -351,27 +353,21 @@
       <td colspan="5" class="bg-yellow" style="text-align:center; font-weight:bold">振込口座</td>
     </tr>
     <tr>
-      <td class="no-border" style="border-right:1px solid #333 !important; border-bottom:1px solid #333 !important">
-        {% if bank_account and inst == 'bank' %}●{% endif %}
-      </td>
+      <td style="text-align:center">{% if bank_account and inst == 'bank' %}●{% endif %}</td>
       <td>銀行</td>
       <td>{% if bank_account and inst == 'bank' %}{{ bank_account.bank_name }}{% endif %}</td>
       <td style="text-align:center">支店</td>
       <td>{% if bank_account and inst == 'bank' %}{{ bank_account.branch_name }}{% endif %}</td>
     </tr>
     <tr>
-      <td class="no-border" style="border-right:1px solid #333 !important; border-bottom:1px solid #333 !important">
-        {% if bank_account and inst == 'shinkin' %}●{% endif %}
-      </td>
+      <td style="text-align:center">{% if bank_account and inst == 'shinkin' %}●{% endif %}</td>
       <td>信用金庫</td>
       <td>{% if bank_account and inst == 'shinkin' %}{{ bank_account.bank_name }}{% endif %}</td>
       <td style="text-align:center">出張所</td>
       <td>{% if bank_account and inst == 'shinkin' %}{{ bank_account.branch_name }}{% endif %}</td>
     </tr>
     <tr>
-      <td class="no-border" style="border-right:1px solid #333 !important; border-bottom:1px solid #333 !important">
-        {% if bank_account and inst == 'nokyo' %}●{% endif %}
-      </td>
+      <td style="text-align:center">{% if bank_account and inst == 'nokyo' %}●{% endif %}</td>
       <td>農協</td>
       <td>{% if bank_account and inst == 'nokyo' %}{{ bank_account.bank_name }}{% endif %}</td>
       <td></td>
@@ -389,7 +385,7 @@
       </td>
     </tr>
     <tr>
-      <td colspan="5" style="border-left:none; border-right:none; text-align:center; font-size:9pt; height:5mm">
+      <td colspan="5" style="text-align:center; font-size:9pt; height:5mm">
         {% if bank_account %}{{ bank_account.account_number }}{% else %}ー{% endif %}
       </td>
     </tr>
@@ -503,9 +499,10 @@
     <div style="margin-top:10mm; text-align:center">
       <table style="width:65%; margin:0 auto; border:2px solid #333">
         <tr style="height:22mm">
-          <td style="border:none; text-align:center; vertical-align:middle">
-            <div style="font-size:10pt; font-weight:bold">売主（甲）署名</div>
-            <div style="font-size:7.5pt; color:#555; margin-top:3mm">※契約条項を確認し署名をして下さい</div>
+          <td style="border:none; text-align:center; vertical-align:bottom; padding: 0 8mm 4mm">
+            <div style="font-size:10pt; font-weight:bold; margin-bottom:3mm">売主（甲）署名</div>
+            <div style="border-bottom:1.5px solid #333; margin-bottom:2mm"></div>
+            <div style="font-size:7.5pt; color:#555">※契約条項を確認し署名をして下さい</div>
           </td>
         </tr>
       </table>

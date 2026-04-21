@@ -5,12 +5,10 @@
 {% block content %}
 <div class="container-fluid py-4">
 
-  <nav aria-label="breadcrumb" class="mb-3">
-    <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="{% url 'leads:case_list' %}">案件一覧</a></li>
-      <li class="breadcrumb-item active">{{ assessment.customer.name }}</li>
-    </ol>
-  </nav>
+  <div class="page-nav">
+    <a href="{% url 'leads:case_list' %}" class="page-back-link"><i class="bi bi-arrow-left"></i> 案件一覧</a>
+    <h4 class="page-nav-title"><i class="bi bi-briefcase text-primary"></i> {{ assessment.customer.name }}</h4>
+  </div>
 
   {% for msg in messages %}
   <div class="alert alert-{{ msg.tags }} alert-dismissible fade show">
@@ -60,7 +58,7 @@
     </li>
     <li class="nav-item">
       <a class="nav-link {% if active_tab == 'customer' %}active{% endif %}" href="?tab=customer">
-        <i class="bi bi-person"></i> 顧客・車両
+        <i class="bi bi-person"></i> 顧客
       </a>
     </li>
     <li class="nav-item">
@@ -73,8 +71,10 @@
   {# ── タブ①: 査定 ────────────────────────────────────── #}
   {% if active_tab == 'assessment' %}
   <div class="row g-4">
+
+    {# 左: 査定内容 #}
     <div class="col-lg-6">
-      <div class="card">
+      <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h6 class="mb-0">査定内容</h6>
           <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editAssessmentModal">
@@ -115,8 +115,8 @@
           {% endif %}
         </div>
       </div>
-    </div>
-    <div class="col-lg-6">
+
+      {# 査定チェック項目 #}
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h6 class="mb-0">査定チェック項目</h6>
@@ -142,6 +142,55 @@
           </ul>
         </div>
       </div>
+    </div>
+
+    {# 右: 車両情報 #}
+    <div class="col-lg-6">
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-car-front"></i> 車両情報</h6>
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editVehicleModal">
+            <i class="bi bi-pencil"></i> 編集
+          </button>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-5 text-muted">メーカー</dt><dd class="col-7">{{ assessment.vehicle.maker }}</dd>
+            <dt class="col-5 text-muted">車種</dt><dd class="col-7">{{ assessment.vehicle.car_model }}</dd>
+            <dt class="col-5 text-muted">年式</dt><dd class="col-7">{{ assessment.vehicle.year }}</dd>
+            <dt class="col-5 text-muted">走行距離</dt><dd class="col-7">{{ assessment.vehicle.mileage }}</dd>
+            <dt class="col-5 text-muted">グレード</dt><dd class="col-7">{{ assessment.vehicle.grade|default:"-" }}</dd>
+            <dt class="col-5 text-muted">カラー</dt><dd class="col-7">{{ assessment.vehicle.color|default:"-" }}</dd>
+            <dt class="col-5 text-muted">排気量</dt><dd class="col-7">{{ assessment.vehicle.displacement|default:"-" }}</dd>
+            <dt class="col-5 text-muted">車台番号</dt><dd class="col-7">{{ assessment.vehicle.chassis_number|default:"-" }}</dd>
+            <dt class="col-5 text-muted">修復歴</dt><dd class="col-7">{% if assessment.vehicle.repair_history_flag is not None %}{% if assessment.vehicle.repair_history_flag %}あり{% else %}なし{% endif %}{% else %}-{% endif %}</dd>
+            <dt class="col-5 text-muted">車検有効期限</dt><dd class="col-7">{{ assessment.vehicle.inspection_expiry|date:"Y-m-d"|default:"-" }}</dd>
+            <dt class="col-5 text-muted">ミッション</dt><dd class="col-7">{{ assessment.vehicle.transmission_type|default:"-" }}</dd>
+            <dt class="col-5 text-muted">ナンバー</dt><dd class="col-7">{{ assessment.vehicle.registration_number|default:"-" }}</dd>
+            <dt class="col-5 text-muted">乗車定員</dt><dd class="col-7">{{ assessment.vehicle.passenger_count|default:"-" }}</dd>
+            <dt class="col-5 text-muted">ボディタイプ</dt><dd class="col-7">{{ assessment.vehicle.body_type|default:"-" }}</dd>
+            <dt class="col-5 text-muted">駆動方式</dt><dd class="col-7">{{ assessment.vehicle.drive_type|default:"-" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      {% if vehicle_images %}
+      <div class="card">
+        <div class="card-header"><h6 class="mb-0">車両画像</h6></div>
+        <div class="card-body">
+          <div class="row g-2">
+            {% for img in vehicle_images %}
+            <div class="col-4">
+              <a href="{{ img.image.url }}" target="_blank">
+                <img src="{{ img.image.url }}" class="img-thumbnail w-100" alt="{{ img.part_type }}">
+              </a>
+              <small class="text-muted d-block text-center">{{ img.part_type }}</small>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
     </div>
 
     {# 契約へ進む #}
@@ -269,7 +318,7 @@
     </div>
   </div>
 
-  {# ── タブ④: 顧客・車両 ──────────────────────────────── #}
+  {# ── タブ④: 顧客 ──────────────────────────────── #}
   {% elif active_tab == 'customer' %}
   <div class="row g-4">
     <div class="col-md-6">
@@ -283,6 +332,7 @@
         <div class="card-body">
           <dl class="row mb-0">
             <dt class="col-5 text-muted">氏名</dt><dd class="col-7">{{ assessment.customer.name }}</dd>
+            <dt class="col-5 text-muted">フリガナ</dt><dd class="col-7">{{ assessment.customer.furigana|default:"-" }}</dd>
             <dt class="col-5 text-muted">電話番号</dt><dd class="col-7">{{ assessment.customer.phone_number }}</dd>
             <dt class="col-5 text-muted">メール</dt><dd class="col-7">{{ assessment.customer.email|default:"-" }}</dd>
             <dt class="col-5 text-muted">郵便番号</dt><dd class="col-7">{{ assessment.customer.postal_code|default:"-" }}</dd>
@@ -294,7 +344,9 @@
           </dl>
         </div>
       </div>
-      <div class="card mt-3">
+    </div>
+    <div class="col-md-6">
+      <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h6 class="mb-0"><i class="bi bi-bank"></i> 口座情報</h6>
           <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#addBankAccountModal">
@@ -321,52 +373,6 @@
           {% endif %}
         </div>
       </div>
-    </div>
-    <div class="col-md-6">
-      <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h6 class="mb-0"><i class="bi bi-car-front"></i> 車両情報</h6>
-          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editVehicleModal">
-            <i class="bi bi-pencil"></i> 編集
-          </button>
-        </div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-5 text-muted">メーカー</dt><dd class="col-7">{{ assessment.vehicle.maker }}</dd>
-            <dt class="col-5 text-muted">車種</dt><dd class="col-7">{{ assessment.vehicle.car_model }}</dd>
-            <dt class="col-5 text-muted">年式</dt><dd class="col-7">{{ assessment.vehicle.year }}</dd>
-            <dt class="col-5 text-muted">走行距離</dt><dd class="col-7">{{ assessment.vehicle.mileage }}</dd>
-            <dt class="col-5 text-muted">グレード</dt><dd class="col-7">{{ assessment.vehicle.grade|default:"-" }}</dd>
-            <dt class="col-5 text-muted">カラー</dt><dd class="col-7">{{ assessment.vehicle.color|default:"-" }}</dd>
-            <dt class="col-5 text-muted">排気量</dt><dd class="col-7">{{ assessment.vehicle.displacement|default:"-" }}</dd>
-            <dt class="col-5 text-muted">車台番号</dt><dd class="col-7">{{ assessment.vehicle.chassis_number|default:"-" }}</dd>
-            <dt class="col-5 text-muted">修復歴</dt><dd class="col-7">{% if assessment.vehicle.repair_history_flag is not None %}{% if assessment.vehicle.repair_history_flag %}あり{% else %}なし{% endif %}{% else %}-{% endif %}</dd>
-            <dt class="col-5 text-muted">車検有効期限</dt><dd class="col-7">{{ assessment.vehicle.inspection_expiry|date:"Y-m-d"|default:"-" }}</dd>
-            <dt class="col-5 text-muted">ミッション</dt><dd class="col-7">{{ assessment.vehicle.transmission_type|default:"-" }}</dd>
-            <dt class="col-5 text-muted">ナンバー</dt><dd class="col-7">{{ assessment.vehicle.registration_number|default:"-" }}</dd>
-            <dt class="col-5 text-muted">乗車定員</dt><dd class="col-7">{{ assessment.vehicle.passenger_count|default:"-" }}</dd>
-            <dt class="col-5 text-muted">ボディタイプ</dt><dd class="col-7">{{ assessment.vehicle.body_type|default:"-" }}</dd>
-            <dt class="col-5 text-muted">駆動方式</dt><dd class="col-7">{{ assessment.vehicle.drive_type|default:"-" }}</dd>
-          </dl>
-        </div>
-      </div>
-      {% if vehicle_images %}
-      <div class="card mt-3">
-        <div class="card-header"><h6 class="mb-0">車両画像</h6></div>
-        <div class="card-body">
-          <div class="row g-2">
-            {% for img in vehicle_images %}
-            <div class="col-4">
-              <a href="{{ img.image.url }}" target="_blank">
-                <img src="{{ img.image.url }}" class="img-thumbnail w-100" alt="{{ img.part_type }}">
-              </a>
-              <small class="text-muted d-block text-center">{{ img.part_type }}</small>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-      </div>
-      {% endif %}
     </div>
   </div>
 

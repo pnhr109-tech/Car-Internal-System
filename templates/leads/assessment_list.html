@@ -18,12 +18,12 @@
         <!-- ヘッダーエリア -->
         <div class="row mb-3">
             <div class="col">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h4 class="mb-1">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h4 class="mb-0">
                         <i class="bi bi-car-front-fill text-primary"></i>
                         査定申込データ
                     </h4>
-                    <div class="d-flex gap-2">
+                    <div class="d-flex gap-2 flex-shrink-0">
                         <a href="/sateiinfo/new/" class="btn btn-success">
                             <i class="bi bi-plus-circle"></i> 新規追加
                         </a>
@@ -102,46 +102,13 @@
             </div>
         </div>
 
-        <!-- データテーブル（PC: md以上） -->
-        <div class="card d-none d-md-block">
-            <div class="card-body p-0 table-container">
-                <table class="table table-hover table-striped mb-0 assessment-table">
-                    <thead class="table-dark sticky-top">
-                        <tr>
-                            <th class="application-number-col">お申込番号</th>
-                            <th>お申込日時</th>
-                            <th>担当営業</th>
-                            <th>対応ステータス</th>
-                            <th>お名前</th>
-                            <th>電話番号</th>
-                            <th class="call-count-col">通話数</th>
-                            <th>希望売却時期</th>
-                            <th>メーカー</th>
-                            <th>車種</th>
-                            <th>年式</th>
-                            <th>走行距離</th>
-                            <th>住所</th>
-                            <th>メールアドレス</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="assessmentTableBody">
-                        <tr>
-                            <td colspan="15" class="text-center text-muted">
-                                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                                データを読み込んでいます...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- データカード（スマホ: md未満） -->
-        <div class="d-md-none" id="assessmentCardContainer">
-            <div class="text-center text-muted py-3">
-                <div class="spinner-border spinner-border-sm me-2" role="status"></div>
-                データを読み込んでいます...
+        <!-- フィードリスト（PC・スマホ共通） -->
+        <div class="card">
+            <div class="card-body p-0" id="assessmentFeedContainer">
+                <div class="text-center text-muted py-4">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    データを読み込んでいます...
+                </div>
             </div>
         </div>
 

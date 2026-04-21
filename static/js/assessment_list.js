@@ -192,112 +192,80 @@ function formatOwnerName(value) {
 }
 
 function renderTable(data) {
-  const tbody     = document.getElementById('assessmentTableBody');
-  const cardContainer = document.getElementById('assessmentCardContainer');
+  const feed = document.getElementById('assessmentFeedContainer');
 
   if (data.length === 0) {
-    tbody.innerHTML       = '<tr><td colspan="15" class="text-center text-muted">データがありません</td></tr>';
-    cardContainer.innerHTML = '<p class="text-center text-muted py-3">データがありません</p>';
+    feed.innerHTML = '<p class="text-center text-muted py-4 mb-0">データがありません</p>';
     return;
   }
 
-  const followStatusClsMap = {
-    '未対応':       'secondary',
-    '不通':         'dark',
-    '再コール予定': 'warning text-dark',
-    '商談確定':     'primary',
-    '商談昇格済':   'info text-dark',
-    '成約':         'success',
-    '見送り':       'danger',
+  const followStatusBadgeMap = {
+    '未対応':       'ui-badge--warning',
+    '不通':         'ui-badge--warning',
+    '再コール予定': 'ui-badge--warning',
+    '商談確定':     'ui-badge--info',
+    '商談昇格済':   'ui-badge--info',
+    '成約':         'ui-badge--success',
+    '見送り':       'ui-badge--danger',
   };
-  const caseStatusClsMap = {
-    in_progress: 'primary',
-    contracted:  'success',
-    lost:        'danger',
-    pre_cancel:  'danger',
-    managed:     'secondary',
+  const caseStatusBadgeMap = {
+    in_progress: 'ui-badge--info',
+    contracted:  'ui-badge--success',
+    lost:        'ui-badge--danger',
+    pre_cancel:  'ui-badge--danger',
+    managed:     'ui-badge--warning',
   };
   const caseStatusLabelMap = {
     in_progress: '査定中',
     contracted:  '成約',
     lost:        '没',
-    pre_cancel:  '査定前キャンセル',
+    pre_cancel:  'キャンセル',
     managed:     '管理',
   };
 
   const statusBadge = (item) => {
     const follow = item.follow_status || '未対応';
     if (follow === '商談昇格済' && item.case_status) {
-      const cls   = caseStatusClsMap[item.case_status] || 'secondary';
+      const cls   = caseStatusBadgeMap[item.case_status] || 'ui-badge--warning';
       const label = caseStatusLabelMap[item.case_status] || item.case_status;
-      return `<span class="badge bg-${cls}">${escapeHtml(label)}</span>`;
+      return `<span class="ui-badge ${cls}">${escapeHtml(label)}</span>`;
     }
-    const cls = followStatusClsMap[follow] || 'secondary';
-    return `<span class="badge bg-${cls}">${escapeHtml(follow)}</span>`;
+    const cls = followStatusBadgeMap[follow] || 'ui-badge--warning';
+    return `<span class="ui-badge ${cls}">${escapeHtml(follow)}</span>`;
   };
 
-  const renderAction = (item) => {
-    const owner = (item.sales_owner_name || '').trim();
-    if (!owner || owner === currentUserDisplayName) {
-      const encodedStatus = encodeURIComponent(item.follow_status || '未対応');
-      const encodedNote   = encodeURIComponent(item.sales_note || '');
-      return `<button class="btn btn-sm btn-outline-success" onclick="openStatusModal(${item.id}, '${encodedStatus}', '${encodedNote}')">更新</button>`;
-    }
-    return '<span class="text-muted small">担当確定済</span>';
-  };
-
-  const renderPhoneLink = (assessmentId, phoneNumber) => {
-    const raw = phoneNumber || '';
-    const tel = raw.replace(/[^0-9+]/g, '');
-    if (!tel) return '-';
-    return `<a href="tel:${tel}" class="text-decoration-none" onclick="recordCallAndDial(event, ${assessmentId})">${escapeHtml(raw)}</a>`;
-  };
-
-  // ── デスクトップ: テーブル行 ──────────────────────────────
-  tbody.innerHTML = data.map(item => `
-    <tr>
-      <td class="application-number-cell"><a href="/sateiinfo/${item.id}/" class="text-decoration-none fw-semibold">${escapeHtml(item.application_number)}</a></td>
-      <td>${item.application_datetime}</td>
-      <td class="owner-name-cell">${formatOwnerName(item.sales_owner_name)}</td>
-      <td>${statusBadge(item)}</td>
-      <td>${item.customer_name}</td>
-      <td>${renderPhoneLink(item.id, item.phone_number)}</td>
-      <td id="call-count-${item.id}" class="call-count-cell">${item.call_count || 0}</td>
-      <td>${item.desired_sale_timing}</td>
-      <td>${item.maker}</td>
-      <td>${item.car_model}</td>
-      <td>${item.year}</td>
-      <td>${item.mileage}</td>
-      <td>${item.address}</td>
-      <td>${item.email}</td>
-      <td>${renderAction(item)}</td>
-    </tr>`).join('');
-
-  // ── モバイル: カード ─────────────────────────────────────
-  cardContainer.innerHTML = data.map(item => {
-    const encodedStatus = encodeURIComponent(item.follow_status || '未対応');
-    const encodedNote   = encodeURIComponent(item.sales_note || '');
+  feed.innerHTML = data.map(item => {
     const owner = (item.sales_owner_name || '').trim();
     const canUpdate = !owner || owner === currentUserDisplayName;
+    const encodedStatus = encodeURIComponent(item.follow_status || '未対応');
+    const encodedNote   = encodeURIComponent(item.sales_note || '');
     const phoneRaw = (item.phone_number || '').replace(/[^0-9+]/g, '');
     const phoneHtml = phoneRaw
-      ? `<a href="tel:${phoneRaw}" class="btn btn-outline-secondary btn-sm" onclick="recordCallAndDial(event, ${item.id})"><i class="bi bi-telephone"></i> ${escapeHtml(item.phone_number)}</a>`
-      : `<span class="text-muted">電話番号なし</span>`;
+      ? `<a href="tel:${phoneRaw}" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); recordCallAndDial(event, ${item.id})"><i class="bi bi-telephone-fill"></i> ${escapeHtml(item.phone_number)}</a>`
+      : '';
+    const vehicle = [item.maker, item.car_model].filter(Boolean).map(v => escapeHtml(v)).join(' ');
+    const chips = [item.year, item.mileage].filter(Boolean).map(v => `<span class="dash-feed-chip">${escapeHtml(v)}</span>`).join('');
+    const ownerBadge = owner ? `<span class="dash-feed-owner">${escapeHtml(owner)}</span>` : '';
 
     return `
-    <div class="assessment-card-item">
-      <div class="card-row">
-        <a href="/sateiinfo/${item.id}/" class="card-title text-decoration-none">${escapeHtml(item.customer_name)}</a>
-        ${statusBadge(item)}
+    <div class="dash-feed-item" style="cursor:pointer" onclick="location.href='/sateiinfo/${item.id}/'">
+      <div class="dash-feed-main">
+        <span class="dash-feed-name">${escapeHtml(item.customer_name)}</span>
+        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+          ${statusBadge(item)}
+          ${ownerBadge}
+        </div>
       </div>
-      <div class="card-meta">${escapeHtml(item.maker)} ${escapeHtml(item.car_model)} / ${escapeHtml(item.year)}</div>
-      <div class="card-meta">${escapeHtml(item.application_number)} &nbsp;·&nbsp; ${escapeHtml(item.application_datetime)}</div>
-      ${owner ? `<div class="card-meta">担当: ${escapeHtml(owner)}</div>` : ''}
-      <div class="card-divider"></div>
-      <div class="card-action">
+      ${vehicle ? `<div class="dash-feed-vehicle"><i class="bi bi-car-front"></i> ${vehicle} ${chips}</div>` : ''}
+      <div class="dash-feed-meta">
+        ${item.address ? `<i class="bi bi-geo-alt"></i> ${escapeHtml(item.address)} &nbsp;·&nbsp; ` : ''}
+        <i class="bi bi-clock"></i> ${escapeHtml(item.application_datetime)}
+        ${item.desired_sale_timing ? ` &nbsp;·&nbsp; 売却: ${escapeHtml(item.desired_sale_timing)}` : ''}
+      </div>
+      <div class="dash-feed-actions">
         ${phoneHtml}
         ${canUpdate
-          ? `<button class="btn btn-outline-success btn-sm" onclick="openStatusModal(${item.id}, '${encodedStatus}', '${encodedNote}')"><i class="bi bi-pencil-square"></i> ステータス更新</button>`
+          ? `<button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); openStatusModal(${item.id}, '${encodedStatus}', '${encodedNote}')"><i class="bi bi-pencil-square"></i> ステータス更新</button>`
           : `<span class="text-muted small align-self-center">担当確定済</span>`
         }
       </div>

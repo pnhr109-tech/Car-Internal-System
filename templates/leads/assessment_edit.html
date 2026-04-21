@@ -4,15 +4,10 @@
 {% block content %}
 <div class="container-fluid py-4">
 
-  <nav aria-label="breadcrumb" class="mb-3">
-    <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="{% url 'leads:assessment_list' %}">査定申込一覧</a></li>
-      <li class="breadcrumb-item"><a href="{% url 'leads:assessment_detail' req.pk %}">{{ req.application_number }}</a></li>
-      <li class="breadcrumb-item active">編集</li>
-    </ol>
-  </nav>
-
-  <h4 class="mb-4"><i class="bi bi-pencil text-primary"></i> 査定申込編集</h4>
+  <div class="page-nav">
+    <a href="{% url 'leads:assessment_detail' req.pk %}" class="page-back-link"><i class="bi bi-arrow-left"></i> {{ req.application_number }}</a>
+    <h4 class="page-nav-title"><i class="bi bi-pencil text-primary"></i> 査定申込編集</h4>
+  </div>
 
   <form method="post">
     {% csrf_token %}

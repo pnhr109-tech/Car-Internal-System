@@ -11,26 +11,21 @@
                 class="app-brand-logo"
                 onerror="this.onerror=null;this.src='{% static 'leads/icons/favicon.svg' %}';this.classList.add('app-brand-logo--fallback');"
             >
-            <span class="app-brand-text">社内システム</span>
         </span>
-        <div class="d-flex align-items-center gap-3">
-                <button class="btn btn-sm header-icon-btn notification-btn position-relative"
-                    type="button"
-                    data-bs-toggle="offcanvas"
-                    data-bs-target="#globalNotificationPanel"
-                    aria-controls="globalNotificationPanel"
-                    id="globalNotificationToggle"
-                    aria-label="通知">
-                <span aria-hidden="true" class="d-inline-flex align-items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M8 16a2 2 0 0 0 1.985-1.75h-3.97A2 2 0 0 0 8 16Zm.104-14.804A1 1 0 0 0 7 2.196v.718C5.286 3.36 4 4.99 4 7v2.764l-.895 1.789A.5.5 0 0 0 3.553 12h8.894a.5.5 0 0 0 .448-.658L12 9.764V7c0-2.01-1.286-3.64-3-4.086v-.718a1 1 0 0 0-.896-1Z"/>
-                    </svg>
-                </span>
-                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="globalNotificationBadge">0</span>
-            </button>
-            <span class="text-white small header-username">{{ request.user.username }}</span>
-            <a href="/logout/" class="btn btn-sm btn-outline-light">ログアウト</a>
-        </div>
+        <button class="btn btn-sm header-icon-btn notification-btn position-relative"
+                type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#globalNotificationPanel"
+                aria-controls="globalNotificationPanel"
+                id="globalNotificationToggle"
+                aria-label="通知">
+            <span aria-hidden="true" class="d-inline-flex align-items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 16a2 2 0 0 0 1.985-1.75h-3.97A2 2 0 0 0 8 16Zm.104-14.804A1 1 0 0 0 7 2.196v.718C5.286 3.36 4 4.99 4 7v2.764l-.895 1.789A.5.5 0 0 0 3.553 12h8.894a.5.5 0 0 0 .448-.658L12 9.764V7c0-2.01-1.286-3.64-3-4.086v-.718a1 1 0 0 0-.896-1Z"/>
+                </svg>
+            </span>
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="globalNotificationBadge">0</span>
+        </button>
     </div>
 </nav>
 
@@ -87,7 +82,11 @@
             <p class="mb-2" id="attendanceLoginAt">{{ attendance_login_at_label }}</p>
             <p class="mb-1 text-muted small">現在の勤務時間</p>
             <p class="mb-3 fw-semibold" id="attendanceWorkDuration" data-login-at="{{ attendance_login_at_iso }}" data-initial-minutes="{{ attendance_work_minutes }}" data-clocked-out="{{ attendance_is_clocked_out|yesno:'true,false' }}">{{ attendance_work_minutes }}分</p>
-            <a href="/clock-out/" class="btn btn-warning w-100">退勤</a>
+            <a href="/clock-out/" class="btn btn-warning w-100 mb-3">退勤</a>
+            <div class="border-top pt-3 d-flex justify-content-between align-items-center">
+                <span class="small text-muted">{{ request.user.get_full_name|default:request.user.username }}</span>
+                <a href="/logout/" class="btn btn-sm btn-outline-secondary">ログアウト</a>
+            </div>
         </div>
     </div>
 </div>

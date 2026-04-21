@@ -4,11 +4,9 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-  <div class="d-flex align-items-center mb-3 gap-2">
-    <a href="{% url 'leads:customer_list' %}" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-arrow-left"></i> 一覧へ
-    </a>
-    <h4 class="mb-0"><i class="bi bi-person text-primary"></i> {{ customer.name }}</h4>
+  <div class="page-nav">
+    <a href="{% url 'leads:customer_list' %}" class="page-back-link"><i class="bi bi-arrow-left"></i> 顧客一覧</a>
+    <h4 class="page-nav-title"><i class="bi bi-person text-primary"></i> {{ customer.name }}</h4>
   </div>
 
   <div class="row g-3">
@@ -85,7 +83,7 @@
             <i class="bi bi-plus"></i> 追加
           </button>
         </div>
-        <div class="card-body p-0" id="bankAccountList">
+        <div class="card-body p-0 mobile-table-outer" id="bankAccountList">
           {% if bank_accounts %}
           <table class="table table-sm mb-0 mobile-card-table">
             <thead class="table-light">
@@ -130,7 +128,7 @@
     <div class="col-12">
       <div class="card">
         <div class="card-header fw-semibold">査定・案件履歴</div>
-        <div class="card-body p-0">
+        <div class="card-body p-0 mobile-table-outer">
           {% if assessments %}
           <table class="table table-sm table-hover mb-0 mobile-card-table">
             <thead class="table-light">
