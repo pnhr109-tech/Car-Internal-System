@@ -68,6 +68,11 @@ from .webhook import (
     gmail_push_notification,
 )
 
+# --- スクレイパー内部 API ---
+from .scraper_api import (
+    scraper_ingest_navikuru,
+)
+
 __all__ = [
     # assessment
     'assessment_list', 'assessment_detail', 'assessment_create', 'assessment_edit',
@@ -87,4 +92,6 @@ __all__ = [
     'update_customer_direct', 'save_bank_account_direct', 'delete_bank_account_direct',
     # webhook
     'gmail_push_notification',
+    # scraper api
+    'scraper_ingest_navikuru',
 ]

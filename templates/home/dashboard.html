@@ -31,10 +31,12 @@
                                 <div class="sales-kpi-label">成約率</div>
                                 <div class="sales-kpi-value" id="kpiCloseRate">{{ monthly_kpis.close_rate }}%</div>
                             </div>
+                            {% if monthly_kpis.self_cc_ratio %}
                             <div class="sales-kpi-card">
                                 <div class="sales-kpi-label">自アポ：CC</div>
                                 <div class="sales-kpi-value" id="kpiSelfCcRatio">{{ monthly_kpis.self_cc_ratio }}</div>
                             </div>
+                            {% endif %}
                             <div class="sales-kpi-card">
                                 <div class="sales-kpi-label">MQ</div>
                                 <div class="sales-kpi-value" id="kpiMq">{{ monthly_kpis.mq }}</div>
@@ -121,7 +123,7 @@
                                     <div class="store-mq-value-row"><span>商談</span><strong>{{ store_item.appointments }}</strong></div>
                                     <div class="store-mq-value-row"><span>契約</span><strong>{{ store_item.contracts }}</strong></div>
                                     <div class="store-mq-value-row"><span>契約率</span><strong>{{ store_item.close_rate }}%</strong></div>
-                                    <div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>
+                                    {% if store_item.self_cc_ratio %}<div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>{% endif %}
                                     <div class="store-mq-value-row"><span>管理数</span><strong>{{ store_item.managed_count }}</strong></div>
                                     <div class="store-mq-value-row"><span>没数</span><strong>{{ store_item.lost_count }}</strong></div>
                                     <div class="store-mq-value-row"><span>査定前キャンセル数</span><strong>{{ store_item.pre_assessment_cancel_count }}</strong></div>
@@ -138,10 +140,12 @@
                                     <div class="sales-kpi-label">当月CC商談数</div>
                                     <div class="sales-kpi-value">{{ monthly_kpis.cc_appointments }}</div>
                                 </div>
+                                {% if monthly_kpis.self_cc_ratio %}
                                 <div class="sales-kpi-card">
                                     <div class="sales-kpi-label">当月自アポ：CC</div>
                                     <div class="sales-kpi-value">{{ monthly_kpis.self_cc_ratio }}</div>
                                 </div>
+                                {% endif %}
                                 <div class="sales-kpi-card">
                                     <div class="sales-kpi-label">当月商談数（全体）</div>
                                     <div class="sales-kpi-value">{{ monthly_kpis.appointments }}</div>
@@ -153,17 +157,19 @@
                                 <div class="store-mq-card">
                                     <div class="store-mq-name">{{ store_item.store }}</div>
                                     <div class="store-mq-value-row"><span>CC商談</span><strong>{{ store_item.cc_appointments }}</strong></div>
-                                    <div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>
+                                    {% if store_item.self_cc_ratio %}<div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>{% endif %}
                                     <div class="store-mq-value-row"><span>MQ</span><strong>{{ store_item.mq }}</strong></div>
                                 </div>
                                 {% endfor %}
                             </div>
                             <div class="sales-hero-section-ribbon">📞 CC通話率・予定率</div>
                             <div class="sales-kpi-row">
+                                {% if monthly_kpis.self_cc_ratio %}
                                 <div class="sales-kpi-card">
                                     <div class="sales-kpi-label">自アポ：CC</div>
                                     <div class="sales-kpi-value">{{ monthly_kpis.self_cc_ratio }}</div>
                                 </div>
+                                {% endif %}
                                 <div class="sales-kpi-card">
                                     <div class="sales-kpi-label">成約率</div>
                                     <div class="sales-kpi-value">{{ monthly_kpis.close_rate }}%</div>
@@ -236,10 +242,12 @@
                                     <div class="sales-kpi-label">成約率</div>
                                     <div class="sales-kpi-value">{{ monthly_kpis.close_rate }}%</div>
                                 </div>
+                                {% if monthly_kpis.self_cc_ratio %}
                                 <div class="sales-kpi-card">
                                     <div class="sales-kpi-label">自アポ：CC</div>
                                     <div class="sales-kpi-value">{{ monthly_kpis.self_cc_ratio }}</div>
                                 </div>
+                                {% endif %}
                             </div>
 
                             <div class="sales-hero-section-ribbon">🏪 店舗RATE（当月）</div>
@@ -248,7 +256,7 @@
                                 <div class="store-mq-card">
                                     <div class="store-mq-name">{{ store_item.store }}</div>
                                     <div class="store-mq-value-row"><span>成約率</span><strong>{{ store_item.close_rate }}%</strong></div>
-                                    <div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>
+                                    {% if store_item.self_cc_ratio %}<div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>{% endif %}
                                 </div>
                                 {% endfor %}
                             </div>
@@ -588,7 +596,7 @@
             setText('kpiAppointments', data.appointments ?? 0);
             setText('kpiContracts', data.contracts ?? 0);
             setText('kpiCloseRate', `${data.close_rate ?? 0}%`);
-            setText('kpiSelfCcRatio', data.self_cc_ratio ?? '0:0');
+            if (data.self_cc_ratio) setText('kpiSelfCcRatio', data.self_cc_ratio);
             setText('kpiMq', data.mq ?? 0);
             setText('kpiManagedCount', data.managed_count ?? 0);
             setText('kpiLostCount', data.lost_count ?? 0);

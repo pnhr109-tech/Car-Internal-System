@@ -55,4 +55,7 @@ urlpatterns = [
 
     # ── Gmail Webhook ─────────────────────────────────────────
     path('webhook/gmail-push/', views.gmail_push_notification, name='gmail_push_notification'),
+
+    # ── スクレイパー内部 API（スクレイパープロセス専用・外部公開不可） ──
+    path('internal/scraper/navikuru/', views.scraper_ingest_navikuru, name='scraper_ingest_navikuru'),
 ]

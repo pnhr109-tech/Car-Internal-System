@@ -1,7 +1,11 @@
 :root {
-  /* typography */
-  --font-base: 14px;
-  --font-heading: 24px;
+  /* typography scale */
+  --font-xs:   0.75rem;    /* 12px — チップ・バッジ・タイムスタンプ */
+  --font-sm:   0.875rem;   /* 14px — 補助テキスト・ラベル・テーブル */
+  --font-base: 1rem;       /* 16px — 本文 */
+  --font-lg:   1.125rem;   /* 18px — カード見出し・セクション小見出し */
+  --font-xl:   1.25rem;    /* 20px — ページサブタイトル */
+  --font-2xl:  1.5rem;     /* 24px — ページタイトル */
 
   /* shape */
   --radius: 6px;

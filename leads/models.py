@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 
 # ---------------------------------------------------------------------------
@@ -333,6 +334,8 @@ class CarAssessmentRequest(models.Model):
         verbose_name='担当者',
     )
     external_service_id  = models.CharField(max_length=100, blank=True, verbose_name='外部サービスID')
+    external_status      = models.CharField(max_length=50, blank=True, verbose_name='外部ステータス')
+    scraped_at           = models.DateTimeField(null=True, blank=True, verbose_name='最終スクレイピング日時')
     referral_name        = models.CharField(max_length=100, blank=True, verbose_name='紹介者名')
     reservation_datetime = models.DateTimeField(null=True, blank=True, verbose_name='査定予約日時')
     cancel_reason        = models.CharField(max_length=255, blank=True, verbose_name='キャンセル理由')
@@ -346,7 +349,11 @@ class CarAssessmentRequest(models.Model):
             models.Index(fields=['-application_datetime'], name='idx_app_datetime'),
             models.Index(fields=['customer_name'], name='idx_customer_name'),
             models.Index(fields=['phone_number'], name='idx_phone_number'),
+            models.Index(fields=['channel_type', 'external_service_id'], name='idx_channel_external_id'),
         ]
+        # external_service_id の重複排除はアプリ層で
+        # get_or_create(channel_type=..., external_service_id=...) を使用
+        # MySQL は条件付き UNIQUE 制約未対応のため DB 制約は設けない
 
     def __str__(self):
         return f"{self.application_number} - {self.customer_name}（{self.maker} {self.car_model}）"

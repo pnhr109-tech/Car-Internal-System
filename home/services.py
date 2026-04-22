@@ -21,7 +21,7 @@ CHAT_SCOPES = [
 
 
 def _self_cc_ratio_text(self_appointments, cc_appointments):
-    return '75%：25%'
+    return None
 
 
 def _week_of_month(dt_value):
