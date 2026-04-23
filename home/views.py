@@ -50,7 +50,10 @@ def dashboard(request):
         'period_kpis': period_kpis,
         'store_performance_summary': store_performance_summary,
         'current_user_display_name': current_user_display_name,
-        'follow_status_choices': [choice[0] for choice in CarAssessmentRequest.FOLLOW_STATUS_CHOICES],
+        'follow_status_choices': [
+            c[0] for c in CarAssessmentRequest.FOLLOW_STATUS_CHOICES
+            if c[0] not in {CarAssessmentRequest.STATUS_PROMOTED, CarAssessmentRequest.STATUS_CLOSED}
+        ],
     })
 
 

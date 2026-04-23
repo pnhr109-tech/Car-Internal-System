@@ -3,14 +3,13 @@ import json
 from datetime import date, datetime, timedelta
 
 from django.utils import timezone
-from django.db.models import Count
-from django.db.models import F
+from django.db.models import Count, F, IntegerField, Subquery, OuterRef
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from leads.models import CarAssessmentRequest
+from leads.models import CarAssessmentRequest, Assessment
 
 
 CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
@@ -107,7 +106,12 @@ def _build_user_kpis(display_name, period_start, period_end, period_label):
 
 
 def get_latest_assessments(limit=100):
-    return CarAssessmentRequest.objects.order_by('-application_datetime')[:limit]
+    case_id_subq = Assessment.objects.filter(
+        assessment_request_id=OuterRef('pk')
+    ).values('pk')[:1]
+    return CarAssessmentRequest.objects.annotate(
+        case_id=Subquery(case_id_subq, output_field=IntegerField())
+    ).order_by('-application_datetime')[:limit]
 
 
 def _current_month_range():

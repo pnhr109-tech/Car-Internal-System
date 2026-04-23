@@ -32,6 +32,7 @@ urlpatterns = [
     # ── 新規 API ─────────────────────────────────────────────
     path('api/assessments/<int:request_id>/promote/',           views.promote_to_case,                  name='promote_to_case'),
     path('api/cases/<int:assessment_id>/update/',              views.update_assessment_info,            name='update_assessment_info'),
+    path('api/cases/<int:assessment_id>/change-assignee/',     views.change_case_assignee,              name='change_case_assignee'),
     path('api/cases/<int:assessment_id>/update-vehicle/',      views.update_vehicle_info,               name='update_vehicle_info'),
     path('api/cases/<int:assessment_id>/update-customer/',     views.update_customer_info,              name='update_customer_info'),
     path('api/cases/<int:assessment_id>/save-bank-account/',   views.save_bank_account,                 name='save_bank_account'),
@@ -45,6 +46,11 @@ urlpatterns = [
     path('api/cases/<int:assessment_id>/create-contract/',      views.create_contract,                  name='create_contract'),
     path('api/cases/<int:assessment_id>/check-items/add/',      views.add_check_item,                   name='add_check_item'),
     path('api/check-items/<int:item_id>/delete/',               views.delete_check_item,                name='delete_check_item'),
+    path('api/contracts/<int:contract_id>/ownership-release/',  views.update_ownership_release,         name='update_ownership_release'),
+    path('api/contracts/<int:contract_id>/advance-payments/add/', views.add_advance_payment,            name='add_advance_payment'),
+    path('api/advance-payments/<int:ap_id>/delete/',            views.delete_advance_payment,           name='delete_advance_payment'),
+    path('api/advance-payments/<int:ap_id>/approve/',           views.approve_advance_payment,          name='approve_advance_payment'),
+    path('api/contracts/<int:contract_id>/required-docs/',      views.update_required_docs,             name='update_required_docs'),
 
     # ── 顧客一覧 ─────────────────────────────────────────────
     path('customers/',                                          views.customer_list,              name='customer_list'),

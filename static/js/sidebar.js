@@ -114,33 +114,10 @@
   };
 
   const showGlobalNewToast = (records, count) => {
-    const container = document.getElementById('globalToastContainer');
-    if (!container || typeof bootstrap === 'undefined') return;
-
     const first = records[0] || {};
     const summary = `${first.application_number || '-'} ${first.customer_name || ''}`.trim();
     const message = count > 1 ? `${summary} ほか ${count - 1}件` : summary;
-    const toastId = `global-toast-${Date.now()}`;
-
-    container.insertAdjacentHTML('beforeend', `
-      <div id="${toastId}" class="toast align-items-center text-white bg-info border-0"
-           role="alert" aria-live="assertive" aria-atomic="true"
-           data-bs-autohide="true" data-bs-delay="6000">
-        <div class="d-flex">
-          <div class="toast-body">
-            <strong>${count}件の新着申込</strong><br>${message}
-          </div>
-          <button type="button" class="btn-close btn-close-white me-2 m-auto"
-                  data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-      </div>`);
-
-    const toastEl = document.getElementById(toastId);
-    if (!toastEl) return;
-    toastEl.style.cursor = 'pointer';
-    toastEl.addEventListener('click', applyNotificationAction);
-    toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
-    new bootstrap.Toast(toastEl).show();
+    showToast(`${count}件の新着申込`, message, 'info', true, applyNotificationAction);
   };
 
   const renderRecentList = () => {

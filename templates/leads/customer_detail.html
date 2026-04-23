@@ -3,7 +3,7 @@
 {% block title %}顧客詳細 — {{ customer.name }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-xxl py-4">
   <div class="page-nav">
     <a href="{% url 'leads:customer_list' %}" class="page-back-link"><i class="bi bi-arrow-left"></i> 顧客一覧</a>
     <h4 class="page-nav-title"><i class="bi bi-person text-primary"></i> {{ customer.name }}</h4>

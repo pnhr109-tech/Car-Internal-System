@@ -4,7 +4,7 @@
 {% block body_class %}bg-light{% endblock %}
 
 {% block content %}
-    <div class="container-fluid py-4">
+    <div class="container-xxl py-4">
         <div class="row g-3">
             <div class="col-12 col-xl-6">
                 <div class="sales-hero-wrap">
@@ -275,7 +275,7 @@
                 </div>
             </div>
 
-            <div class="col-12 col-xl-6">
+            <div class="col-12 col-xl-6" id="assessmentListSection">
                 <div class="card h-100">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <span>査定申込一覧（最新100件）</span>
@@ -292,7 +292,7 @@
                                     <div class="d-flex align-items-center gap-1 flex-shrink-0">
                                         {% if item.follow_status == '成約' %}
                                         <span class="ui-badge ui-badge--success">{{ item.follow_status }}</span>
-                                        {% elif item.follow_status == '商談確定' %}
+                                        {% elif item.follow_status == '商談予定' %}
                                         <span class="ui-badge ui-badge--info">{{ item.follow_status }}</span>
                                         {% elif item.follow_status == '見送り' %}
                                         <span class="ui-badge ui-badge--danger">{{ item.follow_status }}</span>
@@ -313,10 +313,12 @@
                                     {% if item.mileage %}<span class="dash-feed-chip">{{ item.mileage }}</span>{% endif %}
                                 </div>
 
-                                {# 3行目: 住所 + 申込日時 #}
+                                {# 3行目: 住所 + 申込日時 + 通話回数 + 外部申込番号 #}
                                 <div class="dash-feed-meta">
                                     {% if item.address %}<i class="bi bi-geo-alt"></i> {{ item.address }} &nbsp;·&nbsp; {% endif %}
                                     <i class="bi bi-clock"></i> {{ item.application_datetime|date:'m/d H:i' }}
+                                    {% if item.phone_number %} &nbsp;·&nbsp; <i class="bi bi-telephone"></i> <span id="top-call-count-{{ item.id }}">{{ item.call_count }}</span>回{% endif %}
+                                    {% if item.external_service_id %} &nbsp;·&nbsp; <span class="dash-feed-chip text-muted" style="cursor:pointer" title="クリックでコピー" onclick="event.stopPropagation(); copyToClipboard('{{ item.external_service_id }}', this)"><i class="bi bi-clipboard"></i> {{ item.external_service_id }}</span>{% endif %}
                                 </div>
 
                                 {# アクション: 直接発信 + ステータス更新 #}
@@ -326,8 +328,12 @@
                                         <i class="bi bi-telephone-fill"></i> {{ item.phone_number }}
                                     </a>
                                     {% endif %}
-                                    {% if not item.sales_owner_name or item.sales_owner_name == current_user_display_name %}
-                                    <button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); openTopStatusModal({{ item.id }}, '{{ item.follow_status|urlencode }}', '{{ item.sales_note|urlencode }}')">
+                                    {% if item.follow_status == '商談昇格済' and item.case_id %}
+                                    <a href="{% url 'leads:case_detail' item.case_id %}" class="btn btn-sm btn-primary" onclick="event.stopPropagation()">
+                                        <i class="bi bi-briefcase"></i> 案件詳細
+                                    </a>
+                                    {% elif not item.sales_owner_name or item.sales_owner_name == current_user_display_name %}
+                                    <button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); openTopStatusModal({{ item.id }}, '{{ item.follow_status|urlencode }}', '{{ item.sales_note|urlencode }}', '{% if item.reservation_datetime %}{{ item.reservation_datetime|date:"Y-m-d" }}T{{ item.reservation_datetime|date:"H:i" }}{% endif %}')">
                                         <i class="bi bi-pencil-square"></i> 更新
                                     </button>
                                     {% endif %}
@@ -344,6 +350,16 @@
         </div>
     </div>
 
+    <!-- FAB: 申込一覧へ ＋ トップへ戻る -->
+    <div class="fab-stack">
+        <button class="fab-btn fab-btn--light" id="dashBackToTopBtn" data-fab-hidden="true" aria-label="トップへ戻る">
+            <i class="bi bi-chevron-up"></i> トップ
+        </button>
+        <a href="#assessmentListSection" class="fab-btn fab-btn--primary" aria-label="申込一覧へ">
+            <i class="bi bi-list-ul"></i> 申込一覧
+        </a>
+    </div>
+
     <div class="modal fade" id="topStatusUpdateModal" tabindex="-1" aria-labelledby="topStatusUpdateModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
@@ -355,11 +371,15 @@
                     <input type="hidden" id="topModalAssessmentId">
                     <div class="mb-3">
                         <label for="topModalFollowStatus" class="form-label">対応ステータス</label>
-                        <select id="topModalFollowStatus" class="form-select">
+                        <select id="topModalFollowStatus" class="form-select" onchange="onTopModalStatusChange()">
                             {% for status in follow_status_choices %}
                             <option value="{{ status }}">{{ status }}</option>
                             {% endfor %}
                         </select>
+                    </div>
+                    <div class="mb-3 d-none" id="topModalReservationRow">
+                        <label for="topModalReservationDatetime" class="form-label">商談予定日時 <span class="text-danger">*</span></label>
+                        <input type="datetime-local" id="topModalReservationDatetime" class="form-control">
                     </div>
                     <div>
                         <label for="topModalSalesNote" class="form-label">コメント</label>
@@ -398,11 +418,7 @@
         const topDetailModal = new bootstrap.Modal(document.getElementById('topDetailModal'));
         const periodKpis = JSON.parse(document.getElementById('periodKpisData').textContent || '{}');
 
-        function escapeHtml(value) {
-            const div = document.createElement('div');
-            div.textContent = value ?? '';
-            return div.innerHTML;
-        }
+        initBackToTop('dashBackToTopBtn');
 
         function formatOwnerName(value) {
             const raw = (value || '').trim();
@@ -422,11 +438,6 @@
 
         applyTopOwnerLineBreaks();
 
-        function getCsrfToken() {
-            const cookie = document.cookie.split(';').map(v => v.trim()).find(v => v.startsWith('csrftoken='));
-            return cookie ? cookie.split('=')[1] : '';
-        }
-
         function recordTopCallAndDial(event, assessmentId) {
             incrementTopCallCount(assessmentId);
         }
@@ -435,7 +446,7 @@
             fetch(`/sateiinfo/api/assessments/${assessmentId}/call/`, {
                 method: 'POST',
                 headers: {
-                    'X-CSRFToken': getCsrfToken(),
+                    'X-CSRFToken': getCsrf(),
                 },
                 credentials: 'same-origin',
             })
@@ -454,10 +465,17 @@
                 });
         }
 
-        function openTopStatusModal(assessmentId, encodedStatus, encodedNote) {
+        function onTopModalStatusChange() {
+            const status = document.getElementById('topModalFollowStatus').value;
+            document.getElementById('topModalReservationRow').classList.toggle('d-none', status !== '商談予定');
+        }
+
+        function openTopStatusModal(assessmentId, encodedStatus, encodedNote, reservation) {
             document.getElementById('topModalAssessmentId').value = assessmentId;
             document.getElementById('topModalFollowStatus').value = decodeURIComponent(encodedStatus || '未対応');
             document.getElementById('topModalSalesNote').value = decodeURIComponent(encodedNote || '');
+            document.getElementById('topModalReservationDatetime').value = reservation || '';
+            onTopModalStatusChange();
             topStatusUpdateModal.show();
         }
 
@@ -465,18 +483,24 @@
             const assessmentId = document.getElementById('topModalAssessmentId').value;
             const followStatus = document.getElementById('topModalFollowStatus').value;
             const salesNote = document.getElementById('topModalSalesNote').value;
+            const reservation = document.getElementById('topModalReservationDatetime').value;
+
+            if (followStatus === '商談予定' && !reservation) {
+                alert('商談予定日時を入力してください');
+                return;
+            }
+
+            const body = { follow_status: followStatus, sales_note: salesNote };
+            if (reservation) body.reservation_datetime = reservation;
 
             fetch(`/sateiinfo/api/assessments/${assessmentId}/update/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrfToken(),
+                    'X-CSRFToken': getCsrf(),
                 },
                 credentials: 'same-origin',
-                body: JSON.stringify({
-                    follow_status: followStatus,
-                    sales_note: salesNote,
-                }),
+                body: JSON.stringify(body),
             })
                 .then(async (response) => {
                     const data = await response.json();

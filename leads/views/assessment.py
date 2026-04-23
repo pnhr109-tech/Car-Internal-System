@@ -18,7 +18,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import F, Max, Q, Subquery, OuterRef, CharField
+from django.db.models import F, Max, Q, Subquery, OuterRef, CharField, IntegerField
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -43,12 +43,20 @@ logger = logging.getLogger(__name__)
 # 画面ビュー
 # ---------------------------------------------------------------------------
 
+_MODAL_EXCLUDED_STATUSES = {
+    CarAssessmentRequest.STATUS_PROMOTED,  # 商談昇格済（案件昇格フローで自動設定）
+    CarAssessmentRequest.STATUS_CLOSED,    # 成約（承認フローで設定）
+}
+
 @login_required
 def assessment_list(request):
     """査定申込一覧"""
     return render(request, 'leads/assessment_list.html', {
         'current_user_display_name': _current_user_display_name(request.user),
-        'follow_status_choices': [c[0] for c in CarAssessmentRequest.FOLLOW_STATUS_CHOICES],
+        'follow_status_choices': [
+            c[0] for c in CarAssessmentRequest.FOLLOW_STATUS_CHOICES
+            if c[0] not in _MODAL_EXCLUDED_STATUSES
+        ],
         'channel_choices': CarAssessmentRequest.CHANNEL_CHOICES,
     })
 
@@ -58,9 +66,12 @@ def assessment_detail(request, pk):
     """査定申込詳細・変更（S02）"""
     req = get_object_or_404(CarAssessmentRequest, pk=pk)
     histories = req.contact_histories.select_related('recorded_by').order_by('-contacted_at')
+    profile = getattr(request.user, 'profile', None)
+    can_approve = (profile and profile.can_approve) or request.user.is_superuser
     can_promote = (
         req.follow_status == CarAssessmentRequest.STATUS_APPOINTMENT
         and not hasattr(req, 'assessment')
+        and can_approve
     )
     try:
         linked_assessment = req.assessment
@@ -72,7 +83,10 @@ def assessment_detail(request, pk):
         'histories': histories,
         'can_promote': can_promote,
         'linked_assessment': linked_assessment,
-        'follow_status_choices': CarAssessmentRequest.FOLLOW_STATUS_CHOICES,
+        'follow_status_choices': [
+            c for c in CarAssessmentRequest.FOLLOW_STATUS_CHOICES
+            if c[0] not in _MODAL_EXCLUDED_STATUSES
+        ],
         'channel_choices': CarAssessmentRequest.CHANNEL_CHOICES,
         'contact_method_choices': ContactHistory.METHOD_CHOICES,
     })
@@ -237,20 +251,32 @@ def assessment_edit(request, pk):
 def get_assessments(request):
     """査定申込データ一覧取得 API（検索・ページネーション対応）"""
     application_number = request.GET.get('application_number', '').strip()
+    customer_name      = request.GET.get('customer_name', '').strip()
+    phone_number       = request.GET.get('phone_number', '').strip()
+    maker              = request.GET.get('maker', '').strip()
+    car_model          = request.GET.get('car_model', '').strip()
+    address            = request.GET.get('address', '').strip()
+    external_id        = request.GET.get('external_id', '').strip()
     date_from          = request.GET.get('date_from', '').strip()
     date_to            = request.GET.get('date_to', '').strip()
-    address            = request.GET.get('address', '').strip()
     page               = int(request.GET.get('page', 1))
     per_page           = int(request.GET.get('per_page', 100))
 
-    has_search = bool(application_number or date_from or date_to or address)
+    has_search = bool(
+        application_number or customer_name or phone_number or maker
+        or car_model or address or external_id or date_from or date_to
+    )
 
     case_status_subq = Assessment.objects.filter(
         assessment_request_id=OuterRef('pk')
     ).values('status')[:1]
+    case_id_subq = Assessment.objects.filter(
+        assessment_request_id=OuterRef('pk')
+    ).values('pk')[:1]
 
     queryset = CarAssessmentRequest.objects.annotate(
-        case_status=Subquery(case_status_subq, output_field=CharField())
+        case_status=Subquery(case_status_subq, output_field=CharField()),
+        case_id=Subquery(case_id_subq, output_field=IntegerField()),
     ).order_by('-application_datetime')
 
     if not has_search:
@@ -258,6 +284,18 @@ def get_assessments(request):
 
     if application_number:
         queryset = queryset.filter(application_number=application_number)
+    if customer_name:
+        queryset = queryset.filter(customer_name__icontains=customer_name)
+    if phone_number:
+        queryset = queryset.filter(phone_number__icontains=phone_number)
+    if maker:
+        queryset = queryset.filter(maker__icontains=maker)
+    if car_model:
+        queryset = queryset.filter(car_model__icontains=car_model)
+    if address:
+        queryset = queryset.filter(address__icontains=address)
+    if external_id:
+        queryset = queryset.filter(external_service_id__icontains=external_id)
     if date_from:
         try:
             queryset = queryset.filter(
@@ -274,8 +312,6 @@ def get_assessments(request):
             )
         except ValueError:
             pass
-    if address:
-        queryset = queryset.filter(address__icontains=address)
 
     total_count = queryset.count() if has_search else min(queryset.count(), 100)
     paginator   = Paginator(queryset, per_page)
@@ -288,6 +324,7 @@ def get_assessments(request):
         {
             'id':                   row['id'],
             'application_number':   row['application_number'],
+            'external_service_id':  row['external_service_id'] or '',
             'application_datetime': _fmt(row.get('application_datetime'), '%Y-%m-%d %H:%M'),
             'desired_sale_timing':  row['desired_sale_timing'],
             'maker':                row['maker'],
@@ -304,17 +341,20 @@ def get_assessments(request):
             'sales_assigned_at':    _fmt(row.get('sales_assigned_at'), '%Y-%m-%d %H:%M'),
             'follow_status':        row['follow_status'],
             'sales_note':           row['sales_note'],
+            'reservation_datetime': _fmt(row.get('reservation_datetime'), '%Y-%m-%dT%H:%M'),
             'status_updated_at':    _fmt(row.get('status_updated_at'), '%Y-%m-%d %H:%M'),
             'status_updated_by':    row['status_updated_by'],
             'created_at':           _fmt(row.get('created_at'), '%Y-%m-%d %H:%M:%S'),
             'case_status':          row.get('case_status') or '',
+            'case_id':              row.get('case_id'),
         }
         for row in page_obj.object_list.values(
-            'id', 'application_number', 'application_datetime', 'desired_sale_timing',
-            'maker', 'car_model', 'year', 'mileage', 'customer_name', 'phone_number',
-            'call_count', 'postal_code', 'case_status', 'address', 'email',
-            'sales_owner_name', 'sales_assigned_at', 'follow_status', 'sales_note',
-            'status_updated_at', 'status_updated_by', 'created_at',
+            'id', 'application_number', 'external_service_id', 'application_datetime',
+            'desired_sale_timing', 'maker', 'car_model', 'year', 'mileage',
+            'customer_name', 'phone_number', 'call_count', 'postal_code',
+            'case_status', 'case_id', 'address', 'email', 'sales_owner_name',
+            'sales_assigned_at', 'follow_status', 'sales_note',
+            'reservation_datetime', 'status_updated_at', 'status_updated_by', 'created_at',
         )
     ]
 
@@ -459,12 +499,31 @@ def update_assessment_follow_status(request, request_id):
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
 
-    follow_status    = str(payload.get('follow_status', '')).strip()
-    sales_note       = str(payload.get('sales_note', '')).strip()
+    follow_status        = str(payload.get('follow_status', '')).strip()
+    sales_note           = str(payload.get('sales_note', '')).strip()
+    reservation_datetime_raw = str(payload.get('reservation_datetime', '')).strip()
     allowed_statuses = {c[0] for c in CarAssessmentRequest.FOLLOW_STATUS_CHOICES}
 
     if follow_status not in allowed_statuses:
         return JsonResponse({'success': False, 'message': '対応ステータスが不正です'}, status=400)
+
+    if follow_status == CarAssessmentRequest.STATUS_APPOINTMENT and not reservation_datetime_raw:
+        return JsonResponse({'success': False, 'message': '商談予定日時を入力してください'}, status=400)
+
+    reservation_dt = None
+    if reservation_datetime_raw:
+        try:
+            reservation_dt = timezone.make_aware(
+                datetime.strptime(reservation_datetime_raw, '%Y-%m-%dT%H:%M')
+            )
+        except ValueError:
+            return JsonResponse({'success': False, 'message': '商談予定日時の形式が不正です'}, status=400)
+
+    # 担当確定を伴うステータス
+    _ASSIGN_STATUSES = {
+        CarAssessmentRequest.STATUS_APPOINTMENT,  # 商談予定
+        CarAssessmentRequest.STATUS_CALLBACK,     # 再コール予定
+    }
 
     try:
         with transaction.atomic():
@@ -472,29 +531,46 @@ def update_assessment_follow_status(request, request_id):
             if not target:
                 return JsonResponse({'success': False, 'message': '対象データが存在しません'}, status=404)
 
-            if not target.sales_owner_name:
-                if follow_status != CarAssessmentRequest.STATUS_APPOINTMENT:
+            update_fields = ['follow_status', 'sales_note', 'status_updated_by', 'status_updated_at', 'updated_at']
+
+            if reservation_dt is not None:
+                target.reservation_datetime = reservation_dt
+                update_fields.append('reservation_datetime')
+
+            if follow_status in _ASSIGN_STATUSES:
+                # 商談予定・再コール予定 → 担当自動確定。他担当者は変更不可
+                if not target.sales_owner_name:
+                    target.sales_owner_name  = sales_name
+                    target.sales_assigned_at = timezone.now()
+                    target.assigned_to       = request.user
+                    update_fields += ['sales_owner_name', 'sales_assigned_at', 'assigned_to']
+                elif target.sales_owner_name != sales_name:
                     return JsonResponse(
-                        {'success': False, 'message': '担当未確定の案件は商談確定で更新してください'},
-                        status=400,
+                        {'success': False, 'message': f'担当営業（{target.sales_owner_name}）のみ更新できます'},
+                        status=403,
                     )
-                target.sales_owner_name  = sales_name
-                target.sales_assigned_at = timezone.now()
-            elif target.sales_owner_name != sales_name:
-                return JsonResponse(
-                    {'success': False, 'message': f'担当営業（{target.sales_owner_name}）のみ更新できます'},
-                    status=403,
-                )
+            else:
+                # 担当確定不要ステータス（不通・即ぷ・見送りなど）
+                if target.sales_owner_name and target.sales_owner_name != sales_name:
+                    # 他人が担当確定している案件には触れない
+                    return JsonResponse(
+                        {'success': False, 'message': f'担当営業（{target.sales_owner_name}）のみ更新できます'},
+                        status=403,
+                    )
+                elif target.sales_owner_name == sales_name:
+                    # 自分が担当のままステータスを戻す → 担当クリア
+                    target.sales_owner_name  = ''
+                    target.sales_assigned_at = None
+                    target.assigned_to       = None
+                    update_fields += ['sales_owner_name', 'sales_assigned_at', 'assigned_to']
+                # 担当なし → 誰でも更新可、担当は変わらず
 
             now = timezone.now()
             target.follow_status     = follow_status
             target.sales_note        = sales_note
             target.status_updated_by = sales_name
             target.status_updated_at = now
-            target.save(update_fields=[
-                'sales_owner_name', 'sales_assigned_at', 'follow_status',
-                'sales_note', 'status_updated_by', 'status_updated_at', 'updated_at',
-            ])
+            target.save(update_fields=update_fields)
     except Exception as exc:
         logger.error(f'update_assessment_follow_status failed: request_id={request_id}, error={exc}')
         return JsonResponse({'success': False, 'message': 'ステータス更新に失敗しました'}, status=500)
@@ -505,7 +581,11 @@ def update_assessment_follow_status(request, request_id):
 @login_required
 @require_POST
 def promote_to_case(request, request_id):
-    """査定申込 → 案件 昇格 API"""
+    """査定申込 → 案件 昇格 API（承認権限者のみ）"""
+    profile = getattr(request.user, 'profile', None)
+    if not ((profile and profile.can_approve) or request.user.is_superuser):
+        return JsonResponse({'success': False, 'message': '商談昇格には承認権限が必要です'}, status=403)
+
     req = get_object_or_404(CarAssessmentRequest, pk=request_id)
 
     try:
@@ -514,20 +594,51 @@ def promote_to_case(request, request_id):
     except Assessment.DoesNotExist:
         pass
 
-    if not req.customer or not req.vehicle:
-        return JsonResponse({'success': False, 'message': '顧客・車両情報を先に登録してください'}, status=400)
-
     try:
         with transaction.atomic():
+            # スクレイパー経由の申込は customer/vehicle FK が未設定のため自動生成
+            if not req.customer:
+                customer = Customer.objects.create(
+                    name=req.customer_name,
+                    phone_number=req.phone_number,
+                    email=req.email or '',
+                    postal_code=req.postal_code or '',
+                    address=req.address or '',
+                    updated_by=request.user,
+                )
+                req.customer = customer
+
+            if not req.vehicle:
+                vehicle = Vehicle.objects.create(
+                    maker=req.maker or '',
+                    car_model=req.car_model or '',
+                    year=req.year or '',
+                    mileage=req.mileage or '',
+                    updated_by=request.user,
+                )
+                req.vehicle = vehicle
+
+            # assigned_to: 申込の担当者を優先。未設定の場合は sales_owner_name からユーザーを検索
+            assigned_user = req.assigned_to
+            if not assigned_user and req.sales_owner_name:
+                from django.contrib.auth import get_user_model
+                _User = get_user_model()
+                name_parts = req.sales_owner_name.strip().split()
+                if len(name_parts) >= 2:
+                    assigned_user = _User.objects.filter(
+                        last_name=name_parts[0], first_name=name_parts[1]
+                    ).first()
+            assigned_user = assigned_user or request.user
+
             assessment = Assessment.objects.create(
                 assessment_request=req,
                 customer=req.customer,
                 vehicle=req.vehicle,
-                assigned_to=req.assigned_to or request.user,
+                assigned_to=assigned_user,
                 assessment_datetime=req.reservation_datetime,
             )
             req.follow_status = CarAssessmentRequest.STATUS_PROMOTED
-            req.save(update_fields=['follow_status', 'updated_at'])
+            req.save(update_fields=['follow_status', 'customer', 'vehicle', 'updated_at'])
     except Exception as exc:
         logger.error(f'promote_to_case failed: {exc}')
         return JsonResponse({'success': False, 'message': '案件昇格に失敗しました'}, status=500)

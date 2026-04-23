@@ -16,8 +16,34 @@ let assessmentDetailModal;
 document.addEventListener('DOMContentLoaded', () => {
   statusUpdateModal    = new bootstrap.Modal(document.getElementById('statusUpdateModal'));
   assessmentDetailModal = new bootstrap.Modal(document.getElementById('assessmentDetailModal'));
+  initSearchPanel();
+  initBackToTop('backToTopBtn');
   loadAssessments();
 });
+
+// ── 検索フォーム折りたたみ ──────────────────────────────────────────────
+
+function initSearchPanel() {
+  const collapseEl = document.getElementById('searchFormCollapse');
+  const icon       = document.getElementById('searchToggleIcon');
+  if (!collapseEl || !icon) return;
+
+  const saved      = localStorage.getItem('searchPanelOpen');
+  const isMobile   = window.innerWidth < 768;
+  const shouldOpen = saved !== null ? saved === 'true' : !isMobile;
+
+  if (shouldOpen) collapseEl.classList.add('show');
+  icon.className = `bi bi-chevron-${shouldOpen ? 'up' : 'down'}`;
+
+  collapseEl.addEventListener('show.bs.collapse', () => {
+    icon.className = 'bi bi-chevron-up';
+    localStorage.setItem('searchPanelOpen', 'true');
+  });
+  collapseEl.addEventListener('hide.bs.collapse', () => {
+    icon.className = 'bi bi-chevron-down';
+    localStorage.setItem('searchPanelOpen', 'false');
+  });
+}
 
 // ── ローディング ──────────────────────────────────────────────────────────
 
@@ -58,10 +84,15 @@ function searchAssessments(page = 1) {
   currentPage = page;
 
   currentFilters = {
+    customer_name:      document.getElementById('customerName').value,
+    phone_number:       document.getElementById('phoneNumber').value,
+    maker:              document.getElementById('maker').value,
+    car_model:          document.getElementById('carModel').value,
+    address:            document.getElementById('address').value,
+    external_id:        document.getElementById('externalId').value,
     application_number: document.getElementById('applicationNumber').value,
     date_from:          document.getElementById('dateFrom').value,
     date_to:            document.getElementById('dateTo').value,
-    address:            document.getElementById('address').value,
   };
 
   const params = new URLSearchParams({ ...currentFilters, page: currentPage, per_page: perPage });
@@ -179,12 +210,6 @@ function goToPage(page) {
 
 // ── テーブル描画 ──────────────────────────────────────────────────────────
 
-function escapeHtml(value) {
-  const div = document.createElement('div');
-  div.textContent = value ?? '';
-  return div.innerHTML;
-}
-
 function formatOwnerName(value) {
   const raw = (value || '').trim();
   if (!raw || raw === '-') return '';
@@ -202,8 +227,9 @@ function renderTable(data) {
   const followStatusBadgeMap = {
     '未対応':       'ui-badge--warning',
     '不通':         'ui-badge--warning',
+    '即ぷ':         'ui-badge--warning',
     '再コール予定': 'ui-badge--warning',
-    '商談確定':     'ui-badge--info',
+    '商談予定':     'ui-badge--info',
     '商談昇格済':   'ui-badge--info',
     '成約':         'ui-badge--success',
     '見送り':       'ui-badge--danger',
@@ -236,16 +262,20 @@ function renderTable(data) {
 
   feed.innerHTML = data.map(item => {
     const owner = (item.sales_owner_name || '').trim();
-    const canUpdate = !owner || owner === currentUserDisplayName;
     const encodedStatus = encodeURIComponent(item.follow_status || '未対応');
     const encodedNote   = encodeURIComponent(item.sales_note || '');
     const phoneRaw = (item.phone_number || '').replace(/[^0-9+]/g, '');
+    const callCount = item.call_count || 0;
     const phoneHtml = phoneRaw
       ? `<a href="tel:${phoneRaw}" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); recordCallAndDial(event, ${item.id})"><i class="bi bi-telephone-fill"></i> ${escapeHtml(item.phone_number)}</a>`
       : '';
     const vehicle = [item.maker, item.car_model].filter(Boolean).map(v => escapeHtml(v)).join(' ');
     const chips = [item.year, item.mileage].filter(Boolean).map(v => `<span class="dash-feed-chip">${escapeHtml(v)}</span>`).join('');
     const ownerBadge = owner ? `<span class="dash-feed-owner">${escapeHtml(owner)}</span>` : '';
+    const externalId = item.external_service_id || '';
+    const externalBadge = externalId
+      ? `<span class="dash-feed-chip text-muted" title="クリックでコピー" style="cursor:pointer" onclick="event.stopPropagation(); copyToClipboard('${escapeHtml(externalId)}', this)"><i class="bi bi-clipboard"></i> ${escapeHtml(externalId)}</span>`
+      : '';
 
     return `
     <div class="dash-feed-item" style="cursor:pointer" onclick="location.href='/sateiinfo/${item.id}/'">
@@ -261,12 +291,14 @@ function renderTable(data) {
         ${item.address ? `<i class="bi bi-geo-alt"></i> ${escapeHtml(item.address)} &nbsp;·&nbsp; ` : ''}
         <i class="bi bi-clock"></i> ${escapeHtml(item.application_datetime)}
         ${item.desired_sale_timing ? ` &nbsp;·&nbsp; 売却: ${escapeHtml(item.desired_sale_timing)}` : ''}
+        &nbsp;·&nbsp; <i class="bi bi-telephone"></i> <span id="call-count-${item.id}">${callCount}</span>回
+        ${externalBadge ? ` &nbsp;·&nbsp; ${externalBadge}` : ''}
       </div>
       <div class="dash-feed-actions">
         ${phoneHtml}
-        ${canUpdate
-          ? `<button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); openStatusModal(${item.id}, '${encodedStatus}', '${encodedNote}')"><i class="bi bi-pencil-square"></i> ステータス更新</button>`
-          : `<span class="text-muted small align-self-center">担当確定済</span>`
+        ${item.follow_status === '商談昇格済' && item.case_id
+          ? `<a href="/sateiinfo/cases/${item.case_id}/" class="btn btn-sm btn-primary" onclick="event.stopPropagation()"><i class="bi bi-briefcase"></i> 案件詳細</a>`
+          : `<button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); openStatusModal(${item.id}, '${encodedStatus}', '${encodedNote}', '${escapeHtml(item.reservation_datetime || '')}')"><i class="bi bi-pencil-square"></i> ステータス更新</button>`
         }
       </div>
     </div>`;
@@ -296,23 +328,39 @@ function incrementCallCount(assessmentId) {
 
 // ── ステータス更新モーダル ────────────────────────────────────────────────
 
-function openStatusModal(assessmentId, encodedStatus, encodedNote) {
-  document.getElementById('modalAssessmentId').value    = assessmentId;
-  document.getElementById('modalFollowStatus').value    = decodeURIComponent(encodedStatus || '未対応');
-  document.getElementById('modalSalesNote').value       = decodeURIComponent(encodedNote || '');
+function onModalStatusChange() {
+  const status = document.getElementById('modalFollowStatus').value;
+  document.getElementById('modalReservationRow').classList.toggle('d-none', status !== '商談予定');
+}
+
+function openStatusModal(assessmentId, encodedStatus, encodedNote, reservation) {
+  document.getElementById('modalAssessmentId').value       = assessmentId;
+  document.getElementById('modalFollowStatus').value       = decodeURIComponent(encodedStatus || '未対応');
+  document.getElementById('modalSalesNote').value          = decodeURIComponent(encodedNote || '');
+  document.getElementById('modalReservationDatetime').value = reservation || '';
+  onModalStatusChange();
   statusUpdateModal.show();
 }
 
 function saveStatusUpdate() {
-  const assessmentId = document.getElementById('modalAssessmentId').value;
-  const followStatus = document.getElementById('modalFollowStatus').value;
-  const salesNote    = document.getElementById('modalSalesNote').value;
+  const assessmentId  = document.getElementById('modalAssessmentId').value;
+  const followStatus  = document.getElementById('modalFollowStatus').value;
+  const salesNote     = document.getElementById('modalSalesNote').value;
+  const reservation   = document.getElementById('modalReservationDatetime').value;
+
+  if (followStatus === '商談予定' && !reservation) {
+    showToast('入力エラー', '商談予定日時を入力してください', 'danger');
+    return;
+  }
+
+  const body = { follow_status: followStatus, sales_note: salesNote };
+  if (reservation) body.reservation_datetime = reservation;
 
   fetch(`/sateiinfo/api/assessments/${assessmentId}/update/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
     credentials: 'same-origin',
-    body: JSON.stringify({ follow_status: followStatus, sales_note: salesNote }),
+    body: JSON.stringify(body),
   })
   .then(async (response) => {
     const data = await response.json();

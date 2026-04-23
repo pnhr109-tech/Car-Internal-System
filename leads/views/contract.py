@@ -26,6 +26,7 @@ from django.views.decorators.http import require_POST
 
 from ..models import (
     Assessment,
+    CarAssessmentRequest,
     ContactHistory,
     Customer,
     CustomerBankAccount,
@@ -82,9 +83,13 @@ def approval_list(request):
         messages.error(request, '承認権限がありません')
         return redirect('leads:assessment_list')
 
+    pending_appointments = CarAssessmentRequest.objects.filter(
+        follow_status=CarAssessmentRequest.STATUS_APPOINTMENT,
+    ).select_related('customer', 'vehicle').order_by('-status_updated_at')
+
     pending_assessments = Assessment.objects.filter(
         approved_by__isnull=True,
-        status__in=[Assessment.STATUS_IN_PROGRESS, Assessment.STATUS_CONTRACTED],
+        status=Assessment.STATUS_CONTRACTED,
     ).select_related('customer', 'vehicle', 'assigned_to').order_by('-created_at')
 
     pending_contracts = PurchaseContract.objects.filter(
@@ -102,6 +107,7 @@ def approval_list(request):
     )
 
     return render(request, 'leads/approval_list.html', {
+        'pending_appointments': pending_appointments,
         'pending_assessments':  pending_assessments,
         'pending_contracts':    pending_contracts,
         'pending_corrections':  pending_corrections,
@@ -205,8 +211,12 @@ def create_contract(request, assessment_id):
         except User.DoesNotExist:
             return None
 
-    customer_furigana       = payload.get('customer_furigana', '').strip() or None
-    customer_license_number = payload.get('customer_license_number', '').strip() or None
+    customer_name           = (payload.get('customer_name') or '').strip() or None
+    customer_furigana       = (payload.get('customer_furigana') or '').strip() or None
+    customer_postal_code    = (payload.get('customer_postal_code') or '').strip() or None
+    customer_address        = (payload.get('customer_address') or '').strip() or None
+    customer_license_number = (payload.get('customer_license_number') or '').strip() or None
+    customer_occupation     = (payload.get('customer_occupation') or '').strip() or None
 
     try:
         with transaction.atomic():
@@ -237,15 +247,54 @@ def create_contract(request, assessment_id):
                 invoice_registration_number=payload.get('invoice_registration_number', ''),
                 manager1=_get_user(payload.get('manager1_id')),
                 manager2=_get_user(payload.get('manager2_id')),
+                required_inkan_count=int(payload.get('required_inkan_count') or 0),
+                required_juminhyo_count=int(payload.get('required_juminhyo_count') or 0),
+                required_jotohyo_count=int(payload.get('required_jotohyo_count') or 0),
+                required_ininjyo_count=int(payload.get('required_ininjyo_count') or 0),
+                required_jotosho_count=int(payload.get('required_jotosho_count') or 0),
+                required_kanpu_count=int(payload.get('required_kanpu_count') or 0),
                 updated_by=request.user,
             )
             _sync_customer_from_contract(assessment.customer, {
+                'name':                        customer_name,
                 'furigana':                    customer_furigana,
+                'postal_code':                 customer_postal_code,
+                'address':                     customer_address,
                 'birth_date':                  _parse_date(payload.get('customer_birth_date', '')),
                 'license_number':              customer_license_number,
+                'occupation':                  customer_occupation,
                 'is_taxable_business':         _parse_tristate(payload.get('qualified_invoice_registered')),
                 'invoice_registration_number': payload.get('invoice_registration_number') or None,
             }, request.user)
+
+            # 口座情報の保存
+            bank_institution_type = payload.get('bank_institution_type', 'bank')
+            bank_name = (payload.get('bank_name') or '').strip()
+            if bank_institution_type == 'yucho' and not bank_name:
+                bank_name = 'ゆうちょ銀行'
+            if bank_name:
+                bank_data = {
+                    'bank_institution_type': bank_institution_type,
+                    'bank_name':   bank_name,
+                    'branch_name': (payload.get('branch_name') or '').strip(),
+                    'account_type':   payload.get('account_type', '普通'),
+                    'account_number': (payload.get('account_number') or '').strip(),
+                    'account_holder': (payload.get('account_holder') or '').strip(),
+                }
+                existing = assessment.customer.bank_accounts.filter(is_primary=True).first()
+                if existing:
+                    for k, v in bank_data.items():
+                        if v:
+                            setattr(existing, k, v)
+                    existing.updated_by = request.user
+                    existing.save()
+                else:
+                    CustomerBankAccount.objects.create(
+                        customer=assessment.customer,
+                        is_primary=True,
+                        updated_by=request.user,
+                        **bank_data,
+                    )
     except Exception as exc:
         logger.error(f'create_contract failed: assessment_id={assessment_id}, error={exc}')
         return JsonResponse({'success': False, 'message': '契約の作成に失敗しました'}, status=500)
@@ -297,8 +346,12 @@ def update_contract(request, contract_id):
 
     qualified_invoice_reg = payload.get('qualified_invoice_registered')
     invoice_reg_number    = payload.get('invoice_registration_number', '')
-    cust_furigana         = payload.get('customer_furigana', '').strip() or None
-    cust_license_number   = payload.get('customer_license_number', '').strip() or None
+    cust_name             = (payload.get('customer_name') or '').strip() or None
+    cust_furigana         = (payload.get('customer_furigana') or '').strip() or None
+    cust_postal_code      = (payload.get('customer_postal_code') or '').strip() or None
+    cust_address          = (payload.get('customer_address') or '').strip() or None
+    cust_license_number   = (payload.get('customer_license_number') or '').strip() or None
+    cust_occupation       = (payload.get('customer_occupation') or '').strip() or None
 
     try:
         with transaction.atomic():
@@ -317,6 +370,12 @@ def update_contract(request, contract_id):
             contract.remarks                      = payload.get('remarks', '')
             contract.manager1                     = _get_user(payload.get('manager1_id'))
             contract.manager2                     = _get_user(payload.get('manager2_id'))
+            contract.required_inkan_count         = int(payload.get('required_inkan_count') or 0)
+            contract.required_juminhyo_count      = int(payload.get('required_juminhyo_count') or 0)
+            contract.required_jotohyo_count       = int(payload.get('required_jotohyo_count') or 0)
+            contract.required_ininjyo_count       = int(payload.get('required_ininjyo_count') or 0)
+            contract.required_jotosho_count       = int(payload.get('required_jotosho_count') or 0)
+            contract.required_kanpu_count         = int(payload.get('required_kanpu_count') or 0)
             contract.meter_tampering              = _parse_tristate(payload.get('meter_tampering'))
             contract.flood_hail_damage            = _parse_tristate(payload.get('flood_hail_damage'))
             contract.malfunction                  = _parse_tristate(payload.get('malfunction'))
@@ -328,12 +387,45 @@ def update_contract(request, contract_id):
             contract.save()
 
             _sync_customer_from_contract(contract.customer, {
+                'name':                        cust_name,
                 'furigana':                    cust_furigana,
+                'postal_code':                 cust_postal_code,
+                'address':                     cust_address,
                 'birth_date':                  _parse_date(payload.get('customer_birth_date', '')),
                 'license_number':              cust_license_number,
+                'occupation':                  cust_occupation,
                 'is_taxable_business':         _parse_tristate(qualified_invoice_reg),
                 'invoice_registration_number': invoice_reg_number or None,
             }, request.user)
+
+            # 口座情報の保存
+            bank_institution_type = payload.get('bank_institution_type', 'bank')
+            bank_name = (payload.get('bank_name') or '').strip()
+            if bank_institution_type == 'yucho' and not bank_name:
+                bank_name = 'ゆうちょ銀行'
+            if bank_name:
+                bank_data = {
+                    'bank_institution_type': bank_institution_type,
+                    'bank_name':   bank_name,
+                    'branch_name': (payload.get('branch_name') or '').strip(),
+                    'account_type':   payload.get('account_type', '普通'),
+                    'account_number': (payload.get('account_number') or '').strip(),
+                    'account_holder': (payload.get('account_holder') or '').strip(),
+                }
+                existing = contract.customer.bank_accounts.filter(is_primary=True).first()
+                if existing:
+                    for k, v in bank_data.items():
+                        if v:
+                            setattr(existing, k, v)
+                    existing.updated_by = request.user
+                    existing.save()
+                else:
+                    CustomerBankAccount.objects.create(
+                        customer=contract.customer,
+                        is_primary=True,
+                        updated_by=request.user,
+                        **bank_data,
+                    )
 
     except (ValueError, InvalidOperation) as exc:
         return JsonResponse({'success': False, 'message': f'入力値が不正です: {exc}'}, status=400)

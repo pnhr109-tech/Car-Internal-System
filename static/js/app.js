@@ -61,6 +61,45 @@ function showToast(title, message = '', type = 'success', autohide = true, onCli
 }
 
 /**
+ * HTML エスケープ。innerHTML への文字列挿入時に必ず通す。
+ * @param {*} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+  const div = document.createElement('div');
+  div.textContent = value ?? '';
+  return div.innerHTML;
+}
+
+/**
+ * テキストをクリップボードにコピーし、ボタン要素の表示を一時的に変える。
+ * @param {string} text   - コピーするテキスト
+ * @param {Element} el    - 状態変化させる要素
+ */
+function copyToClipboard(text, el) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = el.innerHTML;
+    el.innerHTML = '<i class="bi bi-check2"></i> コピー済';
+    el.classList.add('text-success');
+    setTimeout(() => { el.innerHTML = orig; el.classList.remove('text-success'); }, 1500);
+  }).catch(() => showToast('エラー', 'コピーに失敗しました', 'danger'));
+}
+
+/**
+ * 「トップへ戻る」FABの表示制御を初期化する。
+ * @param {string} btnId           - FABボタンのID
+ * @param {number} [threshold=300] - 表示開始スクロール量(px)
+ */
+function initBackToTop(btnId, threshold = 300) {
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  const update = () => btn.setAttribute('data-fab-hidden', window.scrollY < threshold ? 'true' : 'false');
+  update();
+  window.addEventListener('scroll', update, { passive: true });
+  btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+}
+
+/**
  * JSON API への fetch ラッパー。CSRF ヘッダーと credentials を自動付与する。
  * @param {string} url
  * @param {RequestInit} [options={}]

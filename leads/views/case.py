@@ -7,7 +7,9 @@ views/case.py — 案件・商談フェーズ
 API:
   update_assessment_info, update_vehicle_info, update_customer_info,
   save_bank_account, delete_bank_account, approve_assessment,
-  add_contact_history, add_check_item, delete_check_item
+  add_contact_history, add_check_item, delete_check_item,
+  update_ownership_release, add_advance_payment, delete_advance_payment,
+  approve_advance_payment, update_required_docs
 """
 import json
 import logging
@@ -24,12 +26,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..models import (
+    AdvancePayment,
     Assessment,
     AssessmentCheckItem,
     CarAssessmentRequest,
     ContactHistory,
     Customer,
     CustomerBankAccount,
+    OwnershipRelease,
     PurchaseContract,
     Vehicle,
 )
@@ -88,15 +92,20 @@ def case_detail(request, pk):
         pk=pk,
     )
     try:
-        contract = assessment.contract
+        contract = PurchaseContract.objects.select_related(
+            'manager1', 'manager2', 'approved_by', 'correction_approved_by'
+        ).get(assessment=assessment)
     except PurchaseContract.DoesNotExist:
         contract = None
 
     histories     = assessment.assessment_request.contact_histories.select_related('recorded_by').order_by('-contacted_at')
-    check_items   = assessment.check_items.all()
-    documents     = contract.documents.select_related('document_type').all() if contract else []
-    identity_docs = contract.identity_documents.all() if contract else []
-    bank_accounts = assessment.customer.bank_accounts.all()
+    check_items     = assessment.check_items.all()
+    documents       = contract.documents.select_related('document_type').all() if contract else []
+    identity_docs   = contract.identity_documents.all() if contract else []
+    bank_accounts   = assessment.customer.bank_accounts.all()
+    primary_bank_account = bank_accounts.filter(is_primary=True).first() or bank_accounts.first()
+    ownership_release = getattr(contract, 'ownership_release', None) if contract else None
+    advance_payments  = contract.advance_payments.select_related('approved_by').all() if contract else []
     vehicle_images = assessment.vehicle.images.all()
 
     active_tab = request.GET.get('tab', 'assessment')
@@ -135,12 +144,61 @@ def case_detail(request, pk):
         'transmission_choices':         Vehicle.TRANSMISSION_CHOICES,
         'fuel_type_choices':            Vehicle.FUEL_TYPE_CHOICES,
         'bank_institution_type_choices': CustomerBankAccount.INSTITUTION_TYPE_CHOICES,
+        'primary_bank_account':          primary_bank_account,
+        'bank_account_type_choices':     CustomerBankAccount.ACCOUNT_TYPE_CHOICES,
+        'tristate_rows': [
+            ('メーター戻し・改ざん等',         contract.meter_tampering            if contract else None),
+            ('冠水車・雹害',                   contract.flood_hail_damage          if contract else None),
+            ('故障箇所',                       contract.malfunction                if contract else None),
+            ('駐車違反放置反則金未納',           contract.parking_violation          if contract else None),
+            ('自動車税未納',                   contract.automobile_tax_unpaid      if contract else None),
+            ('適格請求書発行事業者登録',         contract.qualified_invoice_registered if contract else None),
+        ],
+        'ownership_release':             ownership_release,
+        'ownership_release_status_choices': OwnershipRelease.STATUS_CHOICES,
+        'advance_payments':              advance_payments,
+        'required_doc_fields': [
+            ('inkan',    '印鑑証明', contract.required_inkan_count    if contract else 0, contract.inkan_received    if contract else False),
+            ('juminhyo', '住民票',   contract.required_juminhyo_count if contract else 0, contract.juminhyo_received if contract else False),
+            ('jotohyo',  '除票',     contract.required_jotohyo_count  if contract else 0, contract.jotohyo_received  if contract else False),
+            ('ininjyo',  '委任状',   contract.required_ininjyo_count  if contract else 0, contract.ininjyo_received  if contract else False),
+            ('jotosho',  '譲渡書',   contract.required_jotosho_count  if contract else 0, contract.jotosho_received  if contract else False),
+            ('kanpu',    '還付',     contract.required_kanpu_count    if contract else 0, contract.kanpu_received    if contract else False),
+        ],
     })
 
 
 # ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
+
+@login_required
+@require_POST
+def change_case_assignee(request, assessment_id):
+    """案件担当者変更 API（管理者・承認権限者のみ）"""
+    profile = getattr(request.user, 'profile', None)
+    if not ((profile and profile.can_approve) or request.user.is_superuser):
+        return JsonResponse({'success': False, 'message': '担当者変更には承認権限が必要です'}, status=403)
+
+    assessment = get_object_or_404(Assessment, pk=assessment_id)
+    try:
+        payload = json.loads(request.body.decode('utf-8')) if request.body else {}
+        user_id = int(payload.get('user_id', 0))
+    except (ValueError, json.JSONDecodeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    User = get_user_model()
+    new_assignee = get_object_or_404(User, pk=user_id, is_active=True)
+
+    assessment.assigned_to = new_assignee
+    assessment.save(update_fields=['assigned_to'])
+
+    return JsonResponse({
+        'success': True,
+        'message': f'担当者を {new_assignee.get_full_name() or new_assignee.username} に変更しました',
+        'assigned_to_name': new_assignee.get_full_name() or new_assignee.username,
+    })
+
 
 @login_required
 @require_POST
@@ -458,3 +516,168 @@ def delete_check_item(request, item_id):
     item = get_object_or_404(AssessmentCheckItem, pk=item_id)
     item.delete()
     return JsonResponse({'success': True, 'message': 'チェック項目を削除しました'})
+
+
+# ---------------------------------------------------------------------------
+# 所有権解除 API
+# ---------------------------------------------------------------------------
+
+@login_required
+@require_POST
+def update_ownership_release(request, contract_id):
+    """所有権解除 進捗更新 API（作成 or 更新）"""
+    contract = get_object_or_404(PurchaseContract, pk=contract_id)
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    pattern = payload.get('pattern', 'A')
+    status  = payload.get('status', 'pending')
+
+    valid_statuses = {s[0] for s in OwnershipRelease.STATUS_CHOICES}
+    if status not in valid_statuses:
+        return JsonResponse({'success': False, 'message': 'ステータスが不正です'}, status=400)
+
+    def _parse_date(val):
+        if not val:
+            return None
+        try:
+            return datetime.strptime(val, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    with transaction.atomic():
+        obj, _ = OwnershipRelease.objects.get_or_create(contract=contract, defaults={'pattern': pattern})
+        obj.pattern                  = pattern
+        obj.status                   = status
+        obj.inquiry_status           = (payload.get('inquiry_status') or '').strip()
+        obj.dealer_doc_sent_date     = _parse_date(payload.get('dealer_doc_sent_date'))
+        obj.debt_transfer_date       = _parse_date(payload.get('debt_transfer_date'))
+        obj.dealer_doc_returned_date = _parse_date(payload.get('dealer_doc_returned_date'))
+        obj.save()
+
+    return JsonResponse({
+        'success': True,
+        'message': '所有権解除情報を更新しました',
+        'status_display': obj.get_status_display(),
+    })
+
+
+# ---------------------------------------------------------------------------
+# 先払い入金 API
+# ---------------------------------------------------------------------------
+
+@login_required
+@require_POST
+def add_advance_payment(request, contract_id):
+    """先払い入金レコード追加 API"""
+    contract = get_object_or_404(PurchaseContract, pk=contract_id)
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    amount_raw = payload.get('expected_amount')
+    if not amount_raw:
+        return JsonResponse({'success': False, 'message': '入金予定額を入力してください'}, status=400)
+
+    def _parse_date(val):
+        if not val:
+            return None
+        try:
+            return datetime.strptime(val, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    try:
+        ap = AdvancePayment.objects.create(
+            contract=contract,
+            expected_amount=amount_raw,
+            payment_date=_parse_date(payload.get('payment_date')),
+            status='unpaid',
+        )
+    except Exception as exc:
+        logger.error(f'add_advance_payment failed: {exc}')
+        return JsonResponse({'success': False, 'message': '追加に失敗しました'}, status=500)
+
+    return JsonResponse({
+        'success': True,
+        'message': '先払い入金を追加しました',
+        'id': ap.pk,
+        'expected_amount': str(ap.expected_amount),
+        'payment_date': ap.payment_date.strftime('%Y-%m-%d') if ap.payment_date else '',
+        'status': ap.status,
+        'status_display': ap.get_status_display(),
+    })
+
+
+@login_required
+@require_POST
+def delete_advance_payment(request, ap_id):
+    """先払い入金レコード削除 API"""
+    ap = get_object_or_404(AdvancePayment, pk=ap_id)
+    if ap.approved_by:
+        return JsonResponse({'success': False, 'message': '承認済の先払い入金は削除できません'}, status=400)
+    ap.delete()
+    return JsonResponse({'success': True, 'message': '先払い入金を削除しました'})
+
+
+@login_required
+@require_POST
+def approve_advance_payment(request, ap_id):
+    """先払い入金 承認 API（superuser 限定）"""
+    if not request.user.is_superuser:
+        return JsonResponse({'success': False, 'message': 'この操作には社長権限が必要です'}, status=403)
+
+    ap = get_object_or_404(AdvancePayment, pk=ap_id)
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        payload = {}
+
+    ap.approved_by = request.user
+    ap.status = 'paid'
+    if payload.get('payment_date'):
+        try:
+            ap.payment_date = datetime.strptime(payload['payment_date'], '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    ap.save()
+
+    return JsonResponse({
+        'success': True,
+        'message': '先払い入金を承認しました',
+        'approved_by_name': request.user.get_full_name() or request.user.username,
+        'status_display': ap.get_status_display(),
+    })
+
+
+# ---------------------------------------------------------------------------
+# 必要書類 受取確認 API
+# ---------------------------------------------------------------------------
+
+_REQUIRED_DOC_FIELDS = ['inkan', 'juminhyo', 'jotohyo', 'ininjyo', 'jotosho', 'kanpu']
+
+@login_required
+@require_POST
+def update_required_docs(request, contract_id):
+    """必要書類 受取フラグ更新 API"""
+    contract = get_object_or_404(PurchaseContract, pk=contract_id)
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    update_fields = []
+    for key in _REQUIRED_DOC_FIELDS:
+        field = f'{key}_received'
+        if field in payload:
+            setattr(contract, field, bool(payload[field]))
+            update_fields.append(field)
+
+    if update_fields:
+        update_fields.append('updated_at')
+        contract.save(update_fields=update_fields)
+
+    return JsonResponse({'success': True, 'message': '受取状況を更新しました'})

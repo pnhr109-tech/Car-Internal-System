@@ -14,7 +14,7 @@
     <!-- トースト通知エリア -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <div class="container-fluid py-4">
+    <div class="container-xxl py-4">
         <!-- ヘッダーエリア -->
         <div class="row mb-3">
             <div class="col">
@@ -37,35 +37,57 @@
 
         <!-- 検索フォーム -->
         <div class="card search-card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center"
+                 role="button" data-bs-toggle="collapse" data-bs-target="#searchFormCollapse"
+                 style="cursor:pointer">
                 <h5 class="mb-0">
                     <i class="bi bi-search"></i> 検索
                 </h5>
+                <i id="searchToggleIcon" class="bi bi-chevron-down"></i>
             </div>
+            <div class="collapse" id="searchFormCollapse">
             <div class="card-body">
                 <form id="searchForm" onsubmit="event.preventDefault(); searchAssessments();">
                     <div class="row g-3">
                         <div class="col-md-3">
-                            <label for="applicationNumber" class="form-label">お申込番号</label>
-                            <input type="text" class="form-control" id="applicationNumber" placeholder="例: 9060727">
+                            <label for="customerName" class="form-label">お名前</label>
+                            <input type="text" class="form-control" id="customerName" placeholder="例: 山田太郎">
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <label for="phoneNumber" class="form-label">電話番号</label>
+                            <input type="text" class="form-control" id="phoneNumber" placeholder="例: 090-1234-5678">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="maker" class="form-label">メーカー</label>
+                            <input type="text" class="form-control" id="maker" placeholder="例: トヨタ">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="carModel" class="form-label">車種</label>
+                            <input type="text" class="form-control" id="carModel" placeholder="例: プリウス">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="address" class="form-label">住所</label>
+                            <input type="text" class="form-control" id="address" placeholder="例: 東京都">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="externalId" class="form-label">外部申込番号 <small class="text-muted">（ナビクル等）</small></label>
+                            <input type="text" class="form-control" id="externalId" placeholder="例: 9249782">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="applicationNumber" class="form-label">内部申込番号</label>
+                            <input type="text" class="form-control" id="applicationNumber" placeholder="例: N-20260410-0001">
+                        </div>
+                        <div class="col-md-5">
                             <label class="form-label">お申込日時（範囲検索）</label>
                             <div class="row g-2">
                                 <div class="col-5">
                                     <input type="date" class="form-control" id="dateFrom">
                                 </div>
-                                <div class="col-2 date-separator">
-                                    ～
-                                </div>
+                                <div class="col-2 date-separator">～</div>
                                 <div class="col-5">
                                     <input type="date" class="form-control" id="dateTo">
                                 </div>
                             </div>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="address" class="form-label">住所</label>
-                            <input type="text" class="form-control" id="address" placeholder="例: 東京都">
                         </div>
                     </div>
                     <div class="row mt-3">
@@ -80,6 +102,7 @@
                     </div>
                 </form>
             </div>
+            </div><!-- /.collapse -->
         </div>
 
         <!-- 件数表示エリア（検索フォームの下） -->
@@ -125,6 +148,13 @@
         </div>
     </div>
 
+    <!-- FAB: トップへ戻る -->
+    <div class="fab-stack">
+        <button class="fab-btn fab-btn--light" id="backToTopBtn" data-fab-hidden="true" aria-label="トップへ戻る">
+            <i class="bi bi-chevron-up"></i> トップ
+        </button>
+    </div>
+
     <div class="modal fade" id="statusUpdateModal" tabindex="-1" aria-labelledby="statusUpdateModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
@@ -136,11 +166,15 @@
                     <input type="hidden" id="modalAssessmentId">
                     <div class="mb-3">
                         <label for="modalFollowStatus" class="form-label">対応ステータス</label>
-                        <select id="modalFollowStatus" class="form-select">
+                        <select id="modalFollowStatus" class="form-select" onchange="onModalStatusChange()">
                             {% for status in follow_status_choices %}
                             <option value="{{ status }}">{{ status }}</option>
                             {% endfor %}
                         </select>
+                    </div>
+                    <div class="mb-3 d-none" id="modalReservationRow">
+                        <label for="modalReservationDatetime" class="form-label">商談予定日時 <span class="text-danger">*</span></label>
+                        <input type="datetime-local" id="modalReservationDatetime" class="form-control">
                     </div>
                     <div>
                         <label for="modalSalesNote" class="form-label">コメント</label>

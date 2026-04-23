@@ -33,6 +33,7 @@ from .case import (
     case_list,
     case_detail,
     update_assessment_info,
+    change_case_assignee,
     update_vehicle_info,
     update_customer_info,
     save_bank_account,
@@ -41,6 +42,11 @@ from .case import (
     add_contact_history,
     add_check_item,
     delete_check_item,
+    update_ownership_release,
+    add_advance_payment,
+    delete_advance_payment,
+    approve_advance_payment,
+    update_required_docs,
 )
 
 # --- 契約・承認フェーズ ---
@@ -84,6 +90,8 @@ __all__ = [
     'update_assessment_info', 'update_vehicle_info', 'update_customer_info',
     'save_bank_account', 'delete_bank_account', 'approve_assessment',
     'add_contact_history', 'add_check_item', 'delete_check_item',
+    'update_ownership_release', 'add_advance_payment', 'delete_advance_payment',
+    'approve_advance_payment', 'update_required_docs',
     # contract
     'contract_list', 'approval_list', 'contract_print',
     'create_contract', 'update_contract', 'approve_contract', 'approve_correction',

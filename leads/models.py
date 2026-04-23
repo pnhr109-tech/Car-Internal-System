@@ -253,19 +253,21 @@ class CarAssessmentRequest(models.Model):
     """査定申込（全チャネル統合）"""
 
     # 対応ステータス
-    STATUS_UNTOUCHED  = '未対応'
-    STATUS_NO_ANSWER  = '不通'
-    STATUS_CALLBACK   = '再コール予定'
-    STATUS_APPOINTMENT = '商談確定'
-    STATUS_PROMOTED   = '商談昇格済'
-    STATUS_CLOSED     = '成約'
-    STATUS_LOST       = '見送り'
+    STATUS_UNTOUCHED   = '未対応'
+    STATUS_NO_ANSWER   = '不通'
+    STATUS_SOKUPUU     = '即ぷ'
+    STATUS_CALLBACK    = '再コール予定'
+    STATUS_APPOINTMENT = '商談予定'
+    STATUS_PROMOTED    = '商談昇格済'
+    STATUS_CLOSED      = '成約'
+    STATUS_LOST        = '見送り'
 
     FOLLOW_STATUS_CHOICES = [
         (STATUS_UNTOUCHED,   '未対応'),
         (STATUS_NO_ANSWER,   '不通'),
+        (STATUS_SOKUPUU,     '即ぷ'),
         (STATUS_CALLBACK,    '再コール予定'),
-        (STATUS_APPOINTMENT, '商談確定'),
+        (STATUS_APPOINTMENT, '商談予定'),
         (STATUS_PROMOTED,    '商談昇格済'),
         (STATUS_CLOSED,      '成約'),
         (STATUS_LOST,        '見送り'),
@@ -542,6 +544,20 @@ class PurchaseContract(models.Model):
     automobile_tax_unpaid        = models.BooleanField(null=True, blank=True, verbose_name='自動車税未納')
     qualified_invoice_registered = models.BooleanField(null=True, blank=True, verbose_name='適格請求書発行事業者登録')
     invoice_registration_number  = models.CharField(max_length=50, blank=True, verbose_name='適格請求書登録番号')
+
+    # ── 必要書類（通数・受取確認） ───────────────────────────────────
+    required_inkan_count    = models.PositiveSmallIntegerField(default=0, verbose_name='印鑑証明（通数）')
+    required_juminhyo_count = models.PositiveSmallIntegerField(default=0, verbose_name='住民票（通数）')
+    required_jotohyo_count  = models.PositiveSmallIntegerField(default=0, verbose_name='除票（通数）')
+    required_ininjyo_count  = models.PositiveSmallIntegerField(default=0, verbose_name='委任状（通数）')
+    required_jotosho_count  = models.PositiveSmallIntegerField(default=0, verbose_name='譲渡書（通数）')
+    required_kanpu_count    = models.PositiveSmallIntegerField(default=0, verbose_name='還付（通数）')
+    inkan_received    = models.BooleanField(default=False, verbose_name='印鑑証明 受取済')
+    juminhyo_received = models.BooleanField(default=False, verbose_name='住民票 受取済')
+    jotohyo_received  = models.BooleanField(default=False, verbose_name='除票 受取済')
+    ininjyo_received  = models.BooleanField(default=False, verbose_name='委任状 受取済')
+    jotosho_received  = models.BooleanField(default=False, verbose_name='譲渡書 受取済')
+    kanpu_received    = models.BooleanField(default=False, verbose_name='還付 受取済')
 
     # ── 担当者・責任者（契約書表示用） ─────────────────────────────
     manager1 = models.ForeignKey(

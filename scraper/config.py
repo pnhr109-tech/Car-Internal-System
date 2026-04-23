@@ -28,3 +28,7 @@ NAVIKURU_INGEST_PATH = '/sateiinfo/internal/scraper/navikuru/'
 POLL_INTERVAL_SEC      = int(os.getenv('POLL_INTERVAL_SEC', '60'))
 SESSION_REFRESH_MIN    = int(os.getenv('SESSION_REFRESH_MIN', '30'))
 MAX_CONSECUTIVE_ERRORS = int(os.getenv('MAX_CONSECUTIVE_ERRORS', '5'))
+
+# ── 日次リカバリー設定 ────────────────────────────────────────────────
+# reconcile.py が遡る時間数（デフォルト25時間: 1日 + 1時間の余裕）
+RECONCILE_LOOKBACK_HOURS = int(os.getenv('RECONCILE_LOOKBACK_HOURS', '25'))

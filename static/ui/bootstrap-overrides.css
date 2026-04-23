@@ -74,18 +74,4 @@ h1, .h1 { font-size: var(--font-heading); font-weight: 700; }
 /* table hover */
 .table-hover tbody tr:hover { background: var(--c-table-row-hover-bg); }
 
-/* badge-like status chips (use custom classes) */
-.ui-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.ui-badge--success { background: var(--c-success-bg); color: var(--c-success); }
-.ui-badge--warning { background: var(--c-warning-bg); color: var(--c-warning); }
-.ui-badge--danger  { background: var(--c-danger-bg);  color: var(--c-danger); }
-.ui-badge--info    { background: var(--c-info-bg);    color: var(--c-info); }
+/* .ui-badge は components.css で定義 */

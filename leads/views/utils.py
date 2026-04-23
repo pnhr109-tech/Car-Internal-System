@@ -112,7 +112,13 @@ def _sync_customer_from_contract(customer, payload_map: dict, updated_by) -> Non
     """
     update_fields = ['updated_by']
 
-    for f in ('furigana', 'invoice_registration_number'):
+    # name・address・postal_code は値があれば常に更新する
+    for f in ('name', 'address', 'postal_code'):
+        if f in payload_map and payload_map[f]:
+            setattr(customer, f, payload_map[f])
+            update_fields.append(f)
+
+    for f in ('furigana', 'invoice_registration_number', 'occupation'):
         if f in payload_map and payload_map[f] is not None:
             setattr(customer, f, payload_map[f])
             update_fields.append(f)

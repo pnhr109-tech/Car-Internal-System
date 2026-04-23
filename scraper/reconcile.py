@@ -1,17 +1,18 @@
 """
 scraper/reconcile.py — 日次差分照合スクリプト
 
-Cloud Scheduler から 1 日 1 回呼び出す。
-ナビクル一覧を全件取得し、Django API を通じてステータスを同期する。
 ポーリングループが取りこぼしたエントリを補完する目的で使用。
+RECONCILE_LOOKBACK_HOURS（デフォルト25時間）分遡って全ページを取得し、
+未登録エントリのみ Django API 経由で DB に保存する。
 
 実行方法:
     python -m scraper.reconcile
 """
 import logging
 import sys
+from datetime import datetime, timedelta, timezone
 
-from . import api_client
+from . import api_client, config
 from .navikuru import NavikuruScraper
 
 logging.basicConfig(
@@ -24,7 +25,9 @@ logger = logging.getLogger(__name__)
 
 
 def run():
-    logger.info('[reconcile] 日次照合開始')
+    since_dt = datetime.now(timezone.utc) - timedelta(hours=config.RECONCILE_LOOKBACK_HOURS)
+    logger.info(f'[reconcile] 日次照合開始 (since={since_dt.isoformat()}, lookback={config.RECONCILE_LOOKBACK_HOURS}h)')
+
     scraper = NavikuruScraper()
 
     try:
@@ -34,7 +37,7 @@ def run():
         sys.exit(1)
 
     try:
-        entries = scraper.fetch_new_entries()
+        entries = scraper.fetch_entries_since(since_dt)
     except Exception as e:
         logger.error(f'[reconcile] 一覧取得失敗: {e}')
         sys.exit(1)

@@ -86,6 +86,57 @@ h6, .h6 { font-size: var(--font-base); font-weight: 700; }
   display: none !important;
 }
 
+/* ── Floating Action Buttons ──────────────────── */
+.fab-stack {
+  position: fixed;
+  bottom: 24px;
+  right: 16px;
+  z-index: 1040;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+@media (min-width: 768px) {
+  .fab-stack { display: none; }
+}
+
+.fab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 44px;
+  border-radius: 999px;
+  border: none;
+  font-size: var(--font-sm);
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.15s;
+}
+
+.fab-btn:hover {
+  box-shadow: 0 4px 14px rgba(0,0,0,0.28);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+
+.fab-btn--primary { background: var(--c-primary); color: var(--c-on-primary); }
+.fab-btn--primary:hover { color: var(--c-on-primary); }
+
+.fab-btn--light { background: var(--c-white); color: var(--c-primary); border: 1px solid var(--c-border); }
+.fab-btn--light:hover { color: var(--c-primary); }
+
+.fab-btn[data-fab-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+}
+
 /* page navigation (back link + title) */
 .page-nav {
   display: flex;
@@ -340,6 +391,7 @@ h6, .h6 { font-size: var(--font-base); font-weight: 700; }
 
 .dash-feed-actions {
   display: flex;
+  align-items: center;
   gap: 6px;
   margin-top: 4px;
   flex-wrap: wrap;

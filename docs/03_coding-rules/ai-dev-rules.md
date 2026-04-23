@@ -2,8 +2,10 @@
 
 ## Sources of truth
 - docs/ui-style-guide.md
-- static/ui/tokens.css
-- static/ui/bootstrap-overrides.css
+- static/ui/tokens.css          ← デザイントークン（色・サイズ変数）
+- static/ui/components.css      ← UIコンポーネント（.ui-badge, .dash-feed-* 等）
+- static/ui/bootstrap-overrides.css ← Bootstrap上書き・ボタンスタイル
+- static/ui/responsive.css      ← レスポンシブ対応
 - static/ui/responsive.css
 
 ## Must follow
@@ -12,6 +14,17 @@
 - Do NOT introduce new colors/sizes unless requested
 - Button hover must be visible (already enforced by overrides)
 - Primary buttons: recommended 1 per screen, allow up to 2 (avoid more)
+
+## ボタンスタイル規約
+
+| 用途 | クラス | 備考 |
+|---|---|---|
+| リスト行の削除（アイコンのみ） | `btn btn-sm btn-outline-danger` | ゴミ箱アイコン `<i class="bi bi-trash"></i>` |
+| 承認フローの差し戻し（テキスト付き） | `btn btn-sm btn-outline-danger` | 「差し戻し」等のテキストを含む |
+| 追加・新規作成 | `btn btn-sm btn-outline-secondary` | `+ 追加` 等 |
+| 主要アクション | `btn btn-primary` | 1画面1〜2個まで |
+
+- 削除ボタンは **必ず `btn-outline-danger`** を使う。`btn-link text-danger` は使わない
 
 ## When coding templates
 - Prefer Bootstrap classes for layout
@@ -232,11 +245,15 @@ from .case import case_list, ...
 
 | ファイル | 役割 |
 |---|---|
-| `app.js` | 全ページ共通ユーティリティ (`getCsrf`, `showToast`, `apiFetch`) |
+| `app.js` | 全ページ共通ユーティリティ (`getCsrf`, `showToast`, `apiFetch`, `escapeHtml`, `copyToClipboard`) |
 | `sidebar.js` | 勤怠タイマー・通知ポーリング（`internal_base.html` 経由で全ページロード） |
 | `{page_name}.js` | 画面固有のロジック（案件詳細・顧客詳細など） |
 
 - `app.js` と `sidebar.js` は `internal_base.html` でグローバルロード済み。新規ページからは自由に使える
+- **`escapeHtml()`**: 全ページで使える。innerHTML挿入時は必ず通すこと
+- **`copyToClipboard(text, el)`**: クリップボードコピー＋ボタン表示切り替え。個別実装禁止
+- **`getCsrf()`**: CSRF取得。ページ内で独自定義（`getCsrfToken()`等）しない
+- **`showToast()`**: トースト通知。alert()の代わりに使う
 - 新しい画面を作る場合、JS は `static/js/{page_name}.js` として切り出し、テンプレートの `{% block extra_scripts %}` で読み込む
 - 画面ごとに異なる Django テンプレート変数（PK など）だけをインライン `<script>` で宣言し、ロジックはすべて外部ファイルに置く
 

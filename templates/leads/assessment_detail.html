@@ -2,7 +2,7 @@
 {% block title %}査定申込詳細 - {{ req.application_number }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-xxl py-4">
 
   {# パンくず #}
   <div class="page-nav">
@@ -48,6 +48,16 @@
           <dl class="row mb-0">
             <dt class="col-5 text-muted">申込番号</dt>
             <dd class="col-7">{{ req.application_number }}</dd>
+            {% if req.external_service_id %}
+            <dt class="col-5 text-muted">外部申込番号</dt>
+            <dd class="col-7">
+              <span id="externalIdDetail">{{ req.external_service_id }}</span>
+              <button type="button" class="btn btn-sm btn-link p-0 ms-1" title="コピー"
+                onclick="navigator.clipboard.writeText('{{ req.external_service_id }}').then(() => { this.innerHTML='<i class=\'bi bi-check2\'></i>'; setTimeout(() => this.innerHTML='<i class=\'bi bi-clipboard\'></i>', 1500); })">
+                <i class="bi bi-clipboard"></i>
+              </button>
+            </dd>
+            {% endif %}
             <dt class="col-5 text-muted">チャネル</dt>
             <dd class="col-7">{{ req.get_channel_type_display }}</dd>
             <dt class="col-5 text-muted">申込日時</dt>
@@ -117,7 +127,7 @@
           <dl class="row mb-0">
             <dt class="col-5 text-muted">対応ステータス</dt>
             <dd class="col-7">
-              <span class="badge bg-{% if req.follow_status == '未対応' %}secondary{% elif req.follow_status == '商談確定' %}primary{% elif req.follow_status == '商談昇格済' %}success{% elif req.follow_status == '見送り' %}danger{% elif req.follow_status == '不通' %}dark{% else %}warning text-dark{% endif %}">
+              <span class="badge bg-{% if req.follow_status == '未対応' %}secondary{% elif req.follow_status == '商談予定' %}primary{% elif req.follow_status == '商談昇格済' %}success{% elif req.follow_status == '見送り' %}danger{% elif req.follow_status == '不通' %}dark{% else %}warning text-dark{% endif %}">
                 {{ req.follow_status }}
               </span>
             </dd>
@@ -185,11 +195,16 @@
       <div class="modal-body">
         <div class="mb-3">
           <label class="form-label">対応ステータス</label>
-          <select id="modalFollowStatus" class="form-select">
+          <select id="modalFollowStatus" class="form-select" onchange="onDetailStatusChange()">
             {% for val, label in follow_status_choices %}
             <option value="{{ val }}" {% if val == req.follow_status %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
+        </div>
+        <div class="mb-3 {% if req.follow_status != '商談予定' %}d-none{% endif %}" id="detailReservationRow">
+          <label class="form-label">商談予定日時 <span class="text-danger">*</span></label>
+          <input type="datetime-local" id="detailReservationDatetime" class="form-control"
+            value="{% if req.reservation_datetime %}{{ req.reservation_datetime|date:'Y-m-d' }}T{{ req.reservation_datetime|date:'H:i' }}{% endif %}">
         </div>
         <div class="mb-3">
           <label class="form-label">コメント</label>
@@ -246,13 +261,28 @@ const CSRF = '{{ csrf_token }}';
 
 function getCsrf() { return CSRF; }
 
-function saveStatus() {
+function onDetailStatusChange() {
   const status = document.getElementById('modalFollowStatus').value;
-  const note   = document.getElementById('modalSalesNote').value;
+  document.getElementById('detailReservationRow').classList.toggle('d-none', status !== '商談予定');
+}
+
+function saveStatus() {
+  const status      = document.getElementById('modalFollowStatus').value;
+  const note        = document.getElementById('modalSalesNote').value;
+  const reservation = document.getElementById('detailReservationDatetime').value;
+
+  if (status === '商談予定' && !reservation) {
+    alert('商談予定日時を入力してください');
+    return;
+  }
+
+  const body = {follow_status: status, sales_note: note};
+  if (reservation) body.reservation_datetime = reservation;
+
   fetch(`/sateiinfo/api/assessments/${ASSESSMENT_REQUEST_ID}/update/`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
-    body: JSON.stringify({follow_status: status, sales_note: note}),
+    body: JSON.stringify(body),
   })
   .then(r => r.json())
   .then(d => {

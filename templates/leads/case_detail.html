@@ -3,7 +3,7 @@
 {% block title %}案件詳細 - {{ assessment.customer.name }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-xxl py-4">
 
   <div class="page-nav">
     <a href="{% url 'leads:case_list' %}" class="page-back-link"><i class="bi bi-arrow-left"></i> 案件一覧</a>
@@ -32,7 +32,12 @@
           <span class="badge bg-{% if assessment.status == 'contracted' %}success{% elif assessment.status == 'lost' or assessment.status == 'pre_cancel' %}danger{% elif assessment.status == 'managed' %}secondary{% else %}primary{% endif %} fs-6">
             {{ assessment.get_status_display }}
           </span>
-          <div class="text-muted small mt-1">担当：{{ assessment.assigned_to.get_full_name|default:assessment.assigned_to.username }}</div>
+          <div class="text-muted small mt-1 d-flex align-items-center gap-2">
+            担当：<span id="assigneeName">{{ assessment.assigned_to.get_full_name|default:assessment.assigned_to.username }}</span>
+            {% if can_approve %}
+            <button class="btn btn-link btn-sm p-0 text-muted" onclick="openChangeAssigneeModal()" title="担当者変更"><i class="bi bi-pencil"></i></button>
+            {% endif %}
+          </div>
         </div>
       </div>
     </div>
@@ -132,7 +137,7 @@
                 <span class="badge bg-secondary me-2">{{ item.get_check_type_display }}</span>
                 {{ item.description|default:"-" }}
               </div>
-              <button class="btn btn-sm btn-link text-danger p-0" onclick="deleteCheckItem({{ item.pk }})">
+              <button class="btn btn-sm btn-outline-danger" onclick="deleteCheckItem({{ item.pk }})">
                 <i class="bi bi-trash"></i>
               </button>
             </li>
@@ -221,42 +226,66 @@
     </button>
     {% endif %}
   </div>
-  <div class="row g-4">
+  <div class="row g-3">
+
+    {# ── 契約情報 ── #}
     <div class="col-lg-6">
-      <div class="card">
-        <div class="card-header"><h6 class="mb-0">契約情報</h6></div>
+      <div class="card h-100">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-file-earmark-text"></i> 契約情報</h6></div>
         <div class="card-body">
-          <dl class="row mb-0">
+          <dl class="row mb-0 small">
             <dt class="col-6 text-muted">契約日</dt>
-            <dd class="col-6">{{ contract.contract_date|date:"Y-m-d" }}</dd>
+            <dd class="col-6">{{ contract.contract_date|date:"Y年m月d日" }}</dd>
             <dt class="col-6 text-muted">買取価格（税込）</dt>
-            <dd class="col-6">{{ contract.purchase_price_incl_tax|floatformat:0 }}円</dd>
+            <dd class="col-6 fw-bold">{{ contract.purchase_price_incl_tax|floatformat:0 }}円</dd>
             <dt class="col-6 text-muted">買取価格（税抜）</dt>
             <dd class="col-6">{{ contract.purchase_price_excl_tax|floatformat:0 }}円</dd>
             <dt class="col-6 text-muted">消費税額</dt>
             <dd class="col-6">{{ contract.tax_amount|floatformat:0 }}円</dd>
+            {% if contract.recycle_amount %}
+            <dt class="col-6 text-muted">リサイクル券金額</dt>
+            <dd class="col-6">{{ contract.recycle_amount|floatformat:0 }}円</dd>
+            {% endif %}
             <dt class="col-6 text-muted">支払い予定日</dt>
-            <dd class="col-6">{{ contract.payment_scheduled_date|date:"Y-m-d"|default:"-" }}</dd>
+            <dd class="col-6">{{ contract.payment_scheduled_date|date:"Y年m月d日"|default:"-" }}</dd>
             <dt class="col-6 text-muted">出品予定日</dt>
-            <dd class="col-6">{{ contract.auction_scheduled_date|date:"Y-m-d"|default:"-" }}</dd>
+            <dd class="col-6">{{ contract.auction_scheduled_date|date:"Y年m月d日"|default:"-" }}</dd>
+            <dt class="col-6 text-muted">車両引渡日</dt>
+            <dd class="col-6">{{ contract.vehicle_handover_date|date:"Y年m月d日"|default:"-" }}</dd>
+            <dt class="col-6 text-muted">書類引渡日</dt>
+            <dd class="col-6">{{ contract.document_handover_date|date:"Y年m月d日"|default:"-" }}</dd>
             <dt class="col-6 text-muted">加修</dt>
-            <dd class="col-6">{% if contract.repair_flag %}<span class="badge bg-warning text-dark">あり</span>{% else %}なし{% endif %}</dd>
+            <dd class="col-6">
+              {% if contract.repair_flag %}<span class="badge bg-warning text-dark">あり</span>{% if contract.repair_notes %}<span class="ms-1 text-body">{{ contract.repair_notes }}</span>{% endif %}
+              {% else %}なし{% endif %}
+            </dd>
             <dt class="col-6 text-muted">所有権解除</dt>
             <dd class="col-6">{% if contract.ownership_release_flag %}<span class="badge bg-warning text-dark">あり</span>{% else %}なし{% endif %}</dd>
+            {# 必要書類通数 #}
+            <dt class="col-12 fw-semibold text-muted border-top pt-2 mt-1">必要書類</dt>
+            {% for key, label, count, received in required_doc_fields %}
+            <dt class="col-6 text-muted ps-3">{{ label }}</dt>
+            <dd class="col-6">{{ count }}通</dd>
+            {% endfor %}
+            {% if contract.amount_correction_flag %}
             <dt class="col-6 text-muted">金額訂正</dt>
             <dd class="col-6">
-              {% if contract.amount_correction_flag %}
               <span class="badge bg-warning text-dark">あり</span>
               {% if contract.corrected_price %} → {{ contract.corrected_price|floatformat:0 }}円{% endif %}
-              {% if contract.correction_approved_by %}
-              <span class="badge bg-success ms-1"><i class="bi bi-check-circle"></i> 承認済</span>
-              {% else %}
-              <span class="badge bg-danger ms-1"><i class="bi bi-clock"></i> 承認待</span>
-              {% endif %}
-              {% else %}
-              なし
-              {% endif %}
+              {% if contract.correction_approved_by %}<span class="badge bg-success ms-1">承認済</span>{% else %}<span class="badge bg-danger ms-1">承認待</span>{% endif %}
             </dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    {# ── ステータス・責任者 ── #}
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-person-check"></i> ステータス・担当者</h6></div>
+        <div class="card-body">
+          <dl class="row mb-0 small">
             <dt class="col-6 text-muted">ステータス</dt>
             <dd class="col-6">{{ contract.get_status_display }}</dd>
             <dt class="col-6 text-muted">承認</dt>
@@ -271,10 +300,190 @@
               {% endif %}
               {% endif %}
             </dd>
+            <dt class="col-6 text-muted">責任者1</dt>
+            <dd class="col-6">{% if contract.manager1 %}{{ contract.manager1.get_full_name|default:contract.manager1.username }}{% else %}-{% endif %}</dd>
+            <dt class="col-6 text-muted">責任者2</dt>
+            <dd class="col-6">{% if contract.manager2 %}{{ contract.manager2.get_full_name|default:contract.manager2.username }}{% else %}-{% endif %}</dd>
+            {% if contract.remarks %}
+            <dt class="col-6 text-muted">備考</dt>
+            <dd class="col-6">{{ contract.remarks }}</dd>
+            {% endif %}
           </dl>
         </div>
       </div>
     </div>
+
+    {# ── 顧客情報 ── #}
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-person"></i> 顧客情報</h6></div>
+        <div class="card-body">
+          <dl class="row mb-0 small">
+            <dt class="col-5 text-muted">氏名</dt>
+            <dd class="col-7 fw-bold">{{ contract.customer.name|default:"-" }}</dd>
+            <dt class="col-5 text-muted">フリガナ</dt>
+            <dd class="col-7">{{ contract.customer.furigana|default:"-" }}</dd>
+            <dt class="col-5 text-muted">生年月日</dt>
+            <dd class="col-7">{{ contract.customer.birth_date|date:"Y年m月d日"|default:"-" }}</dd>
+            <dt class="col-5 text-muted">職業</dt>
+            <dd class="col-7">{{ contract.customer.occupation|default:"-" }}</dd>
+            <dt class="col-5 text-muted">免許証番号</dt>
+            <dd class="col-7">{{ contract.customer.license_number|default:"-" }}</dd>
+            <dt class="col-5 text-muted">郵便番号</dt>
+            <dd class="col-7">{{ contract.customer.postal_code|default:"-" }}</dd>
+            <dt class="col-5 text-muted">住所</dt>
+            <dd class="col-7">{{ contract.customer.address|default:"-" }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    {# ── 口座情報 ── #}
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-bank"></i> 口座情報</h6></div>
+        <div class="card-body">
+          {% if primary_bank_account %}
+          <dl class="row mb-0 small">
+            <dt class="col-5 text-muted">金融機関</dt>
+            <dd class="col-7">{{ primary_bank_account.get_bank_institution_type_display }} / {{ primary_bank_account.bank_name }}</dd>
+            <dt class="col-5 text-muted">支店名</dt>
+            <dd class="col-7">{{ primary_bank_account.branch_name|default:"-" }}</dd>
+            <dt class="col-5 text-muted">口座種別</dt>
+            <dd class="col-7">{{ primary_bank_account.account_type }}</dd>
+            <dt class="col-5 text-muted">口座番号</dt>
+            <dd class="col-7">{{ primary_bank_account.account_number }}</dd>
+            <dt class="col-5 text-muted">口座名義</dt>
+            <dd class="col-7">{{ primary_bank_account.account_holder }}</dd>
+          </dl>
+          {% else %}
+          <p class="text-muted small mb-0"><i class="bi bi-info-circle"></i> 口座情報が登録されていません</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# ── 車両状況・事業者登録申告 ── #}
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-car-front"></i> 車両状況・事業者登録申告</h6></div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-bordered mb-0 small">
+            <thead class="table-light">
+              <tr><th>項目</th><th class="text-center" style="width:100px">回答</th></tr>
+            </thead>
+            <tbody>
+              {% for label, val in tristate_rows %}
+              <tr>
+                <td>{{ label }}</td>
+                <td class="text-center">
+                  {% if val %}<span class="text-danger fw-bold">あり</span>{% elif val == False %}<span class="text-success">なし</span>{% else %}<span class="text-muted">-</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% if contract.invoice_registration_number %}
+          <div class="p-2 small text-muted">適格請求書登録番号: {{ contract.invoice_registration_number }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# ── 所有権解除 進捗 ── #}
+    {% if contract.ownership_release_flag %}
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header"><h6 class="mb-0"><i class="bi bi-key"></i> 所有権解除 進捗</h6></div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">パターン</label>
+              <select id="orPattern" class="form-select form-select-sm">
+                <option value="A"{% if ownership_release.pattern == 'A' %} selected{% endif %}>A：ディーラー経由</option>
+                <option value="B"{% if ownership_release.pattern == 'B' %} selected{% endif %}>B：自己返済</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">ステータス</label>
+              <select id="orStatus" class="form-select form-select-sm">
+                {% for val, label in ownership_release_status_choices %}
+                <option value="{{ val }}"{% if ownership_release and ownership_release.status == val %} selected{% elif not ownership_release and val == 'pending' %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">残債照会状況</label>
+              <input type="text" id="orInquiryStatus" class="form-control form-control-sm"
+                value="{{ ownership_release.inquiry_status|default:'' }}" placeholder="例：残債200万円確認済">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">書類送付日（ディーラーへ）</label>
+              <input type="date" id="orDocSentDate" class="form-control form-control-sm"
+                value="{{ ownership_release.dealer_doc_sent_date|date:'Y-m-d'|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">残債振込日</label>
+              <input type="date" id="orDebtTransferDate" class="form-control form-control-sm"
+                value="{{ ownership_release.debt_transfer_date|date:'Y-m-d'|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold">書類返却日（ディーラーから）</label>
+              <input type="date" id="orDocReturnedDate" class="form-control form-control-sm"
+                value="{{ ownership_release.dealer_doc_returned_date|date:'Y-m-d'|default:'' }}">
+            </div>
+            <div class="col-12 text-end">
+              <button class="btn btn-sm btn-primary" onclick="updateOwnershipRelease()">
+                <i class="bi bi-save"></i> 保存
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── 先払い入金 ── #}
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-cash-coin"></i> 先払い入金</h6>
+          <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#addAdvancePaymentModal">
+            <i class="bi bi-plus"></i> 追加
+          </button>
+        </div>
+        <div class="card-body p-0">
+          {% if advance_payments %}
+          <ul class="list-group list-group-flush" id="advancePaymentList">
+            {% for ap in advance_payments %}
+            <li class="list-group-item d-flex justify-content-between align-items-center" id="ap-{{ ap.pk }}">
+              <div>
+                <span class="fw-bold">{{ ap.expected_amount|floatformat:0 }}円</span>
+                {% if ap.payment_date %}<span class="text-muted ms-2 small">入金日: {{ ap.payment_date|date:"Y年m月d日" }}</span>{% endif %}
+                {% if ap.approved_by %}
+                <span class="badge bg-success ms-2">承認済（{{ ap.approved_by.get_full_name }}）</span>
+                {% else %}
+                <span class="badge bg-warning text-dark ms-2">未承認</span>
+                {% endif %}
+              </div>
+              <div class="d-flex gap-2">
+                {% if not ap.approved_by %}
+                {% if user.is_superuser %}
+                <button class="btn btn-sm btn-success" onclick="approveAdvancePayment({{ ap.pk }}, this)">承認</button>
+                {% endif %}
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteAdvancePayment({{ ap.pk }}, this)"><i class="bi bi-trash"></i></button>
+                {% endif %}
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-muted text-center py-3 mb-0 small" id="advancePaymentEmpty">先払い入金の登録なし</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
   </div>
   {% else %}
   {% if assessment.status == 'contracted' and assessment.approved_by %}
@@ -292,6 +501,48 @@
 
   {# ── タブ③: 書類 ────────────────────────────────────── #}
   {% elif active_tab == 'documents' %}
+
+  {# ── 必要書類 受取確認 ── #}
+  {% if contract %}
+  <div class="card mb-3">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-card-checklist"></i> 必要書類 受取確認</h6></div>
+    <div class="card-body p-0">
+      <table class="table table-sm mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>書類</th>
+            <th class="text-center" style="width:80px">必要通数</th>
+            <th class="text-center" style="width:100px">ステータス</th>
+            <th style="width:130px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for key, label, count, received in required_doc_fields %}
+          <tr>
+            <td>{{ label }}</td>
+            <td class="text-center">{{ count }}通</td>
+            <td class="text-center">
+              <span id="doc_badge_{{ key }}" class="badge {% if received %}bg-success{% else %}bg-secondary{% endif %}">
+                {% if received %}✓ 受領済{% else %}未済{% endif %}
+              </span>
+            </td>
+            <td class="text-end">
+              {% if received %}
+              <button id="doc_btn_{{ key }}" class="btn btn-sm btn-outline-secondary"
+                onclick="toggleRequiredDoc('{{ key }}', false)">取消</button>
+              {% else %}
+              <button id="doc_btn_{{ key }}" class="btn btn-sm btn-success"
+                onclick="toggleRequiredDoc('{{ key }}', true)">受領済にする</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="card">
     <div class="card-header"><h6 class="mb-0">書類一覧</h6></div>
     <div class="card-body p-0">
@@ -642,7 +893,12 @@
           </div>
 
           {# ── 顧客情報（契約時収集） ── #}
-          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">顧客情報（未入力の場合のみ入力・自動反映されます）</h6></div>
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">顧客情報</h6></div>
+          <div class="col-md-4">
+            <label class="form-label">氏名 <span class="text-danger">*</span></label>
+            <input type="text" id="contractCustName" class="form-control"
+              value="{{ assessment.customer.name }}" placeholder="例：山田 太郎">
+          </div>
           <div class="col-md-4">
             <label class="form-label">フリガナ</label>
             <input type="text" id="contractCustFurigana" class="form-control"
@@ -657,6 +913,111 @@
             <label class="form-label">免許証番号</label>
             <input type="text" id="contractCustLicense" class="form-control"
               value="{{ assessment.customer.license_number }}" placeholder="例：123456789012">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">職業</label>
+            <input type="text" id="contractCustOccupation" class="form-control"
+              value="{{ assessment.customer.occupation }}" placeholder="例：会社員">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">郵便番号</label>
+            <div class="input-group">
+              <input type="text" id="contractCustPostal" class="form-control"
+                value="{{ assessment.customer.postal_code }}" placeholder="例：1500002" maxlength="8">
+              <button type="button" class="btn btn-outline-secondary"
+                onclick="lookupPostalCode('contractCustPostal', 'contractCustAddress')">
+                <i class="bi bi-search"></i> 住所補完
+              </button>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">住所</label>
+            <input type="text" id="contractCustAddress" class="form-control"
+              value="{{ assessment.customer.address }}" placeholder="例：東京都渋谷区渋谷1-1-1">
+          </div>
+
+          {# ── 口座情報 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">口座情報（未入力の場合のみ入力・自動反映されます）</h6></div>
+          <div class="col-md-3">
+            <label class="form-label">金融機関種別</label>
+            <select id="contractBankType" class="form-select">
+              {% for val, label in bank_institution_type_choices %}
+              <option value="{{ val }}"{% if primary_bank_account.bank_institution_type == val %} selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">銀行名</label>
+            <input type="text" id="contractBankName" class="form-control"
+              value="{{ primary_bank_account.bank_name|default:'' }}" placeholder="例：三菱UFJ銀行">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">支店名</label>
+            <input type="text" id="contractBranchName" class="form-control"
+              value="{{ primary_bank_account.branch_name|default:'' }}" placeholder="例：渋谷支店">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">口座種別</label>
+            <select id="contractAccountType" class="form-select">
+              {% for val, label in bank_account_type_choices %}
+              <option value="{{ val }}"{% if primary_bank_account.account_type == val %} selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">口座番号</label>
+            <input type="text" id="contractAccountNumber" class="form-control"
+              value="{{ primary_bank_account.account_number|default:'' }}" placeholder="例：1234567">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">口座名義（カナ）</label>
+            <input type="text" id="contractAccountHolder" class="form-control"
+              value="{{ primary_bank_account.account_holder|default:'' }}" placeholder="例：ヤマダ タロウ">
+          </div>
+
+          {# ── 必要書類 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">必要書類（通数）</h6></div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">印鑑証明</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="reqInkan" class="form-control" min="0" value="0">
+              <span class="input-group-text">通</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">住民票</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="reqJuminhyo" class="form-control" min="0" value="0">
+              <span class="input-group-text">通</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">除票</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="reqJotohyo" class="form-control" min="0" value="0">
+              <span class="input-group-text">通</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">委任状</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="reqIninjyo" class="form-control" min="0" value="0">
+              <span class="input-group-text">通</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">譲渡書</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="reqJotosho" class="form-control" min="0" value="0">
+              <span class="input-group-text">通</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">還付</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="reqKanpu" class="form-control" min="0" value="0">
+              <span class="input-group-text">通</span>
+            </div>
           </div>
 
           {# ── 備考 ── #}
@@ -705,7 +1066,13 @@
           </div>
           <div class="col-md-6">
             <label class="form-label">郵便番号</label>
-            <input type="text" id="custPostal" class="form-control" value="{{ assessment.customer.postal_code }}">
+            <div class="input-group">
+              <input type="text" id="custPostal" class="form-control" value="{{ assessment.customer.postal_code }}" placeholder="例：1500002" maxlength="8">
+              <button type="button" class="btn btn-outline-secondary"
+                onclick="lookupPostalCode('custPostal', 'custAddress')">
+                <i class="bi bi-search"></i> 住所補完
+              </button>
+            </div>
           </div>
           <div class="col-12">
             <label class="form-label">住所</label>
@@ -1068,7 +1435,13 @@
           </div>
 
           {# ── 顧客情報（契約時収集） ── #}
-          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">顧客情報（未入力の場合のみ入力・自動反映されます）</h6></div>
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">顧客情報</h6></div>
+          <div class="col-md-4">
+            <label class="form-label">氏名 <span class="text-danger">*</span></label>
+            <input type="text" id="editContractCustName" class="form-control"
+              value="{{ assessment.customer.name }}" placeholder="例：山田 太郎">
+
+          </div>
           <div class="col-md-4">
             <label class="form-label">フリガナ</label>
             <input type="text" id="editContractCustFurigana" class="form-control"
@@ -1083,6 +1456,111 @@
             <label class="form-label">免許証番号</label>
             <input type="text" id="editContractCustLicense" class="form-control"
               value="{{ assessment.customer.license_number }}" placeholder="例：123456789012">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">職業</label>
+            <input type="text" id="editContractCustOccupation" class="form-control"
+              value="{{ assessment.customer.occupation }}" placeholder="例：会社員">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">郵便番号</label>
+            <div class="input-group">
+              <input type="text" id="editContractCustPostal" class="form-control"
+                value="{{ assessment.customer.postal_code }}" placeholder="例：1500002" maxlength="8">
+              <button type="button" class="btn btn-outline-secondary"
+                onclick="lookupPostalCode('editContractCustPostal', 'editContractCustAddress')">
+                <i class="bi bi-search"></i> 住所補完
+              </button>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">住所</label>
+            <input type="text" id="editContractCustAddress" class="form-control"
+              value="{{ assessment.customer.address }}" placeholder="例：東京都渋谷区渋谷1-1-1">
+          </div>
+
+          {# ── 口座情報 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">口座情報（未入力の場合のみ入力・自動反映されます）</h6></div>
+          <div class="col-md-3">
+            <label class="form-label">金融機関種別</label>
+            <select id="editContractBankType" class="form-select">
+              {% for val, label in bank_institution_type_choices %}
+              <option value="{{ val }}"{% if primary_bank_account.bank_institution_type == val %} selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">銀行名</label>
+            <input type="text" id="editContractBankName" class="form-control"
+              value="{{ primary_bank_account.bank_name|default:'' }}" placeholder="例：三菱UFJ銀行">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">支店名</label>
+            <input type="text" id="editContractBranchName" class="form-control"
+              value="{{ primary_bank_account.branch_name|default:'' }}" placeholder="例：渋谷支店">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">口座種別</label>
+            <select id="editContractAccountType" class="form-select">
+              {% for val, label in bank_account_type_choices %}
+              <option value="{{ val }}"{% if primary_bank_account.account_type == val %} selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">口座番号</label>
+            <input type="text" id="editContractAccountNumber" class="form-control"
+              value="{{ primary_bank_account.account_number|default:'' }}" placeholder="例：1234567">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">口座名義（カナ）</label>
+            <input type="text" id="editContractAccountHolder" class="form-control"
+              value="{{ primary_bank_account.account_holder|default:'' }}" placeholder="例：ヤマダ タロウ">
+          </div>
+
+          {# ── 必要書類 ── #}
+          <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">必要書類（通数）</h6></div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">印鑑証明</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="editReqInkan" class="form-control" min="0" value="{{ contract.required_inkan_count }}">
+              <span class="input-group-text">通</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">住民票</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="editReqJuminhyo" class="form-control" min="0" value="{{ contract.required_juminhyo_count }}">
+              <span class="input-group-text">通</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">除票</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="editReqJotohyo" class="form-control" min="0" value="{{ contract.required_jotohyo_count }}">
+              <span class="input-group-text">通</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">委任状</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="editReqIninjyo" class="form-control" min="0" value="{{ contract.required_ininjyo_count }}">
+              <span class="input-group-text">通</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">譲渡書</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="editReqJotosho" class="form-control" min="0" value="{{ contract.required_jotosho_count }}">
+              <span class="input-group-text">通</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">還付</label>
+            <div class="input-group input-group-sm">
+              <input type="number" id="editReqKanpu" class="form-control" min="0" value="{{ contract.required_kanpu_count }}">
+              <span class="input-group-text">通</span>
+            </div>
           </div>
 
           {# ── 備考 ── #}
@@ -1103,6 +1581,68 @@
   </div>
 </div>
 {% endif %}
+
+{# 先払い入金 追加モーダル #}
+{% if contract %}
+<div class="modal fade" id="addAdvancePaymentModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-cash-coin"></i> 先払い入金を追加</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">入金予定額 <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="number" id="apAmount" class="form-control" min="0" step="1" placeholder="0">
+              <span class="input-group-text">円</span>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">入金日</label>
+            <input type="date" id="apPaymentDate" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-success" onclick="addAdvancePayment()"><i class="bi bi-save"></i> 追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# 担当者変更モーダル #}
+{% if can_approve %}
+<div class="modal fade" id="changeAssigneeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">担当者変更</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">担当者を選択</label>
+        <select id="newAssigneeSelect" class="form-select">
+          {% for u in all_users %}
+          <option value="{{ u.pk }}" {% if u.pk == assessment.assigned_to.pk %}selected{% endif %}>
+            {{ u.get_full_name|default:u.username }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="saveAssigneeChange()">変更する</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -1110,6 +1650,34 @@
 const ASSESSMENT_ID = {{ assessment.pk }};
 const REQUEST_ID    = {{ assessment.assessment_request.pk }};
 {% if contract %}const CONTRACT_ID = {{ contract.pk }};{% endif %}
+
+{% if can_approve %}
+let changeAssigneeModal;
+document.addEventListener('DOMContentLoaded', () => {
+  changeAssigneeModal = new bootstrap.Modal(document.getElementById('changeAssigneeModal'));
+});
+function openChangeAssigneeModal() {
+  changeAssigneeModal.show();
+}
+function saveAssigneeChange() {
+  const userId = document.getElementById('newAssigneeSelect').value;
+  apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/change-assignee/`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      document.getElementById('assigneeName').textContent = d.assigned_to_name;
+      changeAssigneeModal.hide();
+      showToast('成功', d.message, 'success');
+    } else {
+      alert(d.message);
+    }
+  })
+  .catch(err => alert('通信エラー: ' + err.message));
+}
+{% endif %}
 </script>
 <script src="{% static 'js/case_detail.js' %}"></script>
 {% endblock %}

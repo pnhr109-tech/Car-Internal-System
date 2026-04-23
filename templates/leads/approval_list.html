@@ -3,7 +3,7 @@
 {% block title %}承認待ち一覧{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-xxl py-4">
   <h4 class="mb-4"><i class="bi bi-check2-square text-primary"></i> 承認待ち一覧</h4>
 
   {% for msg in messages %}
@@ -11,6 +11,33 @@
     {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
   </div>
   {% endfor %}
+
+  <h6 class="text-muted mb-2">商談予定 承認待ち — {{ pending_appointments.count }}件</h6>
+  <div class="card mb-4 mobile-table-outer">
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0 mobile-card-table">
+        <thead class="table-light">
+          <tr><th>顧客名</th><th>車両</th><th>商談予定日時</th><th>担当者</th><th>申請日</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for req in pending_appointments %}
+          <tr>
+            <td class="card-title"><a href="{% url 'leads:assessment_detail' req.pk %}">{{ req.customer_name }}</a></td>
+            <td data-label="車両">{{ req.maker }} {{ req.car_model }}</td>
+            <td data-label="商談予定日時">{{ req.reservation_datetime|date:"Y-m-d H:i"|default:"-" }}</td>
+            <td data-label="担当者">{{ req.sales_owner_name|default:"-" }}</td>
+            <td data-label="申請日">{{ req.status_updated_at|date:"Y-m-d" }}</td>
+            <td data-label="操作">
+              <button class="btn btn-sm btn-success" onclick="promoteToCase({{ req.pk }})">承認（昇格）</button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-3">商談予定の承認待ちはありません</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 
   <h6 class="text-muted mb-2">査定（商談）承認待ち — {{ pending_assessments.count }}件</h6>
   <div class="card mb-4 mobile-table-outer">
