@@ -1,938 +1,622 @@
-# DB設計書（買取業務フロー）
+# DB設計書
 
-> 元資料：`docs/01_requirements/entity-list.md`
-> フレームワーク：Django 5.0.1 / DB：MySQL 8.0
-> ★ = エンティティ一覧の顧客ヒアリングで追加された項目
+> 生成基準：`leads/models.py` / `accounts/models.py` の現行実装  
+> フレームワーク：Django 5.0.1 / DB：MySQL 8.0  
+> 最終更新：2026-04-24
 
 ---
 
 ## 目次
 
-1. [Djangoアプリ割り当て](#1-djangoアプリ割り当て)
-2. [共通設計方針](#2-共通設計方針)
-3. [employees — 従業員・店舗](#3-employees--従業員店舗)
-4. [customers — 顧客](#4-customers--顧客)
-5. [vehicles — 車両](#5-vehicles--車両)
-6. [leads — 査定申込チャネル](#6-leads--査定申込チャネル)
-7. [sales — 査定・契約](#7-sales--査定契約)
-8. [operations — 引き取り・出品準備・陸送](#8-operations--引き取り出品準備陸送)
-9. [marketplace — オークション・Web掲載](#9-marketplace--オークションweb掲載)
-10. [finance — 入金・支払い](#10-finance--入金支払い)
-11. [common — 共通](#11-common--共通)
-12. [ER図（概要）](#12-er図概要)
+1. [テーブル一覧](#1-テーブル一覧)
+2. [accounts アプリ](#2-accounts-アプリ)
+   - [stores](#21-stores--店舗マスタ)
+   - [user_profiles](#22-user_profiles--ユーザープロファイル)
+   - [login_activities](#23-login_activities--ログイン勤怠)
+3. [leads アプリ](#3-leads-アプリ)
+   - [gmail_messages](#31-gmail_messages--gmailメッセージ)
+   - [customers](#32-customers--顧客)
+   - [customer_bank_accounts](#33-customer_bank_accounts--顧客口座情報)
+   - [vehicles](#34-vehicles--車両)
+   - [vehicle_images](#35-vehicle_images--車両画像)
+   - [number_sequences](#36-number_sequences--連番管理)
+   - [car_assessment_requests](#37-car_assessment_requests--査定申込)
+   - [assessments](#38-assessments--査定商談)
+   - [assessment_check_items](#39-assessment_check_items--査定チェック項目)
+   - [document_type_masters](#310-document_type_masters--書類種別マスタ)
+   - [purchase_contracts](#311-purchase_contracts--買取契約)
+   - [documents](#312-documents--書類後日品)
+   - [identity_documents](#313-identity_documents--本人確認書類)
+   - [ownership_releases](#314-ownership_releases--所有権解除管理)
+   - [advance_payments](#315-advance_payments--先払い入金)
+   - [contact_histories](#316-contact_histories--取引連絡履歴)
+4. [ER図（概要）](#4-er図概要)
+5. [業務フロー別テーブル対応](#5-業務フロー別テーブル対応)
 
 ---
 
-## 1. Djangoアプリ割り当て
+## 1. テーブル一覧
 
-| Djangoアプリ | 管理エンティティ |
+| # | テーブル名 | モデル | アプリ | 概要 |
+|---|---|---|---|---|
+| 1 | `stores` | Store | accounts | 店舗マスタ |
+| 2 | `user_profiles` | UserProfile | accounts | ユーザー権限・所属店舗 |
+| 3 | `login_activities` | LoginActivity | accounts | ログイン勤怠管理 |
+| 4 | `gmail_messages` | GmailMessage | leads | Gmail取り込みメッセージ |
+| 5 | `customers` | Customer | leads | 顧客マスタ |
+| 6 | `customer_bank_accounts` | CustomerBankAccount | leads | 顧客口座情報 |
+| 7 | `vehicles` | Vehicle | leads | 車両マスタ |
+| 8 | `vehicle_images` | VehicleImage | leads | 車両画像 |
+| 9 | `number_sequences` | NumberSequence | leads | 申込番号等の連番管理 |
+| 10 | `car_assessment_requests` | CarAssessmentRequest | leads | 査定申込（全チャネル統合） |
+| 11 | `assessments` | Assessment | leads | 査定・商談 |
+| 12 | `assessment_check_items` | AssessmentCheckItem | leads | 査定チェック項目 |
+| 13 | `document_type_masters` | DocumentTypeMaster | leads | 書類種別マスタ（将来実装） |
+| 14 | `purchase_contracts` | PurchaseContract | leads | 買取契約 |
+| 15 | `documents` | Document | leads | 書類・後日品（将来実装） |
+| 16 | `identity_documents` | IdentityDocument | leads | 本人確認書類（将来実装） |
+| 17 | `ownership_releases` | OwnershipRelease | leads | 所有権解除管理 |
+| 18 | `advance_payments` | AdvancePayment | leads | 先払い入金記録 |
+| 19 | `contact_histories` | ContactHistory | leads | 取引・連絡履歴 |
+
+> Django標準テーブル（`auth_user`, `auth_group`, `django_session` 等）は省略。
+
+---
+
+## 2. accounts アプリ
+
+### 2.1 `stores` — 店舗マスタ
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| code | VARCHAR(20) UNIQUE | NO | | 店舗コード（TSUKUBA / MITO / OYAMA / UTSUNOMIYA / CC / SUPPORT / HQ） |
+| name | VARCHAR(50) | NO | | 店舗名 |
+| is_active | TINYINT(1) | NO | 1 | 有効フラグ |
+
+---
+
+### 2.2 `user_profiles` — ユーザープロファイル
+
+Django標準の `auth_user` と 1:1 で紐づく。権限・所属店舗を管理する。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| user_id | INT FK→auth_user | NO | | ユーザー（1:1） |
+| store_id | INT FK→stores | YES | NULL | 所属店舗（全権限ロールはNULL） |
+| role | VARCHAR(20) | NO | `general` | ロール（general / sub_leader / manager / superuser） |
+| employee_number | VARCHAR(20) | YES | `''` | 社員番号 |
+| is_active_employee | TINYINT(1) | NO | 1 | 在籍中フラグ |
+| created_at | DATETIME | NO | | 作成日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+
+**ロール権限早見表**
+
+| ロール | can_approve | can_edit_numbers | has_global_access |
+|---|---|---|---|
+| general（一般） | ✗ | ✗ | ✗ |
+| sub_leader（次席） | ✓ | ✓ | ✗ |
+| manager（マネージャー） | ✓ | ✓ | ✗ |
+| superuser（全権限） | ✓ | ✓ | ✓ |
+| HQ所属（本社業務） | ✗ | ✗ | ✓ |
+
+---
+
+### 2.3 `login_activities` — ログイン勤怠
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| user_id | INT FK→auth_user | NO | | ユーザー |
+| work_date | DATE | NO | | 勤務日 |
+| login_at | DATETIME | NO | | 出勤時刻 |
+| logout_at | DATETIME | YES | NULL | 退勤時刻 |
+| work_minutes | INT | NO | 0 | 勤務時間（分） |
+| created_at | DATETIME | NO | | 作成日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+
+**インデックス**
+
+| 名前 | カラム |
 |---|---|
-| `employees` | 従業員、店舗 |
-| `customers` | 顧客、顧客口座情報 |
-| `vehicles` | 車両、車両画像 |
-| `leads` | 予約、チャネル別申込（ナビクル/マイカースカウト/HP/来店/カービュー/紹介/メール）、外部サービスマスタ |
-| `sales` | 査定、査定チェック項目、買取契約、書類、書類種別マスタ、本人確認書類、所有権解除管理、先払い入金記録 |
-| `operations` | 引き取り、付属品確認、出品準備、準備作業明細、整備記録、整備明細、付帯費用、陸送業者マスタ、陸送 |
-| `marketplace` | オークション会場マスタ、出品、流れ・不備記録、WEB掲載媒体マスタ、WEB掲載 |
-| `finance` | 入金記録、支払記録 |
-| `common` | 取引・連絡履歴 |
+| idx_login_act_user_date | (user_id, work_date) |
+| idx_login_act_user_out | (user_id, logout_at) |
 
 ---
 
-## 2. 共通設計方針
-
-### フィールド命名規則
-- PK: `id` (BigAutoField, AUTO_INCREMENT)
-- FK: `{参照モデル名}_id`（例: `customer_id`, `assessment_id`）
-- タイムスタンプ: `created_at`, `updated_at`（全テーブル共通）
-- 更新者: `updated_by_id` → FK to `employees_employee`
-
-### 抽象基底モデル（`core.models.BaseModel`）
-全テーブルに以下を自動付与:
-```python
-created_at  = DateTimeField(auto_now_add=True)
-updated_at  = DateTimeField(auto_now=True)
-updated_by  = ForeignKey('employees.Employee', null=True, on_delete=SET_NULL)
-```
-
-### 金額フィールド
-- 税抜金額: `DecimalField(max_digits=10, decimal_places=0)`
-- 消費税額: `DecimalField(max_digits=10, decimal_places=0)`
-- 税込金額: 基本的にDBには持たず、必要に応じてプロパティで計算
-
-### ステータスフィールド
-- `CharField(max_length=20, choices=...)` を使用
-- choices は各モデル内で定数定義
-
----
-
-## 3. employees — 従業員・店舗
-
-### Store（店舗）
-**テーブル名:** `employees_store`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| name | CharField(50) | NOT NULL | 店舗名 |
-| address | CharField(200) | NULL | 所在地 |
-| phone | CharField(20) | NULL | 電話番号 |
-| is_active | BooleanField | DEFAULT TRUE | 稼働中フラグ |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### Employee（従業員）
-**テーブル名:** `employees_employee`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| user_id | OneToOneField → `auth_user` | NULL | Djangoログインユーザー |
-| employee_number | CharField(20) | UNIQUE NOT NULL | 社員ID |
-| name | CharField(50) | NOT NULL | 氏名 |
-| store_id | ForeignKey → `employees_store` | NULL | 所属店舗 |
-| department | CharField(50) | NULL | 所属部署 |
-| role | CharField(20) | NOT NULL | 権限（`admin` / `manager` / `staff`） |
-| is_active | BooleanField | DEFAULT TRUE | 在籍フラグ |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
-**インデックス:** `employee_number`, `store_id`
-
----
-
-## 4. customers — 顧客
-
-### Customer（顧客）
-**テーブル名:** `customers_customer`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| name | CharField(100) | NOT NULL | 氏名 |
-| phone | CharField(20) | NULL | 電話番号 |
-| email | EmailField | NULL | メールアドレス |
-| address | CharField(200) | NULL | 住所 |
-| age | PositiveSmallIntegerField | NULL | 年齢 |
-| occupation | CharField(50) | NULL | 職業 |
-| gender | CharField(10) | NULL | 性別（`male` / `female` / `other`） |
-| family_structure | CharField(100) | NULL | 家族構成 |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-
-**インデックス:** `phone`, `email`
-
----
-
-### CustomerAccount（顧客口座情報）
-**テーブル名:** `customers_customeraccount`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| bank_name | CharField(50) | NOT NULL | 銀行名 |
-| branch_name | CharField(50) | NOT NULL | 支店名 |
-| account_type | CharField(10) | NOT NULL | 口座種別（`ordinary` / `current`） |
-| account_number | CharField(20) | NOT NULL | 口座番号 |
-| account_holder | CharField(100) | NOT NULL | 口座名義 |
-| is_primary | BooleanField | DEFAULT FALSE | 優先フラグ |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-
-**インデックス:** `customer_id`
-
----
-
-## 5. vehicles — 車両
-
-### Vehicle（車両）
-**テーブル名:** `vehicles_vehicle`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| maker | CharField(50) | NOT NULL | メーカー |
-| car_model | CharField(100) | NOT NULL | 車種 |
-| grade | CharField(100) | NULL | グレード |
-| color | CharField(50) | NULL | カラー |
-| model_year | PositiveSmallIntegerField | NULL | 年式 |
-| mileage | PositiveIntegerField | NULL | 走行距離（km） |
-| displacement | PositiveIntegerField | NULL | 排気量（cc） |
-| transmission | CharField(10) | NULL | ミッション（`AT` / `MT` / `CVT`）★ |
-| registration_number | CharField(20) | NULL | 登録番号（ナンバー）★ |
-| chassis_number | CharField(50) | NULL | 車台番号★ |
-| first_registration_date | DateField | NULL | 初年度登録年月★ |
-| has_repair_history | BooleanField | NULL | 修復歴フラグ★ |
-| inspection_expiry | DateField | NULL | 車検有効期限★ |
-| notes | TextField | NULL | 備考 |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-
-**インデックス:** `maker`, `car_model`, `chassis_number`
-
----
-
-### VehicleImage（車両画像）
-**テーブル名:** `vehicles_vehicleimage`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NOT NULL | |
-| image_path | CharField(500) | NOT NULL | 画像ファイルパス（GCS等） |
-| part_type | CharField(50) | NULL | パーツ種別（`exterior` / `interior` / `engine` 等） |
-| taken_at | DateTimeField | NULL | 撮影日時 |
-| created_at | DateTimeField | auto | |
-
-**インデックス:** `vehicle_id`
-
----
-
-## 6. leads — 査定申込チャネル
-
-### ExternalServiceMaster（外部サービスマスタ）
-**テーブル名:** `leads_externalservicemaster`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| name | CharField(50) | UNIQUE NOT NULL | サービス名（ナビクル/マイカースカウト/カービュー等） |
-| notes | TextField | NULL | 備考 |
-
----
-
-### Reservation（予約）
-**テーブル名:** `leads_reservation`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NULL | |
-| assigned_employee_id | ForeignKey → `employees_employee` | NULL | 担当者 |
-| channel_type | CharField(20) | NOT NULL | チャネル種別（`navicle` / `mycar` / `hp` / `walk_in` / `carview` / `referral` / `email`） |
-| scheduled_at | DateTimeField | NULL | 査定日時 |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-
-**インデックス:** `customer_id`, `channel_type`, `scheduled_at`
-
----
-
-### NavicleLead（ナビクル申込）
-**テーブル名:** `leads_naviclelead`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| reservation_id | OneToOneField → `leads_reservation` | NULL | 予約紐付け |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NULL | |
-| external_service_id | ForeignKey → `leads_externalservicemaster` | NOT NULL | |
-| external_id | CharField(100) | NULL | 外部サービスID |
-| applied_at | DateTimeField | NULL | 申込日時 |
-| inquiry_count | PositiveIntegerField | DEFAULT 0 | 問合件数 |
-| last_contacted_at | DateTimeField | NULL | 最終連絡日時 |
-| contracted_at | DateTimeField | NULL | 成約日時 |
-| assigned_employee_name | CharField(50) | NULL | 担当者名（外部表示名） |
-| status | CharField(20) | NOT NULL | ステータス（下記参照）★ |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
-**status choices:** `pending`（未対応）/ `in_progress`（対応中）/ `done`（対応済）/ `lost`（没）/ `call_banned`（架電禁止）/ `bad`（不良）/ `user_cancelled`（ユーザーキャンセル）
-
-**インデックス:** `customer_id`, `status`, `external_id`
-
----
-
-### MyCarScoutLead（マイカースカウト申込）
-**テーブル名:** `leads_mycarsscoutlead`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| reservation_id | OneToOneField → `leads_reservation` | NULL | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NULL | |
-| external_service_id | ForeignKey → `leads_externalservicemaster` | NOT NULL | |
-| external_id | CharField(100) | NULL | 外部サービスID |
-| bid_amount | DecimalField(10,0) | NULL | 入札金額 |
-| bid_at | DateTimeField | NULL | 入札日時 |
-| applied_at | DateTimeField | NULL | 申込日時 |
-| last_contacted_at | DateTimeField | NULL | 最終連絡日時 |
-| contracted_at | DateTimeField | NULL | 成約日時 |
-| assigned_employee_name | CharField(50) | NULL | 担当者名 |
-| status | CharField(20) | NOT NULL | ★（NavicleLead と同じ choices） |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### HPInquiryLead（HP依頼申込）
-**テーブル名:** `leads_hpinquirylead`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| reservation_id | OneToOneField → `leads_reservation` | NULL | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NULL | |
-| applied_at | DateTimeField | NULL | 申込日時 |
-| assigned_employee_id | ForeignKey → `employees_employee` | NULL | |
-| status | CharField(20) | NOT NULL | ★ |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### WalkInLead（来店申込）
-**テーブル名:** `leads_walkinlead`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| reservation_id | OneToOneField → `leads_reservation` | NULL | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NULL | |
-| walked_in_at | DateTimeField | NULL | 来店日時 |
-| assigned_employee_id | ForeignKey → `employees_employee` | NULL | |
-| status | CharField(20) | NOT NULL | ★ |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### CarviewLead（カービュー申込）★新規
-**テーブル名:** `leads_carviewlead`
-
-NavicleLead と同じ構成。外部サービスID・申込状況・問合件数あり。
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| reservation_id | OneToOneField → `leads_reservation` | NULL | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NULL | |
-| external_service_id | ForeignKey → `leads_externalservicemaster` | NOT NULL | |
-| external_id | CharField(100) | NULL | 外部サービスID |
-| applied_at | DateTimeField | NULL | |
-| inquiry_count | PositiveIntegerField | DEFAULT 0 | |
-| last_contacted_at | DateTimeField | NULL | |
-| contracted_at | DateTimeField | NULL | |
-| assigned_employee_name | CharField(50) | NULL | |
-| status | CharField(20) | NOT NULL | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### ReferralLead（紹介申込）★新規
-**テーブル名:** `leads_referrallead`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| reservation_id | OneToOneField → `leads_reservation` | NULL | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NULL | |
-| referrer_name | CharField(100) | NULL | 紹介者名 |
-| applied_at | DateTimeField | NULL | |
-| assigned_employee_id | ForeignKey → `employees_employee` | NULL | |
-| status | CharField(20) | NOT NULL | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### EmailLead（メール申込）★新規
-**テーブル名:** `leads_emaillead`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| reservation_id | OneToOneField → `leads_reservation` | NULL | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NULL | |
-| received_at | DateTimeField | NULL | 受信日時 |
-| subject | CharField(200) | NULL | 件名 |
-| body_summary | TextField | NULL | 本文要旨 |
-| assigned_employee_id | ForeignKey → `employees_employee` | NULL | |
-| status | CharField(20) | NOT NULL | `pending` / `in_progress` / `done` / `lost` / `user_cancelled` |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-## 7. sales — 査定・契約
-
-### Assessment（査定）
-**テーブル名:** `sales_assessment`
-
-> **中心エンティティ。** ②商談以降のほぼ全テーブルがこのIDを参照する。
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| reservation_id | ForeignKey → `leads_reservation` | NULL | 予約紐付け |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NOT NULL | |
-| assigned_employee_id | ForeignKey → `employees_employee` | NOT NULL | 担当者 |
-| assessed_at | DateTimeField | NULL | 査定日時 |
-| assessment_price | DecimalField(10,0) | NULL | 査定額 |
-| market_price | DecimalField(10,0) | NULL | 市場相場価格 |
-| overall_score | PositiveSmallIntegerField | NULL | 総合評価（1〜5） |
-| status | CharField(20) | NOT NULL | `negotiating`（商談中）/ `won`（成約）/ `lost`（不成約）/ `managed`（管理行） |
-| cancel_reason | TextField | NULL | キャンセル理由 |
-| cancelled_at | DateTimeField | NULL | キャンセル日時 |
-| is_managed | BooleanField | DEFAULT FALSE | 管理有無 |
-| managed_status | CharField(20) | NULL | `contracted` / `lost` / `re_approach` |
-| notes | TextField | NULL | 備考 |
-| approved_by_id | ForeignKey → `employees_employee` | NULL | 稟議承認者（マネージャー/次席） |
-| approved_at | DateTimeField | NULL | 承認日時 |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-
-**インデックス:** `customer_id`, `vehicle_id`, `status`, `assessed_at`
-
----
-
-### AssessmentCheckItem（査定チェック項目）
-**テーブル名:** `sales_assessmentcheckitem`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL | |
-| check_type | CharField(50) | NOT NULL | 種別（`scratch` / `repair_history` / `interior` / `tire` 等） |
-| description | TextField | NULL | 詳細説明 |
-| created_at | DateTimeField | auto | |
-
----
-
-### DocumentTypeMaster（書類種別マスタ）
-**テーブル名:** `sales_documenttypemaster`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| name | CharField(100) | UNIQUE NOT NULL | 書類種別名（委任状/譲渡証明書等） |
-| is_required | BooleanField | DEFAULT FALSE | 必須フラグ |
-| description | TextField | NULL | 説明 |
-
----
-
-### PurchaseContract（買取契約）
-**テーブル名:** `sales_purchasecontract`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL UNIQUE | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NOT NULL | |
-| assigned_employee_id | ForeignKey → `employees_employee` | NOT NULL | |
-| contracted_at | DateField | NULL | 契約日 |
-| purchase_price_ex_tax | DecimalField(10,0) | NOT NULL | 買取確定価格（税抜） |
-| tax_amount | DecimalField(10,0) | NOT NULL | 消費税額 |
-| payment_scheduled_date | DateField | NULL | 支払い予定日 |
-| status | CharField(20) | NOT NULL | `pending`（未契約）/ `contracted`（契約済）/ `cancelled`（破棄） |
-| cancel_reason | TextField | NULL | キャンセル理由 |
-| cancelled_at | DateTimeField | NULL | キャンセル日時 |
-| notes | TextField | NULL | 備考 |
-| is_price_corrected | BooleanField | DEFAULT FALSE | 金額訂正フラグ★ |
-| corrected_price | DecimalField(10,0) | NULL | 訂正後買取価格★ |
-| has_repair | BooleanField | DEFAULT FALSE | 加修フラグ★ |
-| repair_notes | TextField | NULL | 加修内容★ |
-| has_ownership_release | BooleanField | DEFAULT FALSE | 所有権解除フラグ★ |
-| auction_scheduled_date | DateField | NULL | オークション出品予定日★ |
-| auction_venue_id | ForeignKey → `marketplace_auctionvenuemaster` | NULL | オークション出品予定会場★ |
-| is_advance_payment | BooleanField | DEFAULT FALSE | 先払いフラグ |
-| approved_by_id | ForeignKey → `employees_employee` | NULL | 承認者 |
-| approved_at | DateTimeField | NULL | 承認日時 |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-
-**インデックス:** `assessment_id`, `customer_id`, `status`
-
----
-
-### Document（書類・後日品）
-**テーブル名:** `sales_document`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL | |
-| contract_id | ForeignKey → `sales_purchasecontract` | NOT NULL | |
-| document_type_id | ForeignKey → `sales_documenttypemaster` | NOT NULL | |
-| issued_date | DateField | NULL | 発行日 |
-| received_date | DateField | NULL | 受領日 |
-| status | CharField(20) | NOT NULL | `not_created`（未作成）/ `creating`（作成中）/ `created`（作成済）/ `waiting_receipt`（受領待）/ `received`（受領済）/ `confirmed`（確認済）★ |
-| file_path | CharField(500) | NULL | ファイルパス |
-| notes | TextField | NULL | 備考 |
-| delivery_status | CharField(20) | NULL | 後日品送付ステータス（`not_sent` / `sent`）★ |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### IdentityDocument（本人確認書類）
-**テーブル名:** `sales_identitydocument`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| contract_id | ForeignKey → `sales_purchasecontract` | NOT NULL | |
-| document_type | CharField(50) | NOT NULL | 種別（`driving_license` / `passport` 等） |
-| confirmed_at | DateTimeField | NULL | 確認日時 |
-| confirmed_by_id | ForeignKey → `employees_employee` | NULL | |
-| file_path | CharField(500) | NULL | ファイルパス |
-| notes | TextField | NULL | 備考 |
-| created_at | DateTimeField | auto | |
-
----
-
-### OwnershipReleaseMgmt（所有権解除管理）★新規
-**テーブル名:** `sales_ownershipreleasemgmt`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| contract_id | ForeignKey → `sales_purchasecontract` | NOT NULL UNIQUE | |
-| pattern | CharField(1) | NOT NULL | パターン（`A`：ディーラー経由 / `B`：自己返済） |
-| debt_inquiry_status | CharField(50) | NULL | 残債照会ステータス |
-| dealer_doc_sent_date | DateField | NULL | ディーラーへの書類送付日 |
-| debt_transfer_date | DateField | NULL | 残債振込日 |
-| dealer_doc_returned_date | DateField | NULL | ディーラーからの書類返却日 |
-| status | CharField(30) | NOT NULL | `pending`（未対応）/ `inquiring`（残債照会中）/ `doc_sent`（書類送付済）/ `debt_paid`（残債振込済）/ `doc_returned`（書類返却済） |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### AdvancePaymentRecord（先払い入金記録）★新規
-**テーブル名:** `sales_advancepaymentrecord`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| contract_id | ForeignKey → `sales_purchasecontract` | NOT NULL | |
-| expected_amount | DecimalField(10,0) | NOT NULL | 入金予定額 |
-| payment_date | DateField | NULL | 入金日 |
-| approved_by_id | ForeignKey → `employees_employee` | NULL | 承認者（社長） |
-| status | CharField(20) | NOT NULL | `pending`（未入金）/ `paid`（入金済） |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-## 8. operations — 引き取り・出品準備・陸送
-
-### VehicleRetrieval（車両引き取り）
-**テーブル名:** `operations_vehicleretrieval`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL UNIQUE | |
-| contract_id | ForeignKey → `sales_purchasecontract` | NOT NULL | |
-| assigned_employee_id | ForeignKey → `employees_employee` | NULL | |
-| scheduled_date | DateField | NULL | 引取予定日 |
-| retrieved_at | DateTimeField | NULL | 引取日時 |
-| location | CharField(200) | NULL | 引取場所 |
-| final_mileage | PositiveIntegerField | NULL | 最終確認走行距離 |
-| status | CharField(20) | NOT NULL | `pending`（未済）/ `done`（済） |
-| notes | TextField | NULL | 備考 |
-| actual_arrival_date | DateField | NULL | 入庫日（変更後）★ |
-| destination_store_id | ForeignKey → `employees_store` | NULL | 送り先店舗★ |
-| needs_confirmation_doc | BooleanField | DEFAULT FALSE | 引取確認書フラグ★ |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### AccessoryCheck（付属品確認）
-**テーブル名:** `operations_accessorycheck`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| retrieval_id | ForeignKey → `operations_vehicleretrieval` | NOT NULL | |
-| item_name | CharField(100) | NOT NULL | 付属品名（スペアキー/取扱説明書等） |
-| notes | TextField | NULL | 備考 |
-
----
-
-### ListingPreparation（出品準備）
-**テーブル名:** `operations_listingpreparation`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL UNIQUE | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NOT NULL | |
-| assigned_employee_id | ForeignKey → `employees_employee` | NULL | |
-| scheduled_date | DateField | NULL | 出品予定日 |
-| completed_date | DateField | NULL | 出品準備完了日 |
-| is_complete | BooleanField | DEFAULT FALSE | 完了フラグ |
-| notes | TextField | NULL | 備考 |
-| has_listing_sheet | BooleanField | DEFAULT FALSE | 出品表作成フラグ★ |
-| listing_sheet_url | CharField(500) | NULL | 出品表URL★ |
-| needs_deregistration | BooleanField | DEFAULT FALSE | 登録抹消フラグ★ |
-| deregistration_status | CharField(20) | NULL | 抹消ステータス（`not_cancelled` / `applying` / `cancelled`）★ |
-| approved_by_id | ForeignKey → `employees_employee` | NULL | 承認者（サポートマネージャー） |
-| approved_at | DateTimeField | NULL | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### PreparationWorkDetail（準備作業明細）
-**テーブル名:** `operations_preparationworkdetail`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| preparation_id | ForeignKey → `operations_listingpreparation` | NOT NULL | |
-| work_type | CharField(50) | NOT NULL | 作業種別（`wash` / `photo` / `doc_check` / `clean` 等） |
-| is_done | BooleanField | DEFAULT FALSE | 完了フラグ |
-| notes | TextField | NULL | 備考 |
-
----
-
-### MaintenanceRecord（整備記録）
-**テーブル名:** `operations_maintenancerecord`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL | |
-| vehicle_id | ForeignKey → `vehicles_vehicle` | NOT NULL | |
-| vendor_name | CharField(100) | NULL | 整備業者名 |
-| work_date | DateField | NULL | 作業日 |
-| total_cost_ex_tax | DecimalField(10,0) | NULL | 合計費用（税抜） |
-| tax_amount | DecimalField(10,0) | NULL | 消費税額 |
-| notes | TextField | NULL | 備考 |
-| approved_by_id | ForeignKey → `employees_employee` | NULL | 承認者 |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### MaintenanceDetail（整備明細）
-**テーブル名:** `operations_maintenancedetail`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| maintenance_id | ForeignKey → `operations_maintenancerecord` | NOT NULL | |
-| work_description | CharField(200) | NOT NULL | 作業内容 |
-| part_name | CharField(100) | NULL | 部品名 |
-| cost_ex_tax | DecimalField(10,0) | NULL | 費用（税抜） |
-| tax_amount | DecimalField(10,0) | NULL | 消費税額 |
-
----
-
-### IncidentalCost（付帯費用）
-**テーブル名:** `operations_incidentalcost`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL | |
-| cost_type | CharField(50) | NOT NULL | 費用種別（`cleaning` / `photo` / `other`） |
-| amount_ex_tax | DecimalField(10,0) | NOT NULL | 金額（税抜） |
-| tax_amount | DecimalField(10,0) | NULL | 消費税額 |
-| occurred_date | DateField | NULL | 発生日 |
-| notes | TextField | NULL | 備考 |
-| created_at | DateTimeField | auto | |
-
----
-
-### TransportVendorMaster（陸送業者マスタ）
-**テーブル名:** `operations_transportvendormaster`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| name | CharField(100) | UNIQUE NOT NULL | 業者名 |
-| phone | CharField(20) | NULL | 電話番号 |
-| email | EmailField | NULL | メールアドレス |
-| notes | TextField | NULL | 備考 |
-
----
-
-### Transport（陸送）
-**テーブル名:** `operations_transport`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL | |
-| retrieval_id | ForeignKey → `operations_vehicleretrieval` | NULL | |
-| vendor_id | ForeignKey → `operations_transportvendormaster` | NULL | 陸送業者 |
-| departure | CharField(200) | NULL | 出発地 |
-| destination | CharField(200) | NULL | 到着地（オークション会場/店舗） |
-| scheduled_date | DateField | NULL | 陸送予定日 |
-| actual_date | DateField | NULL | 陸送実施日 |
-| cost_ex_tax | DecimalField(10,0) | NULL | 費用（税抜） |
-| tax_amount | DecimalField(10,0) | NULL | 消費税額 |
-| status | CharField(20) | NOT NULL | `requested`（依頼済）/ `in_transit`（輸送中）/ `done`（完了） |
-| notes | TextField | NULL | 備考 |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-## 9. marketplace — オークション・Web掲載
-
-### AuctionVenueMaster（オークション会場マスタ）
-**テーブル名:** `marketplace_auctionvenuemaster`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| name | CharField(100) | UNIQUE NOT NULL | 会場名 |
-| location | CharField(200) | NULL | 所在地 |
-| fee_type | CharField(10) | NULL | 手数料形式（`rate` / `fixed`） |
-| fee_rate | DecimalField(5,4) | NULL | 手数料率（例: 0.0300 = 3%） |
-| fee_fixed | DecimalField(10,0) | NULL | 手数料定額 |
-| notes | TextField | NULL | 備考 |
-
----
-
-### AuctionListing（出品）
-**テーブル名:** `marketplace_auctionlisting`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL | |
-| venue_id | ForeignKey → `marketplace_auctionvenuemaster` | NOT NULL | |
-| listed_date | DateField | NULL | 出品日 |
-| listing_number | CharField(50) | NULL | 出品番号 |
-| desired_price | DecimalField(10,0) | NULL | 希望価格 |
-| listing_count | PositiveSmallIntegerField | DEFAULT 1 | 出品回数 |
-| result | CharField(20) | NULL | 結果（`sold`（落札）/ `passed`（流れ）/ `defect`（不備）） |
-| sold_price | DecimalField(10,0) | NULL | 落札価格 |
-| commission | DecimalField(10,0) | NULL | 成約手数料 |
-| notes | TextField | NULL | 備考 |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
-**インデックス:** `assessment_id`, `result`
-
----
-
-### AuctionNoSaleRecord（流れ・不備記録）
-**テーブル名:** `marketplace_auctionnosalerecord`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| listing_id | ForeignKey → `marketplace_auctionlisting` | NOT NULL | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL | |
-| assigned_employee_id | ForeignKey → `employees_employee` | NULL | |
-| occurred_date | DateField | NULL | 発生日 |
-| category | CharField(20) | NOT NULL | 区分（`sold` / `passed` / `defect`） |
-| overall_score | PositiveSmallIntegerField | NULL | 総合評価（1〜5） |
-| reason | TextField | NULL | 理由 |
-| next_action | CharField(20) | NULL | 対応方針（`re_list`（再出品）/ `web_listing`（Web掲載移行）） |
-| created_at | DateTimeField | auto | |
-
----
-
-### WebListingMediaMaster（WEB掲載媒体マスタ）
-**テーブル名:** `marketplace_weblistingmediamaster`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| name | CharField(100) | UNIQUE NOT NULL | 媒体名 |
-| url | CharField(500) | NULL | 媒体URL |
-| fee_rate | DecimalField(5,4) | NULL | 手数料率 |
-| fee_fixed | DecimalField(10,0) | NULL | 手数料定額 |
-| notes | TextField | NULL | 備考 |
-
----
-
-### WebListing（WEB掲載）
-**テーブル名:** `marketplace_weblisting`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL | |
-| media_id | ForeignKey → `marketplace_weblistingmediamaster` | NOT NULL | |
-| assigned_employee_id | ForeignKey → `employees_employee` | NULL | |
-| start_date | DateField | NULL | 掲載開始日 |
-| end_date | DateField | NULL | 掲載終了日 |
-| listing_price | DecimalField(10,0) | NULL | 掲載価格 |
-| status | CharField(20) | NOT NULL | `listing`（掲載中）/ `sold`（成約）/ `withdrawn`（取り下げ） |
-| notes | TextField | NULL | 備考 |
-| approved_by_id | ForeignKey → `employees_employee` | NULL | 承認者（社長） |
-| approved_at | DateTimeField | NULL | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-## 10. finance — 入金・支払い
-
-### PaymentIncomeRecord（入金記録）
-**テーブル名:** `finance_paymentincomerecord`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL | |
-| contract_id | ForeignKey → `sales_purchasecontract` | NOT NULL | |
-| source_type | CharField(20) | NOT NULL | 入金元種別（`auction` / `web`） |
-| source_name | CharField(100) | NULL | 入金元名 |
-| expected_date | DateField | NULL | 入金予定日 |
-| actual_date | DateField | NULL | 実入金日 |
-| expected_amount | DecimalField(10,0) | NULL | 入金予定額 |
-| actual_amount | DecimalField(10,0) | NULL | 実入金額 |
-| bank_account | CharField(200) | NULL | 入金口座 |
-| status | CharField(20) | NOT NULL | `unconfirmed`（未確認）/ `confirmed`（確認済） |
-| notes | TextField | NULL | 備考 |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-### PaymentRecord（支払記録）
-**テーブル名:** `finance_paymentrecord`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NOT NULL | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| contract_id | ForeignKey → `sales_purchasecontract` | NOT NULL | |
-| account_id | ForeignKey → `customers_customeraccount` | NULL | 支払先口座 |
-| scheduled_date | DateField | NULL | 支払い予定日 |
-| actual_date | DateField | NULL | 実支払い日 |
-| amount | DecimalField(10,0) | NULL | 支払い額 |
-| payment_method | CharField(50) | NULL | 支払い方法（`bank_transfer` 等） |
-| is_advance | BooleanField | DEFAULT FALSE | 前倒しフラグ |
-| status | CharField(20) | NOT NULL | `unpaid`（未払い）/ `paid`（支払済） |
-| notes | TextField | NULL | 備考 |
-| is_diff_approved | BooleanField | DEFAULT FALSE | 差異承認フラグ★ |
-| diff_reason | TextField | NULL | 差異理由★ |
-| approved_by_id | ForeignKey → `employees_employee` | NULL | 承認者（社長/経理） |
-| approved_at | DateTimeField | NULL | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-| created_at | DateTimeField | auto | |
-| updated_at | DateTimeField | auto | |
-
----
-
-## 11. common — 共通
-
-### ContactHistory（取引・連絡履歴）
-**テーブル名:** `common_contacthistory`
-
-| フィールド名 | 型 | 制約 | 説明 |
-|---|---|---|---|
-| id | BigAutoField | PK | |
-| assessment_id | ForeignKey → `sales_assessment` | NULL | |
-| customer_id | ForeignKey → `customers_customer` | NOT NULL | |
-| employee_id | ForeignKey → `employees_employee` | NOT NULL | |
-| contacted_at | DateTimeField | NOT NULL | 連絡日時 |
-| contact_method | CharField(20) | NOT NULL | 連絡方法（`phone` / `email` / `sms`） |
-| summary | TextField | NOT NULL | 連絡内容要旨 |
-| created_at | DateTimeField | auto | |
-| updated_by_id | ForeignKey → `employees_employee` | NULL | |
-
-**インデックス:** `customer_id`, `assessment_id`, `contacted_at`
-
----
-
-## 12. ER図（概要）
-
-```
-[leads_reservation]
-  └─ channel_type によって対応するLeadテーブルを参照
-       ├─ leads_naviclelead
-       ├─ leads_mycarsscoutlead
-       ├─ leads_hpinquirylead
-       ├─ leads_walkinlead
-       ├─ leads_carviewlead ★
-       ├─ leads_referrallead ★
-       └─ leads_emaillead ★
-
-[sales_assessment]  ← 中心エンティティ（案件ID）
-  ├─ leads_reservation (FK)
-  ├─ customers_customer (FK)
-  ├─ vehicles_vehicle (FK)
-  ├─ employees_employee (FK)
-  │
-  ├─ [sales_purchasecontract] (1:1)
-  │    ├─ [sales_document] (1:N)
-  │    ├─ [sales_identitydocument] (1:N)
-  │    ├─ [sales_ownershipreleasemgmt] (1:1) ★
-  │    └─ [sales_advancepaymentrecord] (1:N) ★
-  │
-  ├─ [sales_assessmentcheckitem] (1:N)
-  │
-  ├─ [operations_vehicleretrieval] (1:1)
-  │    └─ [operations_accessorycheck] (1:N)
-  │
-  ├─ [operations_listingpreparation] (1:1)
-  │    ├─ [operations_preparationworkdetail] (1:N)
-  │    ├─ [operations_maintenancerecord] (1:N)
-  │    │    └─ [operations_maintenancedetail] (1:N)
-  │    └─ [operations_incidentalcost] (1:N)
-  │
-  ├─ [operations_transport] (1:N)
-  │
-  ├─ [marketplace_auctionlisting] (1:N)
-  │    └─ [marketplace_auctionnosalerecord] (1:N)
-  │
-  ├─ [marketplace_weblisting] (1:N)
-  │
-  ├─ [finance_paymentincomerecord] (1:1)
-  ├─ [finance_paymentrecord] (1:1)
-  │
-  └─ [common_contacthistory] (1:N)
-```
-
----
-
-## 付録：新規追加が必要なDjangoアプリ
-
-現在の `ARCHITECTURE.md` に存在しないアプリで、本設計で新規追加が必要なもの:
-
-| アプリ名 | 対応する業務 |
+## 3. leads アプリ
+
+### 3.1 `gmail_messages` — Gmailメッセージ
+
+Gmail API Push通知で受信したメッセージを保存。査定申込取り込みの元データ。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| message_id | VARCHAR(255) UNIQUE | NO | | GmailメッセージID |
+| thread_id | VARCHAR(255) | NO | | スレッドID |
+| from_address | VARCHAR(255) | NO | | 送信元メールアドレス |
+| to_address | VARCHAR(255) | NO | | 宛先メールアドレス |
+| subject | VARCHAR(500) | NO | | 件名 |
+| received_at | DATETIME | NO | | 受信日時 |
+| created_at | DATETIME | NO | | 取り込み日時 |
+| snippet | TEXT | YES | NULL | スニペット |
+| body_text | TEXT | YES | NULL | 本文（テキスト） |
+| body_html | TEXT | YES | NULL | 本文（HTML） |
+| raw_json | JSON | YES | NULL | Gmail APIレスポンス全体 |
+
+**インデックス**
+
+| 名前 | カラム |
 |---|---|
-| `operations` | 引き取り・出品準備・陸送 |
-| `marketplace` | オークション・Web掲載 |
-| `finance` | 入金・支払い |
-| `common` | 取引・連絡履歴 |
+| idx_received_at | (-received_at) |
 
-既存の `leads` / `sales` / `vehicles` / `customers` / `employees` アプリは本設計に合わせてモデルを大幅に追加・修正する必要がある。
+---
+
+### 3.2 `customers` — 顧客
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| name | VARCHAR(100) | NO | | 氏名 |
+| furigana | VARCHAR(100) | YES | `''` | フリガナ |
+| phone_number | VARCHAR(20) | NO | | 電話番号 |
+| email | VARCHAR(255) | YES | `''` | メールアドレス |
+| postal_code | VARCHAR(10) | YES | `''` | 郵便番号 |
+| address | VARCHAR(255) | YES | `''` | 住所 |
+| age | SMALLINT | YES | NULL | 年齢 |
+| birth_date | DATE | YES | NULL | 生年月日 |
+| occupation | VARCHAR(100) | YES | `''` | 職業 |
+| gender | VARCHAR(10) | YES | `''` | 性別 |
+| family_structure | VARCHAR(100) | YES | `''` | 家族構成 |
+| license_number | VARCHAR(20) | YES | `''` | 免許証番号 |
+| is_taxable_business | TINYINT(1) | YES | NULL | 課税事業者フラグ |
+| invoice_registration_number | VARCHAR(50) | YES | `''` | インボイス登録番号 |
+| created_at | DATETIME | NO | | 作成日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+| updated_by_id | INT FK→auth_user | YES | NULL | 更新者 |
+
+**インデックス**
+
+| 名前 | カラム |
+|---|---|
+| idx_cust_name | (name) |
+| idx_cust_phone | (phone_number) |
+
+---
+
+### 3.3 `customer_bank_accounts` — 顧客口座情報
+
+顧客に対して複数口座を登録可能。`is_primary=True` の口座が振込先として使用される。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| customer_id | INT FK→customers | NO | | 顧客 |
+| bank_institution_type | VARCHAR(20) | NO | `bank` | 金融機関種別（bank / shinkin / nokyo / yucho） |
+| bank_name | VARCHAR(100) | NO | | 銀行名 |
+| branch_name | VARCHAR(100) | NO | | 支店名 |
+| account_type | VARCHAR(10) | NO | | 口座種別（普通 / 当座） |
+| account_number | VARCHAR(20) | NO | | 口座番号 |
+| account_holder | VARCHAR(100) | NO | | 口座名義（カナ） |
+| is_primary | TINYINT(1) | NO | 0 | 優先口座フラグ |
+| created_at | DATETIME | NO | | 作成日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+| updated_by_id | INT FK→auth_user | YES | NULL | 更新者 |
+
+---
+
+### 3.4 `vehicles` — 車両
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| maker | VARCHAR(100) | NO | | メーカー |
+| car_model | VARCHAR(100) | NO | | 車種 |
+| year | VARCHAR(10) | NO | | 年式 |
+| mileage | VARCHAR(20) | NO | | 走行距離 |
+| grade | VARCHAR(100) | YES | `''` | グレード |
+| color | VARCHAR(50) | YES | `''` | カラー |
+| displacement | VARCHAR(20) | YES | `''` | 排気量 |
+| remarks | TEXT | YES | `''` | 備考 |
+| model_type | VARCHAR(50) | YES | `''` | 型式 |
+| fuel_type | VARCHAR(20) | YES | `''` | 燃料種別（gasoline / diesel / hybrid / phev / ev / lpg / other） |
+| chassis_number | VARCHAR(50) | YES | `''` | 車台番号 |
+| first_registration_date | DATE | YES | NULL | 初年度登録年月 |
+| repair_history_flag | TINYINT(1) | YES | NULL | 修復歴（NULL=未回答） |
+| inspection_expiry | DATE | YES | NULL | 車検有効期限 |
+| transmission_type | VARCHAR(10) | YES | `''` | ミッション種別（AT / MT / CVT / その他） |
+| registration_number | VARCHAR(20) | YES | `''` | 登録番号（ナンバー） |
+| passenger_count | VARCHAR(5) | YES | `''` | 乗車定員 |
+| body_type | VARCHAR(50) | YES | `''` | ボディタイプ |
+| drive_type | VARCHAR(10) | YES | `''` | 駆動方式 |
+| created_at | DATETIME | NO | | 作成日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+| updated_by_id | INT FK→auth_user | YES | NULL | 更新者 |
+
+---
+
+### 3.5 `vehicle_images` — 車両画像
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| vehicle_id | INT FK→vehicles | NO | | 車両 |
+| image | VARCHAR(255) | NO | | 画像ファイルパス（upload_to: vehicle_images/） |
+| part_type | VARCHAR(20) | YES | `''` | パーツ種別（外装 / 内装 / エンジン / タイヤ / その他） |
+| taken_at | DATETIME | YES | NULL | 撮影日時 |
+| created_at | DATETIME | NO | | 登録日時 |
+
+---
+
+### 3.6 `number_sequences` — 連番管理
+
+申込番号・契約番号など各種連番の最終値を管理する汎用テーブル。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| sequence_type | VARCHAR(50) | NO | | 連番種別（例: `application_number`） |
+| key | VARCHAR(100) | NO | | 区切りキー（例: `NAVIKURU-20260410`） |
+| last_seq | INT | NO | 0 | 最終発行連番 |
+
+**制約**
+
+- UNIQUE (sequence_type, key)
+
+---
+
+### 3.7 `car_assessment_requests` — 査定申込
+
+全チャネル（ナビクル・メール・来店等）の申込を統合管理する中心テーブル。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| application_number | VARCHAR(50) UNIQUE | NO | | 申込番号（例: N-20260410-0001） |
+| application_datetime | DATETIME | NO | | 申込日時 |
+| channel_type | VARCHAR(20) | NO | `NAVIKURU` | チャネル（NAVIKURU / MYCAR_SCOUT / CARVIEW / HP / WALK_IN / REFERRAL / EMAIL / MANUAL） |
+| customer_name | VARCHAR(100) | NO | | 申込者氏名 |
+| phone_number | VARCHAR(20) | NO | | 電話番号 |
+| email | VARCHAR(255) | YES | `''` | メールアドレス |
+| postal_code | VARCHAR(10) | YES | `''` | 郵便番号 |
+| address | VARCHAR(255) | YES | `''` | 住所 |
+| maker | VARCHAR(100) | YES | `''` | メーカー名（申込時入力値） |
+| car_model | VARCHAR(100) | YES | `''` | 車種名（申込時入力値） |
+| year | VARCHAR(100) | YES | `''` | 年式（申込時入力値） |
+| mileage | VARCHAR(100) | YES | `''` | 走行距離（申込時入力値） |
+| desired_sale_timing | VARCHAR(100) | YES | `''` | 希望売却時期 |
+| follow_status | VARCHAR(30) | NO | `未対応` | 対応ステータス（未対応 / 不通 / 即ぷ / 再コール予定 / 商談予定 / 商談昇格済 / 成約 / 見送り） |
+| sales_owner_name | VARCHAR(150) | YES | `''` | 担当営業名 |
+| sales_assigned_at | DATETIME | YES | NULL | 担当確定日時 |
+| call_count | INT | NO | 0 | 通話数 |
+| sales_note | TEXT | YES | `''` | 対応コメント |
+| status_updated_at | DATETIME | YES | NULL | ステータス更新日時 |
+| status_updated_by | VARCHAR(150) | YES | `''` | ステータス更新者名 |
+| external_service_id | VARCHAR(100) | YES | `''` | 外部サービスID（ナビクル等の申込番号） |
+| external_status | VARCHAR(50) | YES | `''` | 外部ステータス |
+| scraped_at | DATETIME | YES | NULL | 最終スクレイピング日時 |
+| referral_name | VARCHAR(100) | YES | `''` | 紹介者名 |
+| reservation_datetime | DATETIME | YES | NULL | 査定予約日時 |
+| cancel_reason | VARCHAR(255) | YES | `''` | キャンセル理由 |
+| customer_id | INT FK→customers | YES | NULL | 紐づき顧客（商談昇格後に設定） |
+| vehicle_id | INT FK→vehicles | YES | NULL | 紐づき車両（商談昇格後に設定） |
+| assigned_to_id | INT FK→auth_user | YES | NULL | 担当者 |
+| gmail_message_id | INT FK→gmail_messages | YES | NULL | 元メッセージ |
+| created_at | DATETIME | NO | | 取り込み日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+
+**インデックス**
+
+| 名前 | カラム |
+|---|---|
+| idx_app_datetime | (-application_datetime) |
+| idx_customer_name | (customer_name) |
+| idx_phone_number | (phone_number) |
+| idx_channel_external_id | (channel_type, external_service_id) |
+
+---
+
+### 3.8 `assessments` — 査定・商談
+
+`car_assessment_requests` から昇格して生成される。商談〜承認フェーズを管理。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| assessment_request_id | INT FK→car_assessment_requests (1:1) | NO | | 元査定申込 |
+| customer_id | INT FK→customers | NO | | 顧客 |
+| vehicle_id | INT FK→vehicles | NO | | 車両 |
+| assigned_to_id | INT FK→auth_user | NO | | 担当者 |
+| status | VARCHAR(20) | NO | `in_progress` | ステータス（in_progress / contracted / lost / pre_cancel / managed） |
+| management_status | VARCHAR(20) | YES | `''` | 管理方針（contract / lost / re_approach） |
+| assessment_datetime | DATETIME | YES | NULL | 査定日時 |
+| assessment_price | DECIMAL(12,0) | YES | NULL | 査定額 |
+| market_price | DECIMAL(12,0) | YES | NULL | 市場相場価格 |
+| overall_rating | DECIMAL(3,1) | YES | NULL | 総合評価（1〜5、0.5刻み） |
+| cancel_reason | VARCHAR(255) | YES | `''` | キャンセル理由 |
+| cancelled_at | DATETIME | YES | NULL | キャンセル日時 |
+| approved_by_id | INT FK→auth_user | YES | NULL | 承認者 |
+| approved_at | DATETIME | YES | NULL | 承認日時 |
+| remarks | TEXT | YES | `''` | 備考 |
+| created_at | DATETIME | NO | | 作成日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+| updated_by_id | INT FK→auth_user | YES | NULL | 更新者 |
+
+**インデックス**
+
+| 名前 | カラム |
+|---|---|
+| idx_assessment_status | (status) |
+| idx_assessment_user_status | (assigned_to_id, status) |
+
+---
+
+### 3.9 `assessment_check_items` — 査定チェック項目
+
+査定時に確認した傷・修復歴・タイヤ状態などのチェック記録。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| assessment_id | INT FK→assessments | NO | | 査定 |
+| check_type | VARCHAR(20) | NO | | チェック種別（scratch / repair / interior / tire / other） |
+| description | TEXT | YES | `''` | 詳細説明 |
+| created_at | DATETIME | NO | | 作成日時 |
+
+---
+
+### 3.10 `document_type_masters` — 書類種別マスタ
+
+> ⚠️ 将来実装予定。現在DBレコードなし。
+
+書類管理機能（[3.12](#312-documents--書類後日品)）で使用する書類種別のマスタ。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| name | VARCHAR(100) | NO | | 書類種別名 |
+| required_flag | TINYINT(1) | NO | 0 | 必須フラグ |
+| description | TEXT | YES | `''` | 説明 |
+
+---
+
+### 3.11 `purchase_contracts` — 買取契約
+
+`assessments` と 1:1 で紐づく契約情報。契約書PDF出力の元データでもある。
+
+#### 基本情報・金額
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| assessment_id | INT FK→assessments (1:1) | NO | | 査定 |
+| customer_id | INT FK→customers | NO | | 顧客 |
+| vehicle_id | INT FK→vehicles | NO | | 車両 |
+| assigned_to_id | INT FK→auth_user | NO | | 担当者 |
+| status | VARCHAR(20) | NO | `pending` | ステータス（pending / contracted / cancelled） |
+| contract_date | DATE | NO | | 契約日 |
+| purchase_price_excl_tax | DECIMAL(12,0) | NO | | 買取確定価格（税抜） |
+| tax_amount | DECIMAL(12,0) | NO | | 消費税額 |
+| purchase_price_incl_tax | DECIMAL(12,0) | NO | | 買取確定価格（税込） |
+| recycle_amount | DECIMAL(10,0) | YES | NULL | リサイクル券金額 |
+| payment_scheduled_date | DATE | YES | NULL | 支払い予定日 |
+| auction_scheduled_date | DATE | YES | NULL | オークション出品予定日 |
+| vehicle_handover_date | DATE | YES | NULL | 車両引渡日 |
+| document_handover_date | DATE | YES | NULL | 書類引渡日 |
+
+#### 契約オプション
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| repair_flag | TINYINT(1) | NO | 0 | 加修フラグ |
+| repair_notes | TEXT | YES | `''` | 加修内容 |
+| ownership_release_flag | TINYINT(1) | NO | 0 | 所有権解除フラグ |
+| amount_correction_flag | TINYINT(1) | NO | 0 | 金額訂正フラグ |
+| corrected_price | DECIMAL(12,0) | YES | NULL | 訂正後買取価格 |
+| correction_approved_by_id | INT FK→auth_user | YES | NULL | 金額訂正承認者（社長） |
+| correction_approved_at | DATETIME | YES | NULL | 金額訂正承認日時 |
+| cancel_reason | VARCHAR(255) | YES | `''` | キャンセル理由 |
+| cancelled_at | DATETIME | YES | NULL | 破棄日時 |
+
+#### 車両状況・事業者登録申告（契約書記載）
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| meter_tampering | TINYINT(1) | YES | NULL | メーター戻し・改ざん等（NULL=未回答） |
+| flood_hail_damage | TINYINT(1) | YES | NULL | 冠水車・雹害 |
+| malfunction | TINYINT(1) | YES | NULL | 故障箇所 |
+| parking_violation | TINYINT(1) | YES | NULL | 駐車違反放置反則金未納 |
+| automobile_tax_unpaid | TINYINT(1) | YES | NULL | 自動車税未納 |
+| qualified_invoice_registered | TINYINT(1) | YES | NULL | 適格請求書発行事業者登録 |
+| invoice_registration_number | VARCHAR(50) | YES | `''` | 適格請求書登録番号 |
+
+#### 必要書類（通数・受取確認）
+
+車両引渡に必要な書類の通数を契約時に設定し、受取済フラグで進捗を管理する。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| required_inkan_count | SMALLINT | NO | 0 | 印鑑証明（必要通数） |
+| required_juminhyo_count | SMALLINT | NO | 0 | 住民票（必要通数） |
+| required_jotohyo_count | SMALLINT | NO | 0 | 除票（必要通数） |
+| required_ininjyo_count | SMALLINT | NO | 0 | 委任状（必要通数） |
+| required_jotosho_count | SMALLINT | NO | 0 | 譲渡書（必要通数） |
+| required_kanpu_count | SMALLINT | NO | 0 | 還付（必要通数） |
+| inkan_received | TINYINT(1) | NO | 0 | 印鑑証明 受取済 |
+| juminhyo_received | TINYINT(1) | NO | 0 | 住民票 受取済 |
+| jotohyo_received | TINYINT(1) | NO | 0 | 除票 受取済 |
+| ininjyo_received | TINYINT(1) | NO | 0 | 委任状 受取済 |
+| jotosho_received | TINYINT(1) | NO | 0 | 譲渡書 受取済 |
+| kanpu_received | TINYINT(1) | NO | 0 | 還付 受取済 |
+
+#### 担当者・承認
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| manager1_id | INT FK→auth_user | YES | NULL | 責任者1 |
+| manager2_id | INT FK→auth_user | YES | NULL | 責任者2 |
+| approved_by_id | INT FK→auth_user | YES | NULL | 承認者 |
+| approved_at | DATETIME | YES | NULL | 承認日時 |
+| remarks | TEXT | YES | `''` | 備考 |
+| created_at | DATETIME | NO | | 作成日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+| updated_by_id | INT FK→auth_user | YES | NULL | 更新者 |
+
+---
+
+### 3.12 `documents` — 書類・後日品
+
+> ⚠️ 将来実装予定。書類のファイル保存・ステータス管理が必要になった際に使用する。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| assessment_id | INT FK→assessments | YES | NULL | 査定 |
+| contract_id | INT FK→purchase_contracts | YES | NULL | 買取契約 |
+| document_type_id | INT FK→document_type_masters | NO | | 書類種別 |
+| status | VARCHAR(20) | NO | `not_created` | ステータス（not_created / in_progress / created / waiting / received / confirmed） |
+| issue_date | DATE | YES | NULL | 発行日 |
+| received_date | DATE | YES | NULL | 受領日 |
+| file | VARCHAR(255) | YES | `''` | ファイルパス（upload_to: documents/） |
+| later_send_status | VARCHAR(10) | NO | `not_sent` | 後日品送付状態（not_sent / sent） |
+| remarks | TEXT | YES | `''` | 備考 |
+| created_at | DATETIME | NO | | 作成日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+| updated_by_id | INT FK→auth_user | YES | NULL | 更新者 |
+
+---
+
+### 3.13 `identity_documents` — 本人確認書類
+
+> ⚠️ 将来実装予定。本人確認書類（免許証・マイナンバーカード等）の画像保存用。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| customer_id | INT FK→customers | NO | | 顧客 |
+| contract_id | INT FK→purchase_contracts | NO | | 買取契約 |
+| doc_type | VARCHAR(30) | NO | | 書類種別（driving_license / passport / my_number / other） |
+| file | VARCHAR(255) | YES | `''` | ファイルパス（upload_to: identity_documents/） |
+| verified_at | DATETIME | YES | NULL | 確認日時 |
+| verified_by_id | INT FK→auth_user | YES | NULL | 確認者 |
+| remarks | TEXT | YES | `''` | 備考 |
+| created_at | DATETIME | NO | | 作成日時 |
+
+---
+
+### 3.14 `ownership_releases` — 所有権解除管理
+
+`ownership_release_flag=True` の契約に対して 1:1 で紐づく。ローン残債のある車両の所有権解除プロセスを管理する。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| contract_id | INT FK→purchase_contracts (1:1) | NO | | 買取契約 |
+| pattern | VARCHAR(1) | NO | | パターン（A: ディーラー経由 / B: 自己返済） |
+| status | VARCHAR(30) | NO | `pending` | ステータス（pending / inquiry_in_progress / docs_sent / debt_transferred / docs_returned） |
+| inquiry_status | VARCHAR(100) | YES | `''` | 残債照会ステータス（フリーテキスト） |
+| dealer_doc_sent_date | DATE | YES | NULL | ディーラーへの書類送付日 |
+| debt_transfer_date | DATE | YES | NULL | 残債振込日 |
+| dealer_doc_returned_date | DATE | YES | NULL | ディーラーからの書類返却日 |
+| created_at | DATETIME | NO | | 作成日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+
+**ステータス遷移**
+
+```
+pending → inquiry_in_progress → docs_sent → debt_transferred → docs_returned
+```
+
+---
+
+### 3.15 `advance_payments` — 先払い入金
+
+1契約に対して複数の先払い入金を記録できる。社長稟議による承認が必要。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| contract_id | INT FK→purchase_contracts | NO | | 買取契約 |
+| expected_amount | DECIMAL(12,0) | NO | | 入金予定額 |
+| payment_date | DATE | YES | NULL | 入金日 |
+| status | VARCHAR(10) | NO | `unpaid` | ステータス（unpaid / paid） |
+| approved_by_id | INT FK→auth_user | YES | NULL | 承認者（社長）。NULL=未承認 |
+| created_at | DATETIME | NO | | 作成日時 |
+| updated_at | DATETIME | NO | | 更新日時 |
+
+---
+
+### 3.16 `contact_histories` — 取引・連絡履歴
+
+査定申込に紐づく電話・メール・訪問等のすべての接触履歴を記録する。
+
+| カラム | 型 | NULL | デフォルト | 説明 |
+|---|---|---|---|---|
+| id | INT PK | NO | AUTO | |
+| assessment_request_id | INT FK→car_assessment_requests | NO | | 査定申込 |
+| customer_id | INT FK→customers | YES | NULL | 顧客 |
+| recorded_by_id | INT FK→auth_user | NO | | 記録者 |
+| contact_method | VARCHAR(10) | NO | | 連絡方法（phone / email / sms / visit / other） |
+| contacted_at | DATETIME | NO | | 連絡日時 |
+| content | TEXT | NO | | 内容 |
+| created_at | DATETIME | NO | | 作成日時 |
+
+---
+
+## 4. ER図（概要）
+
+```
+auth_user ──────────────────────────────────────────────────────────────────┐
+    │                                                                         │
+    ├── user_profiles (1:1) → stores                                          │
+    └── login_activities (N)                                                  │
+                                                                              │
+gmail_messages                                                                │
+    └── car_assessment_requests (N)                                           │
+            │   assigned_to_id ────────────────────────────────────────────> │
+            │                                                                 │
+            ├── contact_histories (N)                                         │
+            │                                                                 │
+            └── assessments (1:1)                                             │
+                    │   customer_id ──> customers                             │
+                    │   vehicle_id  ──> vehicles → vehicle_images (N)        │
+                    │   assigned_to_id / approved_by_id ──────────────────-> │
+                    │                                                         │
+                    ├── assessment_check_items (N)                            │
+                    │                                                         │
+                    └── purchase_contracts (1:1)                              │
+                            │   manager1/2/approved_by ───────────────────-> │
+                            │   correction_approved_by ───────────────────-> │
+                            │                                                 │
+                            ├── ownership_releases (1:1)                      │
+                            ├── advance_payments (N)  approved_by ─────────> │
+                            ├── documents (N) → document_type_masters         │
+                            └── identity_documents (N)  verified_by ───────> │
+
+customers                                                                     │
+    ├── customer_bank_accounts (N)  updated_by ──────────────────────────-> │
+    ├── identity_documents (N)                                                │
+    └── contact_histories (N)                                                 │
+                                                                              │
+number_sequences  ← 独立テーブル（連番管理）                                      │
+```
+
+---
+
+## 5. 業務フロー別テーブル対応
+
+| フェーズ | 主テーブル | 補助テーブル |
+|---|---|---|
+| ① 申込受付 | `car_assessment_requests` | `gmail_messages`, `number_sequences` |
+| ② フォロー・アポ | `car_assessment_requests` | `contact_histories` |
+| ③ 商談・査定 | `assessments` | `assessment_check_items`, `vehicles`, `vehicle_images` |
+| ④ 成約・稟議 | `assessments` | `customers`, `customer_bank_accounts` |
+| ⑤ 契約作成 | `purchase_contracts` | — |
+| ⑥ 所有権解除 | `ownership_releases` | `purchase_contracts` |
+| ⑦ 先払い入金 | `advance_payments` | `purchase_contracts` |
+| ⑧ 必要書類受取確認 | `purchase_contracts`（required_*/\*_received フィールド） | — |
+| ⑨ 書類ファイル管理（将来） | `documents` | `document_type_masters` |
+| ⑩ 本人確認（将来） | `identity_documents` | `customers` |
+| ⑪ 勤怠管理 | `login_activities` | `auth_user` |
