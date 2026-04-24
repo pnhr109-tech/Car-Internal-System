@@ -78,8 +78,8 @@ class UserProfile(models.Model):
 
     class Meta:
         db_table = 'user_profiles'
-        verbose_name = 'ユーザープロファイル'
-        verbose_name_plural = 'ユーザープロファイル'
+        verbose_name = '社員情報'
+        verbose_name_plural = '社員情報'
 
     def __str__(self):
         store_name = self.store.name if self.store else '（店舗なし）'

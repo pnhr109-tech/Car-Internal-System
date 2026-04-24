@@ -40,7 +40,7 @@
 | # | テーブル名 | モデル | アプリ | 概要 |
 |---|---|---|---|---|
 | 1 | `stores` | Store | accounts | 店舗マスタ |
-| 2 | `user_profiles` | UserProfile | accounts | ユーザー権限・所属店舗 |
+| 2 | `user_profiles` | UserProfile | accounts | 社員情報（権限・所属店舗） |
 | 3 | `login_activities` | LoginActivity | accounts | ログイン勤怠管理 |
 | 4 | `gmail_messages` | GmailMessage | leads | Gmail取り込みメッセージ |
 | 5 | `customers` | Customer | leads | 顧客マスタ |
@@ -76,7 +76,7 @@
 
 ---
 
-### 2.2 `user_profiles` — ユーザープロファイル
+### 2.2 `user_profiles` — 社員情報
 
 Django標準の `auth_user` と 1:1 で紐づく。権限・所属店舗を管理する。
 
