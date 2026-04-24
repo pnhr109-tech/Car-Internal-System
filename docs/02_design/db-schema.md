@@ -11,7 +11,7 @@
 1. [テーブル一覧](#1-テーブル一覧)
 2. [accounts アプリ](#2-accounts-アプリ)
    - [stores](#21-stores--店舗マスタ)
-   - [user_profiles](#22-user_profiles--ユーザープロファイル)
+   - [user_profiles](#22-user_profiles--社員情報)
    - [login_activities](#23-login_activities--ログイン勤怠)
 3. [leads アプリ](#3-leads-アプリ)
    - [gmail_messages](#31-gmail_messages--gmailメッセージ)
