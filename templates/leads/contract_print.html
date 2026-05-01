@@ -237,14 +237,14 @@
       <td colspan="6" class="bg-yellow" style="text-align:center; font-weight:bold">車両状況・事業者登録申告</td>
     </tr>
 
-    {# 修復歴（vehicle.repair_history_flag） #}
+    {# 修復歴（contract.repair_history_flag） #}
     <tr>
       <td>事故による修復歴</td>
       <td style="text-align:center">
-        {% if vehicle.repair_history_flag is not None and vehicle.repair_history_flag %}<span class="marked">ある</span>{% else %}<span class="unmarked">ある</span>{% endif %}
+        {% if contract.repair_history_flag is not None and contract.repair_history_flag %}<span class="marked">ある</span>{% else %}<span class="unmarked">ある</span>{% endif %}
       </td>
       <td style="text-align:center">
-        {% if vehicle.repair_history_flag is not None and not vehicle.repair_history_flag %}<span class="marked">なし</span>{% else %}<span class="unmarked">なし</span>{% endif %}
+        {% if contract.repair_history_flag is not None and not contract.repair_history_flag %}<span class="marked">なし</span>{% else %}<span class="unmarked">なし</span>{% endif %}
       </td>
       <td>メーター戻し・改ざん等</td>
       <td style="text-align:center">

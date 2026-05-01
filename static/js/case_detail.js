@@ -50,6 +50,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // 契約作成モーダル: 価格入力変更時にリアルタイム計算
+  ['contractPriceExcl', 'contractRecycleAmount', 'contractTaxRate'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', _updateContractSummary);
+  });
+
   // ゆうちょ銀行の初期状態設定（編集モーダル：既存データがゆうちょの場合）
   ['contractBankType', 'editContractBankType'].forEach(typeId => {
     const nameId = typeId === 'contractBankType' ? 'contractBankName' : 'editContractBankName';
@@ -62,6 +68,36 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── ヘルパー ─────────────────────────────────────────────────────────────
+
+function prefillCreateContractModal() {
+  // 査定システム取込値で初期入力（円単位）— モーダル表示はBootstrapに任せる
+  if (typeof SATEI_PRICE_YEN !== 'undefined' && SATEI_PRICE_YEN > 0) {
+    const recycleYen   = Number(SATEI_RECYCLE_YEN) || 0;
+    const inclTaxPrice = Number(SATEI_PRICE_YEN) - recycleYen;
+    const exclTaxPrice = Math.ceil(inclTaxPrice / 1.1);
+    document.getElementById('contractPriceExcl').value    = exclTaxPrice;
+    document.getElementById('contractRecycleAmount').value = recycleYen;
+  }
+  _updateContractSummary();
+}
+
+function _fmt(yen) {
+  return Number(yen).toLocaleString() + ' 円';
+}
+
+function _updateContractSummary() {
+  const exclTax  = Number(document.getElementById('contractPriceExcl')?.value)    || 0;
+  const recycle  = Number(document.getElementById('contractRecycleAmount')?.value) || 0;
+  const taxRate  = Number(document.getElementById('contractTaxRate')?.value)       || 0;
+  const tax      = Math.round(exclTax * taxRate / 100);
+  const inclTax  = exclTax + tax;
+  const transfer = inclTax + recycle;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = _fmt(val); };
+  set('summaryRecycle', recycle);
+  set('summaryExcl',    exclTax);
+  set('summaryTax',     tax);
+  set('summaryTotal',   transfer);
+}
 
 function _getRadioValue(name) {
   const checked = document.querySelector(`input[name="${name}"]:checked`);
@@ -131,6 +167,7 @@ function saveContract() {
       remarks:                      document.getElementById('contractRemarks').value,
       manager1_id:                  document.getElementById('contractManager1').value || null,
       manager2_id:                  document.getElementById('contractManager2').value || null,
+      repair_history_flag:          _getRadioValue('repair_history_flag'),
       meter_tampering:              _getRadioValue('meter_tampering'),
       flood_hail_damage:            _getRadioValue('flood_hail_damage'),
       malfunction:                  _getRadioValue('malfunction'),
@@ -279,7 +316,6 @@ function deleteBankAccount(accountId, btn) {
 // ── 車両情報 ─────────────────────────────────────────────────────────────
 
 function saveVehicle() {
-  const rhVal = document.getElementById('vehRepairHistory').value;
   apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/update-vehicle/`, {
     method: 'POST',
     body: JSON.stringify({
@@ -289,17 +325,13 @@ function saveVehicle() {
       mileage:             document.getElementById('vehMileage').value,
       grade:               document.getElementById('vehGrade').value,
       color:               document.getElementById('vehColor').value,
-      model_type:          document.getElementById('vehModelType').value,
       displacement:        document.getElementById('vehDisplacement').value,
-      fuel_type:           document.getElementById('vehFuelType').value,
       chassis_number:      document.getElementById('vehChassis').value,
       registration_number: document.getElementById('vehRegNumber').value,
       inspection_expiry:   document.getElementById('vehInspection').value,
-      transmission_type:   document.getElementById('vehTransmission').value,
       passenger_count:     document.getElementById('vehPassenger').value,
       body_type:           document.getElementById('vehBodyType').value,
       drive_type:          document.getElementById('vehDriveType').value,
-      repair_history_flag: rhVal === '' ? null : rhVal === 'true',
     }),
   })
   .then(r => r.json())
@@ -307,6 +339,119 @@ function saveVehicle() {
     if (d.success) location.reload();
     else alert(d.message || '車両情報の更新に失敗しました');
   });
+}
+
+function importFromAssessmentSystem() {
+  const assessmentSystemId = document.getElementById('assessmentSystemId').value.trim();
+  if (!assessmentSystemId) {
+    alert('査定システムIDを入力してください');
+    return;
+  }
+
+  _showImportOverlay();
+
+  apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/import-assessment-system/`, {
+    method: 'POST',
+    body: JSON.stringify({ assessment_system_id: assessmentSystemId }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    _hideImportOverlay();
+    if (d.success) {
+      _showImportConfirmModal(d);
+    } else {
+      alert(d.message || '取り込みに失敗しました');
+    }
+  })
+  .catch(() => {
+    _hideImportOverlay();
+    alert('通信エラーが発生しました');
+  });
+}
+
+function _showImportOverlay() {
+  let overlay = document.getElementById('importLoadingOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'importLoadingOverlay';
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:9999',
+      'background:rgba(0,0,0,0.55)',
+      'display:flex', 'flex-direction:column',
+      'align-items:center', 'justify-content:center', 'gap:16px',
+    ].join(';');
+    overlay.innerHTML = `
+      <div class="spinner-border text-light" style="width:3rem;height:3rem;" role="status"></div>
+      <div class="text-white fw-bold fs-5">査定システムから取り込み中...</div>
+      <div class="text-white-50 small">完了するまでしばらくお待ちください</div>
+    `;
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+}
+
+function _hideImportOverlay() {
+  const overlay = document.getElementById('importLoadingOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function _showImportConfirmModal(data) {
+  const v = data.vehicle || {};
+  const rows = [
+    ['メーカー',     v.maker],
+    ['車種',         v.car_model],
+    ['年式',         v.year],
+    ['走行距離',     v.mileage],
+    ['グレード',     v.grade],
+    ['カラー',       v.color],
+    ['排気量',       v.displacement ? v.displacement + ' cc' : ''],
+    ['車台番号',     v.chassis_number],
+    ['登録番号',     v.registration_number],
+    ['乗車定員',     v.passenger_count ? v.passenger_count + ' 人' : ''],
+    ['ボディタイプ', v.body_type],
+    ['駆動方式',     v.drive_type],
+    ['車検有効期限', v.inspection_expiry],
+  ].filter(([, val]) => val).map(([label, val]) =>
+    `<tr><td class="text-muted">${label}</td><td class="fw-bold">${val}</td></tr>`
+  ).join('');
+
+  const priceRows = [
+    data.assessment_price != null ? `<tr><td class="text-muted">買取金額（振込金額④）</td><td class="fw-bold text-success">${Number(data.assessment_price).toLocaleString()} 円</td></tr>` : '',
+    data.recycle_amount   != null ? `<tr><td class="text-muted">リサイクル券</td><td class="fw-bold">${Number(data.recycle_amount).toLocaleString()} 円</td></tr>` : '',
+  ].join('');
+
+  let modal = document.getElementById('importConfirmModal');
+  if (modal) modal.remove();
+
+  modal = document.createElement('div');
+  modal.id = 'importConfirmModal';
+  modal.className = 'modal fade';
+  modal.tabIndex = -1;
+  modal.innerHTML = `
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-warning-subtle">
+          <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill text-warning"></i> 取り込み完了 — 内容を確認してください</h5>
+        </div>
+        <div class="modal-body">
+          <p class="text-danger fw-bold mb-3">
+            <i class="bi bi-exclamation-circle"></i>
+            査定システムから取り込んだ情報です。内容に誤りがないか必ず確認してください。
+          </p>
+          <h6 class="border-bottom pb-1">車両情報</h6>
+          <table class="table table-sm mb-3"><tbody>${rows}</tbody></table>
+          ${priceRows ? `<h6 class="border-bottom pb-1">価格情報</h6><table class="table table-sm mb-0"><tbody>${priceRows}</tbody></table>` : ''}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" onclick="location.reload()">
+            <i class="bi bi-check-circle"></i> 確認しました
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  new bootstrap.Modal(modal, { backdrop: 'static', keyboard: false }).show();
 }
 
 // ── チェック項目 ──────────────────────────────────────────────────────────
@@ -400,6 +545,7 @@ function updateContract() {
       remarks:                      document.getElementById('editContractRemarks').value,
       manager1_id:                  document.getElementById('editContractManager1').value || null,
       manager2_id:                  document.getElementById('editContractManager2').value || null,
+      repair_history_flag:          _getRadioValue('edit_repair_history_flag'),
       meter_tampering:              _getRadioValue('edit_meter_tampering'),
       flood_hail_damage:            _getRadioValue('edit_flood_hail_damage'),
       malfunction:                  _getRadioValue('edit_malfunction'),

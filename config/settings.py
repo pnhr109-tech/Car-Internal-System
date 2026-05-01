@@ -157,3 +157,29 @@ LOGOUT_REDIRECT_URL = '/login/'
 # Google Sign-In settings
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 ALLOWED_GOOGLE_DOMAIN = os.getenv('ALLOWED_GOOGLE_DOMAIN', 'gigicompany.jp')
+
+# 査定システム
+ASSESSMENT_SYSTEM_BASE_URL = os.getenv('ASSESSMENT_SYSTEM_BASE_URL', 'https://satei.u-car.co.jp')
+ASSESSMENT_SYSTEM_USER     = os.getenv('ASSESSMENT_SYSTEM_USER', '')
+ASSESSMENT_SYSTEM_PASSWORD = os.getenv('ASSESSMENT_SYSTEM_PASSWORD', '')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'WARNING',
+    },
+    'loggers': {
+        'leads': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

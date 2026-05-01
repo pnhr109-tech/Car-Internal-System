@@ -141,12 +141,11 @@ def case_detail(request, pk):
         'rating_choices':               rating_choices,
         'all_users':                    all_users,
         'contract_tax_rate':            contract_tax_rate,
-        'transmission_choices':         Vehicle.TRANSMISSION_CHOICES,
-        'fuel_type_choices':            Vehicle.FUEL_TYPE_CHOICES,
         'bank_institution_type_choices': CustomerBankAccount.INSTITUTION_TYPE_CHOICES,
         'primary_bank_account':          primary_bank_account,
         'bank_account_type_choices':     CustomerBankAccount.ACCOUNT_TYPE_CHOICES,
         'tristate_rows': [
+            ('修復歴',                         contract.repair_history_flag        if contract else None),
             ('メーター戻し・改ざん等',         contract.meter_tampering            if contract else None),
             ('冠水車・雹害',                   contract.flood_hail_damage          if contract else None),
             ('故障箇所',                       contract.malfunction                if contract else None),
@@ -263,7 +262,7 @@ def update_vehicle_info(request, assessment_id):
 
     str_fields = [
         'maker', 'car_model', 'year', 'mileage', 'grade', 'color',
-        'displacement', 'model_type', 'fuel_type', 'chassis_number', 'transmission_type',
+        'displacement', 'chassis_number',
         'registration_number', 'passenger_count', 'body_type', 'drive_type',
     ]
     update_fields = ['updated_at']
@@ -271,11 +270,6 @@ def update_vehicle_info(request, assessment_id):
         if f in payload:
             setattr(vehicle, f, payload[f])
             update_fields.append(f)
-
-    if 'repair_history_flag' in payload:
-        val = payload['repair_history_flag']
-        vehicle.repair_history_flag = None if val is None else bool(val)
-        update_fields.append('repair_history_flag')
 
     if 'inspection_expiry' in payload:
         raw = payload['inspection_expiry']
@@ -291,6 +285,71 @@ def update_vehicle_info(request, assessment_id):
     update_fields.append('updated_by')
     vehicle.save(update_fields=list(set(update_fields)))
     return JsonResponse({'success': True, 'message': '車両情報を更新しました'})
+
+
+@login_required
+@require_POST
+def import_from_assessment_system(request, assessment_id):
+    """査定システムから車両情報を取り込む API"""
+    from ..services.assessment_system_scraper import scrape_vehicle_data
+
+    assessment = get_object_or_404(
+        Assessment.objects.select_related('vehicle'),
+        pk=assessment_id,
+    )
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    assessment_system_id = payload.get('assessment_system_id', '').strip()
+    if not assessment_system_id:
+        return JsonResponse({'success': False, 'message': '査定システムIDを入力してください'}, status=400)
+
+    try:
+        data = scrape_vehicle_data(assessment_system_id)
+    except ValueError as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=404)
+    except Exception as e:
+        logger.exception('査定システム取り込みエラー')
+        return JsonResponse({'success': False, 'message': f'取り込みに失敗しました: {e}'}, status=500)
+
+    # 車両情報を保存
+    vehicle = assessment.vehicle
+    for field, value in data['vehicle'].items():
+        if field == 'inspection_expiry':
+            vehicle.inspection_expiry = value
+        elif value:
+            setattr(vehicle, field, value)
+    vehicle.updated_by = request.user
+    vehicle.save()
+
+    # Assessment に査定システム情報を保存
+    assessment.assessment_system_id          = assessment_system_id
+    assessment.assessment_system_imported_at = timezone.now()
+    if data.get('assessment_price') is not None:
+        assessment.assessment_price = data['assessment_price']
+    if data.get('recycle_amount') is not None:
+        assessment.assessment_system_recycle_amount = data['recycle_amount']
+    assessment.save(update_fields=[
+        'assessment_system_id', 'assessment_system_imported_at',
+        'assessment_price', 'assessment_system_recycle_amount', 'updated_at',
+    ])
+
+    return JsonResponse({
+        'success':             True,
+        'message':             '査定システムから車両情報を取り込みました',
+        'assessment_price':    data.get('assessment_price'),
+        'recycle_amount':      data.get('recycle_amount'),
+        'vehicle':             {
+            k: str(v) if v is not None else ''
+            for k, v in data['vehicle'].items()
+            if k != 'inspection_expiry'
+        } | {
+            'inspection_expiry': data['vehicle']['inspection_expiry'].strftime('%Y-%m-%d')
+            if data['vehicle'].get('inspection_expiry') else ''
+        },
+    })
 
 
 @login_required

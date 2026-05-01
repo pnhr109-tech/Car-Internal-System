@@ -238,6 +238,7 @@ def create_contract(request, assessment_id):
                 repair_notes=payload.get('repair_notes', ''),
                 ownership_release_flag=bool(payload.get('ownership_release_flag', False)),
                 remarks=payload.get('remarks', ''),
+                repair_history_flag=_parse_tristate(payload.get('repair_history_flag')),
                 meter_tampering=_parse_tristate(payload.get('meter_tampering')),
                 flood_hail_damage=_parse_tristate(payload.get('flood_hail_damage')),
                 malfunction=_parse_tristate(payload.get('malfunction')),
@@ -376,6 +377,7 @@ def update_contract(request, contract_id):
             contract.required_ininjyo_count       = int(payload.get('required_ininjyo_count') or 0)
             contract.required_jotosho_count       = int(payload.get('required_jotosho_count') or 0)
             contract.required_kanpu_count         = int(payload.get('required_kanpu_count') or 0)
+            contract.repair_history_flag          = _parse_tristate(payload.get('repair_history_flag'))
             contract.meter_tampering              = _parse_tristate(payload.get('meter_tampering'))
             contract.flood_hail_damage            = _parse_tristate(payload.get('flood_hail_damage'))
             contract.malfunction                  = _parse_tristate(payload.get('malfunction'))
