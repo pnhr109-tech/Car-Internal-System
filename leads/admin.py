@@ -10,32 +10,12 @@ from .models import (
     CustomerBankAccount,
     Document,
     DocumentTypeMaster,
-    GmailMessage,
     IdentityDocument,
     OwnershipRelease,
     PurchaseContract,
     Vehicle,
     VehicleImage,
 )
-
-
-# ---------------------------------------------------------------------------
-# Gmail
-# ---------------------------------------------------------------------------
-
-@admin.register(GmailMessage)
-class GmailMessageAdmin(admin.ModelAdmin):
-    list_display    = ['received_at', 'from_address', 'subject', 'created_at']
-    list_filter     = ['received_at']
-    search_fields   = ['subject', 'from_address', 'message_id']
-    readonly_fields = ['message_id', 'thread_id', 'created_at', 'raw_json']
-    date_hierarchy  = 'received_at'
-    fieldsets = (
-        ('基本情報', {'fields': ('message_id', 'thread_id', 'from_address', 'to_address', 'subject')}),
-        ('日時',     {'fields': ('received_at', 'created_at')}),
-        ('本文',     {'fields': ('snippet', 'body_text', 'body_html'), 'classes': ('collapse',)}),
-        ('生データ', {'fields': ('raw_json',), 'classes': ('collapse',)}),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -74,15 +54,15 @@ class VehicleImageInline(admin.TabularInline):
 
 @admin.register(Vehicle)
 class VehicleAdmin(admin.ModelAdmin):
-    list_display  = ['maker', 'car_model', 'year', 'mileage', 'color', 'repair_history_flag', 'created_at']
+    list_display  = ['maker', 'car_model', 'year', 'mileage', 'color', 'created_at']
     search_fields = ['maker', 'car_model', 'chassis_number', 'registration_number']
-    list_filter   = ['maker', 'repair_history_flag', 'transmission_type']
+    list_filter   = ['maker']
     inlines       = [VehicleImageInline]
     readonly_fields = ['created_at', 'updated_at']
     fieldsets = (
-        ('基本情報（①アポ時）',   {'fields': ('maker', 'car_model', 'year', 'mileage', 'grade', 'color', 'displacement', 'remarks')}),
-        ('詳細情報（②商談時）',   {'fields': ('chassis_number', 'first_registration_date', 'repair_history_flag', 'inspection_expiry', 'transmission_type', 'registration_number')}),
-        ('システム',              {'fields': ('updated_by', 'created_at', 'updated_at'), 'classes': ('collapse',)}),
+        ('基本情報',     {'fields': ('maker', 'car_model', 'year', 'mileage', 'grade', 'color', 'displacement', 'remarks')}),
+        ('契約書記載項目', {'fields': ('chassis_number', 'inspection_expiry', 'registration_number', 'passenger_count', 'body_type', 'drive_type')}),
+        ('システム',     {'fields': ('updated_by', 'created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
 
 
@@ -97,13 +77,13 @@ class CarAssessmentRequestAdmin(admin.ModelAdmin):
     search_fields = ['application_number', 'customer_name', 'phone_number', 'email', 'maker', 'car_model']
     readonly_fields = ['application_number', 'created_at', 'updated_at']
     date_hierarchy = 'application_datetime'
-    raw_id_fields  = ['customer', 'vehicle', 'assigned_to', 'gmail_message']
+    raw_id_fields  = ['customer', 'vehicle', 'assigned_to']
     fieldsets = (
         ('申込情報',   {'fields': ('application_number', 'application_datetime', 'channel_type', 'external_service_id', 'referral_name', 'reservation_datetime', 'desired_sale_timing')}),
         ('顧客情報',   {'fields': ('customer', 'customer_name', 'phone_number', 'email', 'postal_code', 'address')}),
         ('車両情報',   {'fields': ('vehicle', 'maker', 'car_model', 'year', 'mileage')}),
         ('営業対応',   {'fields': ('assigned_to', 'sales_owner_name', 'sales_assigned_at', 'follow_status', 'call_count', 'cancel_reason', 'sales_note', 'status_updated_at', 'status_updated_by')}),
-        ('システム情報', {'fields': ('gmail_message', 'created_at', 'updated_at'), 'classes': ('collapse',)}),
+        ('システム情報', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
     )
 
 

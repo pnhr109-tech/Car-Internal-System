@@ -4,38 +4,6 @@ from django.db.models import Q
 
 
 # ---------------------------------------------------------------------------
-# Gmail
-# ---------------------------------------------------------------------------
-
-class GmailMessage(models.Model):
-    """Gmail メッセージを保存するモデル（重複防止対応）"""
-
-    message_id   = models.CharField(max_length=255, unique=True, db_index=True, verbose_name='メッセージID')
-    thread_id    = models.CharField(max_length=255, db_index=True, verbose_name='スレッドID')
-    from_address = models.EmailField(max_length=255, verbose_name='送信元')
-    to_address   = models.EmailField(max_length=255, verbose_name='宛先')
-    subject      = models.CharField(max_length=500, verbose_name='件名')
-    received_at  = models.DateTimeField(db_index=True, verbose_name='受信日時')
-    created_at   = models.DateTimeField(auto_now_add=True, verbose_name='取り込み日時')
-    snippet      = models.TextField(blank=True, null=True, verbose_name='スニペット')
-    body_text    = models.TextField(blank=True, null=True, verbose_name='本文（テキスト）')
-    body_html    = models.TextField(blank=True, null=True, verbose_name='本文（HTML）')
-    raw_json     = models.JSONField(blank=True, null=True, verbose_name='Gmail API レスポンス')
-
-    class Meta:
-        db_table = 'gmail_messages'
-        verbose_name = 'Gmailメッセージ'
-        verbose_name_plural = 'Gmailメッセージ'
-        ordering = ['-received_at']
-        indexes = [
-            models.Index(fields=['-received_at'], name='idx_received_at'),
-        ]
-
-    def __str__(self):
-        return f"{self.received_at.strftime('%Y-%m-%d %H:%M')} - {self.subject}"
-
-
-# ---------------------------------------------------------------------------
 # 顧客
 # ---------------------------------------------------------------------------
 
@@ -132,26 +100,9 @@ class CustomerBankAccount(models.Model):
 # ---------------------------------------------------------------------------
 
 class Vehicle(models.Model):
-    """車両"""
+    """車両（契約書に必要な情報のみ保持。詳細は査定システムから取り込む）"""
 
-    TRANSMISSION_CHOICES = [
-        ('AT', 'AT'),
-        ('MT', 'MT'),
-        ('CVT', 'CVT'),
-        ('その他', 'その他'),
-    ]
-
-    FUEL_TYPE_CHOICES = [
-        ('gasoline',   'ガソリン'),
-        ('diesel',     'ディーゼル'),
-        ('hybrid',     'ハイブリッド（HV）'),
-        ('phev',       'プラグインハイブリッド（PHEV）'),
-        ('ev',         '電気自動車（EV）'),
-        ('lpg',        'LPG'),
-        ('other',      'その他'),
-    ]
-
-    # ①アポイント時に登録
+    # アポイント時に登録
     maker    = models.CharField(max_length=100, verbose_name='メーカー')
     car_model = models.CharField(max_length=100, verbose_name='車種')
     year     = models.CharField(max_length=10, verbose_name='年式')
@@ -161,18 +112,13 @@ class Vehicle(models.Model):
     displacement = models.CharField(max_length=20, blank=True, verbose_name='排気量')
     remarks  = models.TextField(blank=True, verbose_name='備考')
 
-    # ②商談時に追加
-    model_type            = models.CharField(max_length=50, blank=True, verbose_name='型式')
-    fuel_type             = models.CharField(max_length=20, choices=FUEL_TYPE_CHOICES, blank=True, verbose_name='燃料種別')
-    chassis_number        = models.CharField(max_length=50, blank=True, verbose_name='車台番号')
-    first_registration_date = models.DateField(null=True, blank=True, verbose_name='初年度登録年月')
-    repair_history_flag   = models.BooleanField(null=True, blank=True, verbose_name='修復歴')
-    inspection_expiry     = models.DateField(null=True, blank=True, verbose_name='車検有効期限')
-    transmission_type     = models.CharField(max_length=10, choices=TRANSMISSION_CHOICES, blank=True, verbose_name='ミッション種別')
-    registration_number   = models.CharField(max_length=20, blank=True, verbose_name='登録番号（ナンバー）')
-    passenger_count       = models.CharField(max_length=5, blank=True, verbose_name='乗車定員')
-    body_type             = models.CharField(max_length=50, blank=True, verbose_name='ボディタイプ')
-    drive_type            = models.CharField(max_length=10, blank=True, verbose_name='駆動方式')
+    # 契約書記載項目（査定システムから取り込み or 手動入力）
+    chassis_number      = models.CharField(max_length=50, blank=True, verbose_name='車台番号')
+    inspection_expiry   = models.DateField(null=True, blank=True, verbose_name='車検有効期限')
+    registration_number = models.CharField(max_length=20, blank=True, verbose_name='登録番号（ナンバー）')
+    passenger_count     = models.CharField(max_length=5, blank=True, verbose_name='乗車定員')
+    body_type           = models.CharField(max_length=50, blank=True, verbose_name='ボディタイプ')
+    drive_type          = models.CharField(max_length=10, blank=True, verbose_name='駆動方式')
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新日時')
@@ -314,13 +260,6 @@ class CarAssessmentRequest(models.Model):
     sales_note        = models.TextField(blank=True, default='', verbose_name='対応コメント')
     status_updated_at = models.DateTimeField(null=True, blank=True, verbose_name='ステータス更新日時')
     status_updated_by = models.CharField(max_length=150, blank=True, default='', verbose_name='ステータス更新者')
-    gmail_message     = models.ForeignKey(
-        GmailMessage,
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='car_assessments',
-        verbose_name='元メッセージ',
-    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='取り込み日時')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='更新日時')
 
@@ -419,6 +358,14 @@ class Assessment(models.Model):
     )
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name='承認日時')
     remarks     = models.TextField(blank=True, verbose_name='備考')
+
+    # 査定システム連携
+    assessment_system_id             = models.CharField(max_length=10, blank=True, verbose_name='査定システムID')
+    assessment_system_imported_at    = models.DateTimeField(null=True, blank=True, verbose_name='査定システム取込日時')
+    assessment_system_recycle_amount = models.DecimalField(
+        max_digits=10, decimal_places=0, null=True, blank=True, verbose_name='リサイクル券金額（査定システム取込）'
+    )
+
     created_at  = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
     updated_at  = models.DateTimeField(auto_now=True, verbose_name='更新日時')
     updated_by  = models.ForeignKey(
@@ -537,6 +484,7 @@ class PurchaseContract(models.Model):
     ownership_release_flag     = models.BooleanField(default=False, verbose_name='所有権解除フラグ')
 
     # ── 車両状況・事業者登録申告（契約書記載） ──────────────────────
+    repair_history_flag          = models.BooleanField(null=True, blank=True, verbose_name='修復歴')
     meter_tampering              = models.BooleanField(null=True, blank=True, verbose_name='メーター戻し・改ざん等')
     flood_hail_damage            = models.BooleanField(null=True, blank=True, verbose_name='冠水車・雹害')
     malfunction                  = models.BooleanField(null=True, blank=True, verbose_name='故障箇所')

@@ -5,7 +5,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 
 SCOPES = [
-    'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/calendar.readonly',
     'https://www.googleapis.com/auth/chat.spaces.readonly',
     'https://www.googleapis.com/auth/chat.messages.readonly',
@@ -36,7 +35,6 @@ class Command(BaseCommand):
             token_handle.write(creds.to_json())
 
         self.stdout.write(self.style.SUCCESS(f'Workspaceトークンを更新しました: {token_file}'))
-        self.stdout.write('※ fetch_gmail で使う token.json とは別管理です。')
         self.stdout.write('取得済みスコープ:')
         for scope in SCOPES:
             self.stdout.write(f'  - {scope}')

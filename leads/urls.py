@@ -33,7 +33,8 @@ urlpatterns = [
     path('api/assessments/<int:request_id>/promote/',           views.promote_to_case,                  name='promote_to_case'),
     path('api/cases/<int:assessment_id>/update/',              views.update_assessment_info,            name='update_assessment_info'),
     path('api/cases/<int:assessment_id>/change-assignee/',     views.change_case_assignee,              name='change_case_assignee'),
-    path('api/cases/<int:assessment_id>/update-vehicle/',      views.update_vehicle_info,               name='update_vehicle_info'),
+    path('api/cases/<int:assessment_id>/update-vehicle/',                views.update_vehicle_info,               name='update_vehicle_info'),
+    path('api/cases/<int:assessment_id>/import-assessment-system/',  views.import_from_assessment_system,     name='import_from_assessment_system'),
     path('api/cases/<int:assessment_id>/update-customer/',     views.update_customer_info,              name='update_customer_info'),
     path('api/cases/<int:assessment_id>/save-bank-account/',   views.save_bank_account,                 name='save_bank_account'),
     path('api/bank-accounts/<int:account_id>/delete/',         views.delete_bank_account,               name='delete_bank_account'),
@@ -58,9 +59,6 @@ urlpatterns = [
     path('api/customers/<int:pk>/update/',                      views.update_customer_direct,     name='update_customer_direct'),
     path('api/customers/<int:pk>/save-bank-account/',           views.save_bank_account_direct,   name='save_bank_account_direct'),
     path('api/customers/<int:pk>/bank-accounts/<int:account_id>/delete/', views.delete_bank_account_direct, name='delete_bank_account_direct'),
-
-    # ── Gmail Webhook ─────────────────────────────────────────
-    path('webhook/gmail-push/', views.gmail_push_notification, name='gmail_push_notification'),
 
     # ── スクレイパー内部 API（スクレイパープロセス専用・外部公開不可） ──
     path('internal/scraper/navikuru/', views.scraper_ingest_navikuru, name='scraper_ingest_navikuru'),

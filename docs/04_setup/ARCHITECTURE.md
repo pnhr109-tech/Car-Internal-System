@@ -26,7 +26,7 @@ gigicompanyの業務を統合管理する社内システム。
 - **Framework**: Django 5.0.1
 - **Database**: MySQL 8.0
 - **Frontend**: Bootstrap 5 + Vanilla JavaScript
-- **External API**: Gmail API (OAuth 2.0), Google Cloud Pub/Sub
+- **External API**: Google Calendar API, Google Chat API
 
 ---
 
@@ -61,13 +61,6 @@ gigicompany-system/
 ├── leads/                       # 査定申込管理 ✅実装済み
 │   ├── models.py               # Lead, AssessmentRequest
 │   ├── views.py                # 査定申込一覧・詳細
-│   ├── integrations/           # 外部連携サービス
-│   │   ├── navikuru.py        # ナビクル（Gmail自動取得）
-│   │   └── base.py            # 共通インターフェース
-│   ├── management/commands/    # コマンド
-│   │   ├── fetch_gmail.py     # Gmail取得
-│   │   ├── gmail_watch_start.py
-│   │   └── gmail_watch_stop.py
 │   └── templates/leads/
 │       └── assessment_list.html
 │
@@ -158,7 +151,7 @@ gigicompany-system/
 ```
 ┌─────────────┐
 │1. 査定申込  │  leads/ (査定申込管理)
-│ (新規申込)  │  - ナビクルから自動取得 (Gmail API + Pub/Sub)
+│ (新規申込)  │  - ナビクルから自動取得（スクレイパー）
 └──────┬──────┘  - 手動登録
        │
        ▼
@@ -383,30 +376,6 @@ gigicompany-system/
 
 ## 技術仕様
 
-### Gmail API連携 (Pub/Sub Push通知)
-
-**実装済み機能:**
-- Gmail Pub/Sub Push通知による新着メール検知
-- ngrokを使用したローカル開発環境でのWebhook受信
-- 自動的な査定申込データのパース・DB保存
-
-**設定:**
-- プロジェクト: `your-project-id`
-- Pub/Subトピック: `projects/your-project-id/topics/gmail-push`
-- Watch有効期限: 7日間（定期的な更新が必要）
-
-**管理コマンド:**
-```bash
-# Gmail Watch開始
-python manage.py gmail_watch_start --topic projects/your-project-id/topics/gmail-push
-
-# Gmail Watch停止
-python manage.py gmail_watch_stop
-
-# 手動メール取得
-python manage.py fetch_gmail --days 7 --max 100
-```
-
 ### 認証・認可
 
 **認証システム:**
@@ -511,9 +480,6 @@ python manage.py fetch_gmail --days 7 --max 100
 ## 関連ドキュメント
 
 - [README.md](README.md) - セットアップ手順・運用手順
-- [GMAIL_PUSH_SETUP.md](GMAIL_PUSH_SETUP.md) - Gmail Push通知設定
-- [OAUTH_SETUP.md](OAUTH_SETUP.md) - OAuth認証設定
-- [GMAIL_API_SETUP.md](GMAIL_API_SETUP.md) - Gmail API設定（DWD方式）
 
 ---
 

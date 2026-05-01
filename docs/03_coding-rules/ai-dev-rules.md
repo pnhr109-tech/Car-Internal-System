@@ -168,8 +168,7 @@ leads/views/
 ├── assessment.py  # 査定申込フェーズ
 ├── case.py        # 案件・商談フェーズ
 ├── contract.py    # 契約・承認フェーズ
-├── customer.py    # 顧客マスタ管理
-└── webhook.py     # 外部 Webhook（Gmail Push 通知など）
+└── customer.py    # 顧客マスタ管理
 ```
 
 ### 分割の基準
@@ -180,7 +179,6 @@ leads/views/
 | `case.py` | 案件（Assessment）詳細・各種情報更新 API |
 | `contract.py` | 契約・承認フェーズの画面・API |
 | `customer.py` | 顧客マスタの一覧・詳細・直接編集 API |
-| `webhook.py` | CSRF 不要な外部受信エンドポイント（`@csrf_exempt`）|
 | `utils.py` | `_` プレフィックス付きヘルパー。ビュー関数を含めない |
 
 ### インポート規則

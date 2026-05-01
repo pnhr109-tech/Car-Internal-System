@@ -2,7 +2,7 @@
 
 ## 設計方針
 
-- **既存の `CarAssessmentRequest` は残す**（Gmail連携が動いているため壊さない）
+- **既存の `CarAssessmentRequest` は残す**（既存データを維持するため）
 - 新たに `Customer` / `Vehicle` を独立テーブル化し、FK で紐付ける
 - 査定申込 → 査定 → 契約 を縦に繋ぐ `Assessment`（査定）テーブルを中核に置く
 - 担当者は Django `auth.User` + `UserProfile` で参照（店舗・ロールを持つ）
@@ -195,7 +195,7 @@ def can_approve(self):
 ### 5. assessment_requests（査定申込）※ 既存 CarAssessmentRequest を拡張
 
 > 既存テーブルに FK カラムを追加するマイグレーションで対応。
-> `application_number` / `gmail_message` などの既存カラムはそのまま保持。
+> `application_number` などの既存カラムはそのまま保持。
 
 **追加カラム（ALTER TABLE）:**
 
@@ -422,7 +422,7 @@ EMAIL          = メール          （申込番号プレフィックス: E）
 ## Djangoアプリ構成（案）
 
 ```
-leads/          ← 既存。AssessmentRequest, GmailMessage + 新規モデルを追加
+leads/          ← 既存。AssessmentRequest + 新規モデルを追加
   models.py     ← Customer, Vehicle, VehicleImage, Assessment,
                    AssessmentCheckItem, PurchaseContract,
                    Document, IdentityDocument, OwnershipRelease,
