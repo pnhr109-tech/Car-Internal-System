@@ -158,6 +158,59 @@ class NavikuruScraper:
         logger.info(f'[navikuru] {len(all_entries)} 件取得')
         return all_entries
 
+    def fetch_entries_until_id(self, stop_id: str) -> list[dict]:
+        """
+        stop_id（external_service_id）に一致するエントリが現れるまでページを取得し、
+        それより新しいエントリのみ返す。
+        一覧は新着順なので stop_id が見つかった時点でページネーションを終了する。
+
+        Args:
+            stop_id: この external_service_id を持つエントリの直前で取得を止める
+
+        Returns:
+            list of entry dicts
+        """
+        self.ensure_logged_in()
+        logger.info(f'[navikuru] ID打ち切り取得開始 (stop_id={stop_id})')
+        all_entries = []
+        page = 1
+
+        while True:
+            url = config.NAVIKURU_LIST_URL if page == 1 else f'{config.NAVIKURU_LIST_URL}?page={page}'
+            resp = self.session.get(url, timeout=15)
+
+            if self._needs_login(BeautifulSoup(resp.text, 'lxml')):
+                logger.warning('[navikuru] セッション切れ — 再ログイン')
+                self._logged_in = False
+                self.login()
+                resp = self.session.get(url, timeout=15)
+
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, 'lxml')
+            entries = self._parse_entries(soup)
+
+            if not entries:
+                break
+
+            page_entries = []
+            found_stop = False
+            for entry in entries:
+                if entry['external_service_id'] == stop_id:
+                    found_stop = True
+                    break
+                page_entries.append(entry)
+
+            all_entries.extend(page_entries)
+            logger.info(f'[navikuru] page={page}: {len(entries)} 件取得, うち対象 {len(page_entries)} 件')
+
+            if found_stop or not self._has_next_page(soup, page):
+                break
+
+            page += 1
+
+        logger.info(f'[navikuru] ID打ち切り取得完了: 合計 {len(all_entries)} 件')
+        return all_entries
+
     def fetch_entries_since(self, since_dt: datetime) -> list[dict]:
         """
         since_dt 以降に申し込まれたエントリを全ページから取得する。
