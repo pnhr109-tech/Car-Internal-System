@@ -1,0 +1,129 @@
+{% extends 'base/internal_base.html' %}
+{% block title %}{% if is_edit %}社員編集{% else %}社員登録{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container-xxl py-4">
+  <div class="mb-3">
+    <a href="{% url 'accounts:employee_list' %}" class="text-muted text-decoration-none small">
+      <i class="bi bi-arrow-left"></i> 社員一覧に戻る
+    </a>
+  </div>
+
+  <h4 class="mb-4">
+    <i class="bi bi-person-{% if is_edit %}gear{% else %}plus{% endif %} text-primary"></i>
+    {% if is_edit %}社員編集{% else %}社員登録{% endif %}
+  </h4>
+
+  {% if messages %}
+  <div class="mb-3">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card" style="max-width: 640px;">
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+
+        <div class="row g-3 mb-3">
+          <div class="col-6">
+            <label class="form-label">姓 <span class="text-danger">*</span></label>
+            <input type="text"
+                   name="last_name"
+                   class="form-control"
+                   value="{% if is_edit and not form_data %}{{ profile.user.last_name }}{% else %}{{ form_data.last_name }}{% endif %}"
+                   required>
+          </div>
+          <div class="col-6">
+            <label class="form-label">名 <span class="text-danger">*</span></label>
+            <input type="text"
+                   name="first_name"
+                   class="form-control"
+                   value="{% if is_edit and not form_data %}{{ profile.user.first_name }}{% else %}{{ form_data.first_name }}{% endif %}"
+                   required>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">メールアドレス <span class="text-danger">*</span></label>
+          <input type="email"
+                 name="email"
+                 class="form-control"
+                 value="{% if is_edit and not form_data %}{{ profile.user.email }}{% else %}{{ form_data.email }}{% endif %}"
+                 placeholder="example@gigicompany.jp"
+                 required>
+          <div class="form-text">Googleログイン時に使用するアドレスと一致させてください。</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">社員番号</label>
+          <input type="text"
+                 name="employee_number"
+                 class="form-control"
+                 value="{% if is_edit and not form_data %}{{ profile.employee_number }}{% else %}{{ form_data.employee_number }}{% endif %}"
+                 placeholder="例: EMP001">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">所属店舗</label>
+          <select name="store_id" class="form-select">
+            <option value="">--- なし ---</option>
+            {% for store in stores %}
+            <option value="{{ store.pk }}"
+              {% if is_edit and not form_data and profile.store_id == store.pk %}selected
+              {% elif form_data.store_id == store.pk|stringformat:"s" %}selected
+              {% endif %}>
+              {{ store.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">ロール <span class="text-danger">*</span></label>
+          <select name="role" class="form-select" required>
+            {% for value, label in role_choices %}
+            <option value="{{ value }}"
+              {% if is_edit and not form_data and profile.role == value %}selected
+              {% elif form_data.role == value %}selected
+              {% endif %}>
+              {{ label }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        {% if is_edit %}
+        <div class="mb-4">
+          <div class="form-check">
+            <input type="checkbox"
+                   name="is_active_employee"
+                   id="isActiveEmployee"
+                   class="form-check-input"
+                   {% if form_data %}
+                     {% if form_data.is_active_employee == 'on' %}checked{% endif %}
+                   {% elif profile.is_active_employee %}
+                     checked
+                   {% endif %}>
+            <label class="form-check-label" for="isActiveEmployee">在籍中</label>
+          </div>
+          <div class="form-text">チェックを外すと退職済みとして扱われます。</div>
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg"></i> {% if is_edit %}更新する{% else %}登録する{% endif %}
+          </button>
+          <a href="{% url 'accounts:employee_list' %}" class="btn btn-outline-secondary">キャンセル</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

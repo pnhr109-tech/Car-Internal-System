@@ -32,12 +32,20 @@ DEBUG = os.getenv('DJANGO_DEBUG', '1') == '1'
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+
 # ngrok対応: 開発環境ではngrokドメインを許可
 if DEBUG:
     ALLOWED_HOSTS.extend([
-        '.ngrok-free.dev',  # ngrok無料版ドメイン
-        '.ngrok.io',         # ngrok有料版ドメイン
+        '.ngrok-free.dev',
+        '.ngrok.io',
     ])
+    # ngrokはHTTPSで受けてHTTPに転送するため、Djangoにhttpsを伝える
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    USE_X_FORWARDED_HOST = True
+    CSRF_TRUSTED_ORIGINS = [
+        'https://*.ngrok-free.dev',
+        'https://*.ngrok.io',
+    ]
 
 
 # Application definition

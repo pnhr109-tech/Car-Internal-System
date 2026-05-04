@@ -1,0 +1,118 @@
+{% extends 'base/internal_base.html' %}
+{% load static attendance_tags %}
+{% block title %}勤怠一覧 - {{ month_label }}{% endblock %}
+
+{% block content %}
+<div class="container-xxl py-4">
+  <h4 class="mb-3"><i class="bi bi-calendar-check text-primary"></i> 勤怠一覧</h4>
+
+  <div class="card search-card mb-3">
+    <div class="card-body">
+      <form method="get">
+        <div class="row g-2 mb-2">
+          <div class="col-6 col-md-2">
+            <label class="form-label">年</label>
+            <input type="number" name="year" class="form-control" value="{{ year }}" min="2020" max="2100">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label">月</label>
+            <select name="month" class="form-select">
+              <option value="1"  {% if month == 1  %}selected{% endif %}>1月</option>
+              <option value="2"  {% if month == 2  %}selected{% endif %}>2月</option>
+              <option value="3"  {% if month == 3  %}selected{% endif %}>3月</option>
+              <option value="4"  {% if month == 4  %}selected{% endif %}>4月</option>
+              <option value="5"  {% if month == 5  %}selected{% endif %}>5月</option>
+              <option value="6"  {% if month == 6  %}selected{% endif %}>6月</option>
+              <option value="7"  {% if month == 7  %}selected{% endif %}>7月</option>
+              <option value="8"  {% if month == 8  %}selected{% endif %}>8月</option>
+              <option value="9"  {% if month == 9  %}selected{% endif %}>9月</option>
+              <option value="10" {% if month == 10 %}selected{% endif %}>10月</option>
+              <option value="11" {% if month == 11 %}selected{% endif %}>11月</option>
+              <option value="12" {% if month == 12 %}selected{% endif %}>12月</option>
+            </select>
+          </div>
+          <div class="col-md-3 col-12">
+            <label class="form-label">氏名</label>
+            <input type="text" name="q_name" class="form-control" value="{{ q_name }}" placeholder="山田 太郎">
+          </div>
+          <div class="col-md-2 col-6">
+            <label class="form-label">社員番号</label>
+            <input type="text" name="q_employee_number" class="form-control" value="{{ q_employee_number }}" placeholder="EMP001">
+          </div>
+          <div class="col-md-2 col-6">
+            <label class="form-label">所属店舗</label>
+            <select name="f_store" class="form-select">
+              <option value="">すべて</option>
+              {% for store in stores %}
+              <option value="{{ store.pk }}" {% if f_store == store.pk|stringformat:"s" %}selected{% endif %}>{{ store.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> 検索</button>
+          <a href="{% url 'accounts:attendance_list' %}" class="btn btn-secondary">クリア</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <a href="?year={{ prev_year }}&month={{ prev_month }}&q_name={{ q_name }}&q_employee_number={{ q_employee_number }}&f_store={{ f_store }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-chevron-left"></i> 前月
+    </a>
+    <span class="fw-semibold fs-6">{{ month_label }}</span>
+    <a href="?year={{ next_year }}&month={{ next_month }}&q_name={{ q_name }}&q_employee_number={{ q_employee_number }}&f_store={{ f_store }}"
+       class="btn btn-sm btn-outline-secondary">
+      翌月 <i class="bi bi-chevron-right"></i>
+    </a>
+  </div>
+
+  <div class="card mobile-table-outer">
+    <div class="card-body p-0">
+      <table class="table table-hover table-striped mb-0 mobile-card-table">
+        <thead class="table-dark sticky-top">
+          <tr>
+            <th>氏名</th>
+            <th>社員番号</th>
+            <th>所属店舗</th>
+            <th>出勤日数</th>
+            <th>実労働時間</th>
+            <th>残業時間</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="card-title">{{ row.profile.user.get_full_name|default:row.profile.user.username }}</td>
+            <td data-label="社員番号">{{ row.profile.employee_number|default:"-" }}</td>
+            <td data-label="所属店舗">{{ row.profile.store.name|default:"なし" }}</td>
+            <td data-label="出勤日数">{{ row.days }}日</td>
+            <td data-label="実労働時間">{{ row.work_minutes|minutes_to_hm }}</td>
+            <td data-label="残業時間">
+              {% if row.overtime_minutes > 0 %}
+              <span class="text-danger fw-semibold">{{ row.overtime_minutes|minutes_to_hm }}</span>
+              {% else %}
+              -
+              {% endif %}
+            </td>
+            <td class="text-end d-mobile-none">
+              <a href="{% url 'accounts:attendance_detail' row.profile.pk %}?year={{ year }}&month={{ month }}"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-calendar3"></i> 勤務表
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-4">社員が見つかりません</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

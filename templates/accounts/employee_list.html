@@ -1,0 +1,183 @@
+{% extends 'base/internal_base.html' %}
+{% load static %}
+{% block title %}社員一覧{% endblock %}
+
+{% block content %}
+<div class="container-xxl py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-person-lines-fill text-primary"></i> 社員一覧</h4>
+    <a href="{% url 'accounts:employee_create' %}" class="btn btn-primary">
+      <i class="bi bi-person-plus"></i> 新規登録
+    </a>
+  </div>
+
+  {% if messages %}
+  <div class="mb-3">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card search-card mb-3">
+    <div class="card-body">
+      <form method="get">
+        <div class="row g-2 mb-2">
+          <div class="col-md-3 col-6">
+            <label class="form-label">氏名</label>
+            <input type="text" name="q_name" class="form-control" value="{{ q_name }}" placeholder="山田 太郎">
+          </div>
+          <div class="col-md-3 col-6">
+            <label class="form-label">メールアドレス</label>
+            <input type="text" name="q_email" class="form-control" value="{{ q_email }}" placeholder="example@">
+          </div>
+          <div class="col-md-2 col-6">
+            <label class="form-label">社員番号</label>
+            <input type="text" name="q_employee_number" class="form-control" value="{{ q_employee_number }}" placeholder="EMP001">
+          </div>
+          <div class="col-md-2 col-6">
+            <label class="form-label">所属店舗</label>
+            <select name="f_store" class="form-select">
+              <option value="">すべて</option>
+              {% for store in stores %}
+              <option value="{{ store.pk }}" {% if f_store == store.pk|stringformat:"s" %}selected{% endif %}>{{ store.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2 col-6">
+            <label class="form-label">ロール</label>
+            <select name="f_role" class="form-select">
+              <option value="">すべて</option>
+              {% for value, label in role_choices %}
+              <option value="{{ value }}" {% if f_role == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2 col-6">
+            <label class="form-label">在籍状況</label>
+            <select name="f_active" class="form-select">
+              <option value="">すべて</option>
+              <option value="1" {% if f_active == "1" %}selected{% endif %}>在籍中</option>
+              <option value="0" {% if f_active == "0" %}selected{% endif %}>退職済み</option>
+            </select>
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> 検索</button>
+          <a href="{% url 'accounts:employee_list' %}" class="btn btn-secondary">クリア</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <p class="text-muted small">{{ total_count }}件</p>
+
+  <div class="card mobile-table-outer">
+    <div class="card-body p-0">
+      <table class="table table-hover table-striped mb-0 mobile-card-table">
+        <thead class="table-dark sticky-top">
+          <tr>
+            <th>氏名</th>
+            <th>社員番号</th>
+            <th>メールアドレス</th>
+            <th>所属店舗</th>
+            <th>ロール</th>
+            <th>在籍</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for profile in page_obj %}
+          <tr>
+            <td class="card-title">{{ profile.user.get_full_name|default:profile.user.username }}</td>
+            <td data-label="社員番号">{{ profile.employee_number|default:"-" }}</td>
+            <td data-label="メール" class="d-mobile-none">{{ profile.user.email }}</td>
+            <td data-label="所属店舗">{{ profile.store.name|default:"なし" }}</td>
+            <td data-label="ロール">{{ profile.get_role_display }}</td>
+            <td data-label="在籍">
+              {% if profile.is_active_employee %}
+              <span class="ui-badge ui-badge--success">在籍</span>
+              {% else %}
+              <span class="ui-badge ui-badge--danger">退職</span>
+              {% endif %}
+            </td>
+            <td class="text-end text-nowrap">
+              <a href="{% url 'accounts:employee_edit' profile.pk %}" class="btn btn-sm btn-outline-primary me-1">
+                <i class="bi bi-pencil"></i> 変更
+              </a>
+              <button type="button"
+                      class="btn btn-sm btn-outline-danger"
+                      data-bs-toggle="modal"
+                      data-bs-target="#deleteModal"
+                      data-delete-url="{% url 'accounts:employee_delete' profile.pk %}"
+                      data-name="{{ profile.user.get_full_name|default:profile.user.username }}">
+                <i class="bi bi-trash"></i>
+              </button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-4">社員が見つかりません</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <nav class="mt-3">
+    <ul class="pagination justify-content-center">
+      {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?q_name={{ q_name }}&q_email={{ q_email }}&q_employee_number={{ q_employee_number }}&f_store={{ f_store }}&f_role={{ f_role }}&f_active={{ f_active }}&page={{ page_obj.previous_page_number }}">前へ</a>
+      </li>
+      {% endif %}
+      {% for num in page_obj.paginator.page_range %}
+        {% if page_obj.number == num %}
+        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+        {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+        <li class="page-item">
+          <a class="page-link" href="?q_name={{ q_name }}&q_email={{ q_email }}&q_employee_number={{ q_employee_number }}&f_store={{ f_store }}&f_role={{ f_role }}&f_active={{ f_active }}&page={{ num }}">{{ num }}</a>
+        </li>
+        {% endif %}
+      {% endfor %}
+      {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?q_name={{ q_name }}&q_email={{ q_email }}&q_employee_number={{ q_employee_number }}&f_store={{ f_store }}&f_role={{ f_role }}&f_active={{ f_active }}&page={{ page_obj.next_page_number }}">次へ</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteModalLabel">社員の削除</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p><span id="deleteTargetName" class="fw-semibold"></span> を削除しますか？</p>
+        <p class="text-danger small mb-0">この操作は取り消せません。関連する勤怠情報もすべて削除されます。</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+        <form id="deleteForm" method="post" action="">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">削除する</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/employee_list.js' %}"></script>
+{% endblock %}

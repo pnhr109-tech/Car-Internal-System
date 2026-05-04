@@ -1,0 +1,179 @@
+{% extends 'base/internal_base.html' %}
+{% load static attendance_tags %}
+{% block title %}勤務表 - {{ profile.user.get_full_name }} {{ month_label }}{% endblock %}
+
+{% block content %}
+<div class="container-xxl py-4">
+  <div class="mb-3">
+    <a href="{% url 'accounts:attendance_list' %}?year={{ year }}&month={{ month }}" class="text-muted text-decoration-none small">
+      <i class="bi bi-arrow-left"></i> 勤怠一覧に戻る
+    </a>
+  </div>
+
+  <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+    <div>
+      <h4 class="mb-1">
+        <i class="bi bi-calendar3 text-primary"></i>
+        {{ profile.user.get_full_name|default:profile.user.username }} さんの勤務表
+      </h4>
+      <div class="text-muted small">
+        {{ profile.store.name|default:"店舗なし" }} &nbsp;/&nbsp; {{ profile.get_role_display }}
+        {% if profile.employee_number %}&nbsp;/&nbsp; {{ profile.employee_number }}{% endif %}
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <a href="?year={{ prev_year }}&month={{ prev_month }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-chevron-left"></i> 前月
+      </a>
+      <span class="fw-semibold">{{ month_label }}</span>
+      <a href="?year={{ next_year }}&month={{ next_month }}" class="btn btn-sm btn-outline-secondary">
+        翌月 <i class="bi bi-chevron-right"></i>
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-4 col-md-3">
+      <div class="card text-center">
+        <div class="card-body py-2">
+          <div class="text-muted small">出勤日数</div>
+          <div class="fs-4 fw-bold" id="summaryDays">{{ total_days }}<span class="fs-6 fw-normal text-muted ms-1">日</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4 col-md-3">
+      <div class="card text-center">
+        <div class="card-body py-2">
+          <div class="text-muted small">実労働時間</div>
+          <div class="fs-5 fw-bold" id="summaryWork">{{ total_work_minutes|minutes_to_hm }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-4 col-md-3">
+      <div class="card text-center">
+        <div class="card-body py-2">
+          <div class="text-muted small">残業時間</div>
+          <div class="fs-5 fw-bold {% if total_overtime_minutes > 0 %}text-danger{% endif %}" id="summaryOvertime">
+            {{ total_overtime_minutes|minutes_to_hm }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mobile-table-outer">
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0 mobile-card-table">
+        <thead class="table-dark sticky-top">
+          <tr>
+            <th>日</th>
+            <th>曜</th>
+            <th>出勤</th>
+            <th>退勤</th>
+            <th>実労働時間</th>
+            <th>残業時間</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for day in days %}
+          {% with dk=day.date|date:"Ymd" %}
+          <tr class="{% if day.is_weekend %}table-secondary{% endif %}" id="row-{{ dk }}">
+            <td class="card-title">{{ day.date|date:"n/j" }}</td>
+            <td data-label="曜日"
+                class="fw-semibold {% if day.weekday_ja == '土' %}text-primary{% elif day.weekday_ja == '日' %}text-danger{% endif %}">
+              {{ day.weekday_ja }}
+            </td>
+            <td data-label="出勤" id="cell-login-{{ dk }}">
+              {% if day.login_at %}{{ day.login_at|time:"H:i" }}{% else %}-{% endif %}
+            </td>
+            <td data-label="退勤" id="cell-logout-{{ dk }}">
+              {% if day.logout_at %}
+                <span class="{% if day.overtime_minutes > 0 %}text-danger{% endif %}">{{ day.logout_at|time:"H:i" }}</span>
+              {% elif day.login_at %}
+                <span class="text-warning">未退勤</span>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td data-label="実労働時間" id="cell-work-{{ dk }}">
+              {% if day.work_minutes %}{{ day.work_minutes|minutes_to_hm }}{% else %}-{% endif %}
+            </td>
+            <td data-label="残業時間" id="cell-overtime-{{ dk }}">
+              {% if day.overtime_minutes > 0 %}
+              <span class="text-danger fw-semibold">{{ day.overtime_minutes|minutes_to_hm }}</span>
+              {% else %}-{% endif %}
+            </td>
+            <td class="text-end d-mobile-none">
+              <button type="button"
+                      class="btn btn-sm btn-outline-secondary"
+                      data-bs-toggle="modal"
+                      data-bs-target="#editDayModal"
+                      data-date="{{ day.date|date:'Y-m-d' }}"
+                      data-date-label="{{ day.date|date:'n月j日' }}（{{ day.weekday_ja }}）"
+                      data-login="{% if day.login_at %}{{ day.login_at|time:'H:i' }}{% endif %}"
+                      data-logout="{% if day.logout_at %}{{ day.logout_at|time:'H:i' }}{% endif %}">
+                <i class="bi bi-pencil"></i>
+              </button>
+            </td>
+          </tr>
+          {% endwith %}
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-light fw-semibold">
+          <tr>
+            <td colspan="2">合計</td>
+            <td id="footerDays">{{ total_days }}日</td>
+            <td></td>
+            <td id="footerWork">{{ total_work_minutes|minutes_to_hm }}</td>
+            <td id="footerOvertime" class="{% if total_overtime_minutes > 0 %}text-danger{% endif %}">
+              {{ total_overtime_minutes|minutes_to_hm }}
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <p class="text-muted small mt-2">
+    ※ 実労働時間 = 出退勤時間から昼休憩1時間を差し引いた時間。残業時間 = 18:00以降の勤務時間。
+  </p>
+</div>
+
+<div class="modal fade" id="editDayModal" tabindex="-1" aria-labelledby="editDayModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editDayModalLabel">勤務時間を編集</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="fw-semibold mb-3" id="editDayLabel"></p>
+        <input type="hidden" id="editWorkDate">
+        <div class="mb-3">
+          <label class="form-label">出勤時刻 <span class="text-danger">*</span></label>
+          <input type="time" id="editLoginTime" class="form-control">
+        </div>
+        <div class="mb-1">
+          <label class="form-label">退勤時刻</label>
+          <input type="time" id="editLogoutTime" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="editDaySaveBtn">
+          <i class="bi bi-check-lg"></i> 保存
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const ATTENDANCE_UPDATE_URL = "{% url 'accounts:attendance_update_day' profile.pk %}";
+</script>
+<script src="{% static 'js/attendance_detail.js' %}"></script>
+{% endblock %}
