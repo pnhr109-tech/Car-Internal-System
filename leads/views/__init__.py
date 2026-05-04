@@ -69,6 +69,12 @@ from .customer import (
     delete_bank_account_direct,
 )
 
+# --- 車両一覧 ---
+from .vehicle import (
+    vehicle_list,
+    vehicle_list_csv,
+)
+
 # --- スクレイパー内部 API ---
 from .scraper_api import (
     scraper_ingest_navikuru,
@@ -93,6 +99,8 @@ __all__ = [
     # customer
     'customer_list', 'customer_detail',
     'update_customer_direct', 'save_bank_account_direct', 'delete_bank_account_direct',
+    # vehicle
+    'vehicle_list', 'vehicle_list_csv',
     # scraper api
     'scraper_ingest_navikuru',
 ]

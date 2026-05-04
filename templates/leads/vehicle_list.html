@@ -1,0 +1,130 @@
+{% extends 'base/internal_base.html' %}
+{% block title %}車両一覧{% endblock %}
+
+{% block content %}
+<div class="container-xxl py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-car-front text-primary"></i> 車両一覧</h4>
+    <a href="{% url 'leads:vehicle_list_csv' %}?{{ search_qs }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-download"></i> CSV出力
+    </a>
+  </div>
+
+  <div class="card search-card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-6 col-md-3">
+          <label class="form-label">メーカー</label>
+          <input type="text" name="maker" class="form-control" value="{{ maker }}" placeholder="例：トヨタ">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">車種</label>
+          <input type="text" name="car_model" class="form-control" value="{{ car_model }}" placeholder="例：プリウス">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">車体番号</label>
+          <input type="text" name="chassis_number" class="form-control" value="{{ chassis_number }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">顧客名</label>
+          <input type="text" name="customer_name" class="form-control" value="{{ customer_name }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">成約日（から）</label>
+          <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">成約日（まで）</label>
+          <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
+        </div>
+        <div class="col-12 col-md-auto">
+          <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> 検索</button>
+          <a href="{% url 'leads:vehicle_list' %}" class="btn btn-secondary ms-1">クリア</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <p class="text-muted small">{{ total_count }}件</p>
+
+  <div class="card mobile-table-outer">
+    <div class="card-body p-0">
+      <table class="table table-hover table-striped mb-0 mobile-card-table">
+        <thead class="table-dark sticky-top">
+          <tr>
+            <th>メーカー / 車種</th>
+            <th>年式</th>
+            <th>走行距離</th>
+            <th>カラー</th>
+            <th>車体番号</th>
+            <th>顧客名</th>
+            <th>担当者</th>
+            <th>成約日</th>
+            <th>買取金額（税込）</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in page_obj %}
+          <tr style="cursor:pointer" onclick="location.href='{% url 'leads:case_detail' a.pk %}'">
+            <td class="card-title">{{ a.vehicle.maker }} {{ a.vehicle.car_model }}</td>
+            <td data-label="年式">{{ a.vehicle.year }}</td>
+            <td data-label="走行距離">{{ a.vehicle.mileage }}</td>
+            <td data-label="カラー">{{ a.vehicle.color|default:"-" }}</td>
+            <td data-label="車体番号">{{ a.vehicle.chassis_number|default:"-" }}</td>
+            <td data-label="顧客名">{{ a.customer.name }}</td>
+            <td class="d-mobile-none" data-label="担当者">{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}</td>
+            <td data-label="成約日">{{ a.contract.contract_date|default:"-" }}</td>
+            <td class="d-mobile-none" data-label="買取金額（税込）">
+              {% if a.contract.purchase_price_incl_tax %}
+                ¥{{ a.contract.purchase_price_incl_tax|floatformat:0 }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td class="d-mobile-none">
+              <a href="{% url 'leads:case_detail' a.pk %}"
+                 class="btn btn-sm btn-outline-primary"
+                 onclick="event.stopPropagation()">
+                <i class="bi bi-eye"></i> 詳細
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="10" class="text-center text-muted py-4">成約済みの車両が見つかりません</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <nav class="mt-3">
+    <ul class="pagination justify-content-center">
+      {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?{{ search_qs }}&page={{ page_obj.previous_page_number }}">前へ</a>
+      </li>
+      {% endif %}
+      {% for num in page_obj.paginator.page_range %}
+        {% if page_obj.number == num %}
+        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+        {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+        <li class="page-item">
+          <a class="page-link" href="?{{ search_qs }}&page={{ num }}">{{ num }}</a>
+        </li>
+        {% endif %}
+      {% endfor %}
+      {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?{{ search_qs }}&page={{ page_obj.next_page_number }}">次へ</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

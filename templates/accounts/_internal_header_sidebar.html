@@ -56,6 +56,9 @@
                 <a href="/sateiinfo/approvals/" class="list-group-item list-group-item-action sidebar-menu-link">
                     <i class="bi bi-check2-square me-2"></i>承認待ち
                 </a>
+                <a href="/sateiinfo/vehicles/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-car-front me-2"></i>車両一覧
+                </a>
             </div>
 
             {% with profile=request.user.profile %}
@@ -64,6 +67,18 @@
             <div class="list-group list-group-flush mb-3">
                 <a href="/sateiinfo/customers/" class="list-group-item list-group-item-action sidebar-menu-link">
                     <i class="bi bi-people me-2"></i>顧客一覧
+                </a>
+            </div>
+            {% endif %}
+
+            {% if request.user.is_superuser or profile.role != 'general' %}
+            <p class="text-muted small px-1 mb-1 mt-2">社員情報</p>
+            <div class="list-group list-group-flush mb-3">
+                <a href="/employees/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-person-lines-fill me-2"></i>社員一覧
+                </a>
+                <a href="/attendance/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-calendar-check me-2"></i>勤怠一覧
                 </a>
             </div>
             {% endif %}

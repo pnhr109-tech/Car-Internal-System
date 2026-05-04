@@ -53,6 +53,10 @@ urlpatterns = [
     path('api/advance-payments/<int:ap_id>/approve/',           views.approve_advance_payment,          name='approve_advance_payment'),
     path('api/contracts/<int:contract_id>/required-docs/',      views.update_required_docs,             name='update_required_docs'),
 
+    # ── 車両一覧 ─────────────────────────────────────────────
+    path('vehicles/',         views.vehicle_list,     name='vehicle_list'),
+    path('vehicles/export/',  views.vehicle_list_csv, name='vehicle_list_csv'),
+
     # ── 顧客一覧 ─────────────────────────────────────────────
     path('customers/',                                          views.customer_list,              name='customer_list'),
     path('customers/<int:pk>/',                                 views.customer_detail,            name='customer_detail'),
