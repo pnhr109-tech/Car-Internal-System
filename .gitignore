@@ -32,6 +32,9 @@ ngrok.exe
 ngrok
 *.ngrok-free.dev
 
+# Claude Code
+.claude/
+
 # IDE
 .vscode/
 .idea/
