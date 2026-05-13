@@ -12,34 +12,7 @@
   </div>
   {% endfor %}
 
-  <h6 class="text-muted mb-2">商談予定 承認待ち — {{ pending_appointments.count }}件</h6>
-  <div class="card mb-4 mobile-table-outer">
-    <div class="card-body p-0">
-      <table class="table table-hover mb-0 mobile-card-table">
-        <thead class="table-light">
-          <tr><th>顧客名</th><th>車両</th><th>商談予定日時</th><th>担当者</th><th>申請日</th><th>操作</th></tr>
-        </thead>
-        <tbody>
-          {% for req in pending_appointments %}
-          <tr>
-            <td class="card-title"><a href="{% url 'leads:assessment_detail' req.pk %}">{{ req.customer_name }}</a></td>
-            <td data-label="車両">{{ req.maker }} {{ req.car_model }}</td>
-            <td data-label="商談予定日時">{{ req.reservation_datetime|date:"Y-m-d H:i"|default:"-" }}</td>
-            <td data-label="担当者">{{ req.sales_owner_name|default:"-" }}</td>
-            <td data-label="申請日">{{ req.status_updated_at|date:"Y-m-d" }}</td>
-            <td data-label="操作">
-              <button class="btn btn-sm btn-success" onclick="promoteToCase({{ req.pk }})">承認（昇格）</button>
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="6" class="text-center text-muted py-3">商談予定の承認待ちはありません</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <h6 class="text-muted mb-2">査定（商談）承認待ち — {{ pending_assessments.count }}件</h6>
+  <h6 class="text-muted mb-2">査定（成約）承認待ち — {{ pending_assessments.count }}件</h6>
   <div class="card mb-4 mobile-table-outer">
     <div class="card-body p-0">
       <table class="table table-hover mb-0 mobile-card-table">
@@ -53,10 +26,9 @@
             <td data-label="車両">{{ a.vehicle.maker }} {{ a.vehicle.car_model }}</td>
             <td data-label="査定額">{% if a.assessment_price %}{{ a.assessment_price|floatformat:0 }}円{% else %}-{% endif %}</td>
             <td data-label="担当者">{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}</td>
-            <td data-label="申請日">{{ a.created_at|date:"Y-m-d" }}</td>
+            <td data-label="申請日">{{ a.approval_requested_at|date:"Y-m-d"|default:"-" }}</td>
             <td data-label="操作">
-              <button class="btn btn-sm btn-success" onclick="approveAssessment({{ a.pk }}, 'approve')">承認</button>
-              <button class="btn btn-sm btn-outline-danger ms-1" onclick="approveAssessment({{ a.pk }}, 'reject')">差し戻し</button>
+              <a href="{% url 'leads:case_detail' a.pk %}" class="btn btn-sm btn-outline-secondary">詳細で承認</a>
             </td>
           </tr>
           {% empty %}
@@ -72,7 +44,7 @@
     <div class="card-body p-0">
       <table class="table table-hover mb-0 mobile-card-table">
         <thead class="table-light">
-          <tr><th>顧客名</th><th>車両</th><th>買取価格</th><th>担当者</th><th>契約日</th><th>操作</th></tr>
+          <tr><th>顧客名</th><th>車両</th><th>買取価格</th><th>担当者</th><th>申請日</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for c in pending_contracts %}
@@ -81,10 +53,9 @@
             <td data-label="車両">{{ c.vehicle.maker }} {{ c.vehicle.car_model }}</td>
             <td data-label="買取価格">{{ c.purchase_price_incl_tax|floatformat:0 }}円</td>
             <td data-label="担当者">{{ c.assigned_to.get_full_name|default:c.assigned_to.username }}</td>
-            <td data-label="契約日">{{ c.contract_date|date:"Y-m-d" }}</td>
+            <td data-label="申請日">{{ c.approval_requested_at|date:"Y-m-d"|default:"-" }}</td>
             <td data-label="操作">
-              <button class="btn btn-sm btn-success" onclick="approveContract({{ c.pk }}, 'approve')">承認</button>
-              <button class="btn btn-sm btn-outline-danger ms-1" onclick="approveContract({{ c.pk }}, 'reject')">差し戻し</button>
+              <a href="{% url 'leads:case_detail' c.assessment.pk %}?tab=contract" class="btn btn-sm btn-outline-secondary">詳細で承認</a>
             </td>
           </tr>
           {% empty %}

@@ -93,25 +93,38 @@
               <span class="badge bg-{% if assessment.status == 'contracted' %}success{% elif assessment.status == 'lost' or assessment.status == 'pre_cancel' %}danger{% elif assessment.status == 'managed' %}secondary{% else %}primary{% endif %}">
                 {{ assessment.get_status_display }}
               </span>
+              {% if not assessment.approved_by %}
+              <button class="btn btn-sm btn-outline-secondary ms-1 py-0 px-1"
+                      data-bs-toggle="modal" data-bs-target="#statusChangeModal"
+                      title="ステータスを変更">
+                <i class="bi bi-pencil-square"></i>
+              </button>
+              {% endif %}
             </dd>
             <dt class="col-5 text-muted">査定日時</dt>
             <dd class="col-7">{{ assessment.assessment_datetime|date:"Y-m-d H:i"|default:"-" }}</dd>
             <dt class="col-5 text-muted">査定額</dt>
-            <dd class="col-7">{% if assessment.assessment_price %}{{ assessment.assessment_price|floatformat:"-1" }}万円{% else %}-{% endif %}</dd>
+            <dd class="col-7">{% if assessment.assessment_price %}{{ assessment.assessment_price|floatformat:0|intcomma }}円{% else %}-{% endif %}</dd>
             <dt class="col-5 text-muted">市場相場価格</dt>
-            <dd class="col-7">{% if assessment.market_price %}{{ assessment.market_price|floatformat:"-1" }}万円{% else %}-{% endif %}</dd>
+            <dd class="col-7">{% if assessment.market_price %}{{ assessment.market_price|floatformat:0|intcomma }}円{% else %}-{% endif %}</dd>
             <dt class="col-5 text-muted">総合評価</dt>
             <dd class="col-7">{% if assessment.overall_rating %}{{ assessment.overall_rating }} / 5{% else %}-{% endif %}</dd>
             <dt class="col-5 text-muted">承認</dt>
             <dd class="col-7">
               {% if assessment.approved_by %}
               <span class="text-success"><i class="bi bi-check-circle-fill"></i> {{ assessment.approved_by.get_full_name }} ({{ assessment.approved_at|date:"Y-m-d" }})</span>
+              {% elif assessment.status == 'contracted' %}
+                {% if assessment.approval_requested_to %}
+                  <span class="text-warning"><i class="bi bi-send"></i> {{ assessment.approval_requested_to.get_full_name }} に申請中</span>
+                  {% if assessment.approval_requested_to == request.user or request.user.is_superuser %}
+                  <button class="btn btn-sm btn-success ms-2" onclick="approveAssessment('approve')">承認</button>
+                  <button class="btn btn-sm btn-outline-danger ms-1" onclick="approveAssessment('reject')">差し戻し</button>
+                  {% endif %}
+                {% else %}
+                  <span class="text-warning"><i class="bi bi-clock"></i> 未申請</span>
+                {% endif %}
               {% else %}
-              <span class="text-warning"><i class="bi bi-clock"></i> 未承認</span>
-              {% if can_approve %}
-              <button class="btn btn-sm btn-success ms-2" onclick="approveAssessment('approve')">承認</button>
-              <button class="btn btn-sm btn-outline-danger ms-1" onclick="approveAssessment('reject')">差し戻し</button>
-              {% endif %}
+              <span class="text-muted small">-</span>
               {% endif %}
             </dd>
           </dl>
@@ -323,12 +336,18 @@
             <dd class="col-6">
               {% if contract.approved_by %}
               <span class="text-success"><i class="bi bi-check-circle-fill"></i> {{ contract.approved_by.get_full_name }}</span>
-              {% else %}
-              <span class="text-warning"><i class="bi bi-clock"></i> 未承認</span>
-              {% if can_approve %}
+              {% elif contract.approval_requested_to %}
+              <span class="text-warning"><i class="bi bi-send"></i> {{ contract.approval_requested_to.get_full_name }} に申請中</span>
+              {% if contract.approval_requested_to == request.user or request.user.is_superuser %}
               <button class="btn btn-sm btn-success ms-2" onclick="approveContract('approve')">承認</button>
               <button class="btn btn-sm btn-outline-danger ms-1" onclick="approveContract('reject')">差し戻し</button>
               {% endif %}
+              <button class="btn btn-sm btn-outline-secondary ms-1" data-bs-toggle="modal" data-bs-target="#contractApprovalRequestModal" title="承認者を変更">
+                <i class="bi bi-pencil-square"></i>
+              </button>
+              {% else %}
+              <span class="text-warning"><i class="bi bi-clock"></i> 未申請</span>
+              <button class="btn btn-sm btn-outline-primary ms-2" data-bs-toggle="modal" data-bs-target="#contractApprovalRequestModal">承認申請</button>
               {% endif %}
             </dd>
             <dt class="col-6 text-muted">責任者1</dt>
@@ -700,32 +719,24 @@
       </div>
       <div class="modal-body">
         <div class="mb-3">
-          <label class="form-label">ステータス</label>
-          <select id="editStatus" class="form-select">
-            {% for val, label in assessment_status_choices %}
-            <option value="{{ val }}" {% if val == assessment.status %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="mb-3">
           <label class="form-label">査定日時</label>
           <input type="datetime-local" id="editAssessmentDatetime" class="form-control"
             value="{{ assessment.assessment_datetime|date:'Y-m-d' }}{% if assessment.assessment_datetime %}T{{ assessment.assessment_datetime|date:'H:i' }}{% endif %}">
         </div>
         <div class="mb-3">
-          <label class="form-label">査定額（万円）</label>
+          <label class="form-label">査定額（円）</label>
           <div class="input-group">
-            <input type="number" id="editAssessmentPrice" class="form-control" min="0" step="0.1"
+            <input type="number" id="editAssessmentPrice" class="form-control" min="0" step="1"
               value="{{ assessment.assessment_price|default:'' }}">
-            <span class="input-group-text">万円</span>
+            <span class="input-group-text">円</span>
           </div>
         </div>
         <div class="mb-3">
-          <label class="form-label">市場相場価格（万円）</label>
+          <label class="form-label">市場相場価格（円）</label>
           <div class="input-group">
-            <input type="number" id="editMarketPrice" class="form-control" min="0" step="0.1"
+            <input type="number" id="editMarketPrice" class="form-control" min="0" step="1"
               value="{{ assessment.market_price|default:'' }}">
-            <span class="input-group-text">万円</span>
+            <span class="input-group-text">円</span>
           </div>
         </div>
         <div class="mb-3">
@@ -1654,6 +1665,73 @@
 </div>
 {% endif %}
 
+{# ステータス変更・承認申請モーダル #}
+{% if not assessment.approved_by %}
+<div class="modal fade" id="statusChangeModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">ステータスを変更</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">新しいステータス</label>
+          <select id="newStatusSelect" class="form-select" onchange="handleStatusSelectChange(this.value)">
+            {% for val, label in assessment_status_choices %}
+            <option value="{{ val }}"{% if val == assessment.status %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="approverSection" class="mb-3" style="display:none">
+          <label class="form-label fw-semibold">承認申請先 <span class="text-danger">*</span></label>
+          <select id="approverSelect" class="form-select">
+            <option value="">-- 承認者を選択してください --</option>
+            {% for u in all_users %}
+            <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text text-muted">成約の場合、承認者に承認申請が送られます。</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" id="statusChangeSubmitBtn" onclick="submitStatusChange()">変更する</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# 契約承認申請モーダル #}
+{% if contract and not contract.approved_by %}
+<div class="modal fade" id="contractApprovalRequestModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">契約の承認を申請</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label fw-semibold">承認申請先 <span class="text-danger">*</span></label>
+        <select id="contractApproverSelect" class="form-select">
+          <option value="">-- 承認者を選択してください --</option>
+          {% for u in all_users %}
+          <option value="{{ u.pk }}"{% if contract.approval_requested_to and contract.approval_requested_to.pk == u.pk %} selected{% endif %}>
+            {{ u.get_full_name|default:u.username }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="requestContractApproval()">承認申請</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {# 担当者変更モーダル #}
 {% if can_approve %}
 <div class="modal fade" id="changeAssigneeModal" tabindex="-1">
@@ -1689,6 +1767,9 @@
 const ASSESSMENT_ID = {{ assessment.pk }};
 const REQUEST_ID    = {{ assessment.assessment_request.pk }};
 {% if contract %}const CONTRACT_ID = {{ contract.pk }};{% endif %}
+const ASSESSMENT_STATUS = '{{ assessment.status }}';
+const ASSESSMENT_APPROVAL_REQUESTED_TO_ID = {{ assessment.approval_requested_to_id|default:0 }};
+{% if contract %}const CONTRACT_APPROVAL_REQUESTED_TO_ID = {{ contract.approval_requested_to_id|default:0 }};{% endif %}
 // 査定システム取込データ（いずれも円単位）
 const SATEI_PRICE_YEN   = {{ assessment.assessment_price|default:0 }};
 const SATEI_RECYCLE_YEN = {{ assessment.assessment_system_recycle_amount|default:0 }};

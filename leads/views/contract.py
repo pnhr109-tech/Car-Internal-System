@@ -77,27 +77,31 @@ def contract_list(request):
 
 @login_required
 def approval_list(request):
-    """承認待ち一覧（S07）"""
+    """承認待ち一覧（S07）— 自分宛の承認申請のみ表示"""
     profile = getattr(request.user, 'profile', None)
-    if not (profile and profile.can_approve) and not request.user.is_superuser:
-        messages.error(request, '承認権限がありません')
-        return redirect('leads:assessment_list')
+    is_superuser_role = (profile and profile.role == 'superuser') or request.user.is_superuser
 
-    pending_appointments = CarAssessmentRequest.objects.filter(
-        follow_status=CarAssessmentRequest.STATUS_APPOINTMENT,
-    ).select_related('customer', 'vehicle').order_by('-status_updated_at')
-
-    pending_assessments = Assessment.objects.filter(
+    # 査定：自分が承認申請先になっているもの（superuserは全件）
+    assessment_qs = Assessment.objects.filter(
         approved_by__isnull=True,
         status=Assessment.STATUS_CONTRACTED,
-    ).select_related('customer', 'vehicle', 'assigned_to').order_by('-created_at')
+        approval_requested_to__isnull=False,
+    ).select_related('customer', 'vehicle', 'assigned_to', 'approval_requested_to')
+    if not is_superuser_role:
+        assessment_qs = assessment_qs.filter(approval_requested_to=request.user)
+    pending_assessments = assessment_qs.order_by('-approval_requested_at')
 
-    pending_contracts = PurchaseContract.objects.filter(
+    # 契約：自分が承認申請先になっているもの（superuserは全件）
+    contract_qs = PurchaseContract.objects.filter(
         approved_by__isnull=True,
         status=PurchaseContract.STATUS_PENDING,
-    ).select_related('customer', 'vehicle', 'assigned_to').order_by('-contract_date')
+        approval_requested_to__isnull=False,
+    ).select_related('customer', 'vehicle', 'assigned_to', 'approval_requested_to')
+    if not is_superuser_role:
+        contract_qs = contract_qs.filter(approval_requested_to=request.user)
+    pending_contracts = contract_qs.order_by('-approval_requested_at')
 
-    is_superuser_role = (profile and profile.role == 'superuser') or request.user.is_superuser
+    # 金額訂正：superuserのみ
     pending_corrections = (
         PurchaseContract.objects.filter(
             amount_correction_flag=True,
@@ -107,7 +111,6 @@ def approval_list(request):
     )
 
     return render(request, 'leads/approval_list.html', {
-        'pending_appointments': pending_appointments,
         'pending_assessments':  pending_assessments,
         'pending_contracts':    pending_contracts,
         'pending_corrections':  pending_corrections,
@@ -440,13 +443,51 @@ def update_contract(request, contract_id):
 
 @login_required
 @require_POST
+def request_contract_approval(request, contract_id):
+    """契約承認申請 API（営業担当者が実行）"""
+    contract = get_object_or_404(PurchaseContract, pk=contract_id)
+
+    if contract.status != PurchaseContract.STATUS_PENDING:
+        return JsonResponse({'success': False, 'message': '未契約の契約のみ承認申請できます'}, status=400)
+
+    try:
+        payload     = json.loads(request.body)
+        approver_id = payload.get('approver_id')
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    if not approver_id:
+        return JsonResponse({'success': False, 'message': '承認者を選択してください'}, status=400)
+
+    User     = get_user_model()
+    approver = get_object_or_404(User, pk=approver_id, is_active=True)
+
+    contract.approval_requested_to = approver
+    contract.approval_requested_at = timezone.now()
+    contract.save(update_fields=['approval_requested_to', 'approval_requested_at', 'updated_at'])
+
+    return JsonResponse({
+        'success': True,
+        'message': f'{approver.get_full_name() or approver.username} に承認申請しました',
+        'approver_name': approver.get_full_name() or approver.username,
+    })
+
+
+@login_required
+@require_POST
 def approve_contract(request, contract_id):
-    """契約承認 API"""
-    profile = getattr(request.user, 'profile', None)
-    if not (profile and profile.can_approve) and not request.user.is_superuser:
+    """契約承認 API（承認申請先ユーザーのみ実行可）"""
+    contract = get_object_or_404(PurchaseContract, pk=contract_id)
+
+    is_designated = (
+        contract.approval_requested_to_id is not None
+        and contract.approval_requested_to_id == request.user.pk
+    )
+    profile     = getattr(request.user, 'profile', None)
+    can_approve = (profile and profile.can_approve) or request.user.is_superuser
+    if not (is_designated or (can_approve and contract.approval_requested_to_id is None)):
         return JsonResponse({'success': False, 'message': '承認権限がありません'}, status=403)
 
-    contract = get_object_or_404(PurchaseContract, pk=contract_id)
     try:
         payload = json.loads(request.body)
         action  = payload.get('action')
@@ -461,8 +502,10 @@ def approve_contract(request, contract_id):
         contract.save(update_fields=['approved_by', 'approved_at', 'status', 'updated_at'])
         return JsonResponse({'success': True, 'message': '契約を承認しました'})
     elif action == 'reject':
-        contract.cancel_reason = reason
-        contract.save(update_fields=['cancel_reason', 'updated_at'])
+        contract.cancel_reason             = reason
+        contract.approval_requested_to     = None
+        contract.approval_requested_at     = None
+        contract.save(update_fields=['cancel_reason', 'approval_requested_to', 'approval_requested_at', 'updated_at'])
         return JsonResponse({'success': True, 'message': '差し戻しました'})
 
     return JsonResponse({'success': False, 'message': 'action が不正です'}, status=400)

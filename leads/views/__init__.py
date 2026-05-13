@@ -38,6 +38,7 @@ from .case import (
     update_customer_info,
     save_bank_account,
     delete_bank_account,
+    request_assessment_approval,
     approve_assessment,
     add_contact_history,
     add_check_item,
@@ -56,6 +57,7 @@ from .contract import (
     contract_print,
     create_contract,
     update_contract,
+    request_contract_approval,
     approve_contract,
     approve_correction,
 )
@@ -89,13 +91,15 @@ __all__ = [
     # case
     'case_list', 'case_detail',
     'update_assessment_info', 'update_vehicle_info', 'update_customer_info',
-    'save_bank_account', 'delete_bank_account', 'approve_assessment',
+    'save_bank_account', 'delete_bank_account',
+    'request_assessment_approval', 'approve_assessment',
     'add_contact_history', 'add_check_item', 'delete_check_item',
     'update_ownership_release', 'add_advance_payment', 'delete_advance_payment',
     'approve_advance_payment', 'update_required_docs',
     # contract
     'contract_list', 'approval_list', 'contract_print',
-    'create_contract', 'update_contract', 'approve_contract', 'approve_correction',
+    'create_contract', 'update_contract',
+    'request_contract_approval', 'approve_contract', 'approve_correction',
     # customer
     'customer_list', 'customer_detail',
     'update_customer_direct', 'save_bank_account_direct', 'delete_bank_account_direct',

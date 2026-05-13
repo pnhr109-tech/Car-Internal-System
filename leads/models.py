@@ -357,6 +357,14 @@ class Assessment(models.Model):
         verbose_name='承認者',
     )
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name='承認日時')
+    approval_requested_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='assessment_approval_requests',
+        verbose_name='承認申請先',
+    )
+    approval_requested_at = models.DateTimeField(null=True, blank=True, verbose_name='承認申請日時')
     remarks     = models.TextField(blank=True, verbose_name='備考')
 
     # 査定システム連携
@@ -531,6 +539,14 @@ class PurchaseContract(models.Model):
         verbose_name='承認者',
     )
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name='承認日時')
+    approval_requested_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='contract_approval_requests',
+        verbose_name='承認申請先',
+    )
+    approval_requested_at = models.DateTimeField(null=True, blank=True, verbose_name='承認申請日時')
     remarks     = models.TextField(blank=True, verbose_name='備考')
     created_at  = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
     updated_at  = models.DateTimeField(auto_now=True, verbose_name='更新日時')

@@ -460,13 +460,51 @@ def delete_bank_account(request, account_id):
 
 @login_required
 @require_POST
+def request_assessment_approval(request, assessment_id):
+    """成約ステータス変更 + 承認申請 API（営業担当者が実行）"""
+    assessment = get_object_or_404(Assessment, pk=assessment_id)
+    try:
+        payload     = json.loads(request.body)
+        approver_id = payload.get('approver_id')
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    if not approver_id:
+        return JsonResponse({'success': False, 'message': '承認者を選択してください'}, status=400)
+
+    User     = get_user_model()
+    approver = get_object_or_404(User, pk=approver_id, is_active=True)
+
+    assessment.status                = Assessment.STATUS_CONTRACTED
+    assessment.approval_requested_to = approver
+    assessment.approval_requested_at = timezone.now()
+    assessment.save(update_fields=['status', 'approval_requested_to', 'approval_requested_at', 'updated_at'])
+
+    return JsonResponse({
+        'success': True,
+        'message': f'{approver.get_full_name() or approver.username} に承認申請しました',
+        'approver_name': approver.get_full_name() or approver.username,
+    })
+
+
+@login_required
+@require_POST
 def approve_assessment(request, assessment_id):
-    """査定承認 API"""
-    profile = getattr(request.user, 'profile', None)
-    if not (profile and profile.can_approve) and not request.user.is_superuser:
+    """査定承認 API（承認申請先ユーザーのみ実行可）"""
+    assessment = get_object_or_404(Assessment, pk=assessment_id)
+
+    if assessment.status != Assessment.STATUS_CONTRACTED:
+        return JsonResponse({'success': False, 'message': '成約ステータスの案件のみ承認できます'}, status=400)
+
+    is_designated = (
+        assessment.approval_requested_to_id is not None
+        and assessment.approval_requested_to_id == request.user.pk
+    )
+    profile     = getattr(request.user, 'profile', None)
+    can_approve = (profile and profile.can_approve) or request.user.is_superuser
+    if not (is_designated or (can_approve and assessment.approval_requested_to_id is None)):
         return JsonResponse({'success': False, 'message': '承認権限がありません'}, status=403)
 
-    assessment = get_object_or_404(Assessment, pk=assessment_id)
     try:
         payload = json.loads(request.body)
         action  = payload.get('action')
@@ -480,8 +518,10 @@ def approve_assessment(request, assessment_id):
         assessment.save(update_fields=['approved_by', 'approved_at', 'updated_at'])
         return JsonResponse({'success': True, 'message': '承認しました'})
     elif action == 'reject':
-        assessment.cancel_reason = reason
-        assessment.save(update_fields=['cancel_reason', 'updated_at'])
+        assessment.cancel_reason             = reason
+        assessment.approval_requested_to     = None
+        assessment.approval_requested_at     = None
+        assessment.save(update_fields=['cancel_reason', 'approval_requested_to', 'approval_requested_at', 'updated_at'])
         return JsonResponse({'success': True, 'message': '差し戻しました'})
 
     return JsonResponse({'success': False, 'message': 'action が不正です'}, status=400)
