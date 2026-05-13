@@ -56,8 +56,9 @@ urlpatterns = [
     path('api/contracts/<int:contract_id>/required-docs/',      views.update_required_docs,             name='update_required_docs'),
 
     # ── 車両一覧 ─────────────────────────────────────────────
-    path('vehicles/',         views.vehicle_list,     name='vehicle_list'),
-    path('vehicles/export/',  views.vehicle_list_csv, name='vehicle_list_csv'),
+    path('vehicles/',                views.vehicle_list,     name='vehicle_list'),
+    path('vehicles/export/',         views.vehicle_list_csv, name='vehicle_list_csv'),
+    path('api/vehicles/create/',     views.vehicle_create,   name='vehicle_create'),
 
     # ── 顧客一覧 ─────────────────────────────────────────────
     path('customers/',                                          views.customer_list,              name='customer_list'),

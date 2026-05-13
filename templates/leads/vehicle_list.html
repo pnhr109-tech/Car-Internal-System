@@ -1,14 +1,20 @@
 {% extends 'base/internal_base.html' %}
+{% load static humanize %}
 {% block title %}車両一覧{% endblock %}
 
 {% block content %}
 <div class="container-xxl py-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0"><i class="bi bi-car-front text-primary"></i> 車両一覧</h4>
-    <a href="{% url 'leads:vehicle_list_csv' %}?{{ search_qs }}"
-       class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-download"></i> CSV出力
-    </a>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#vehicleCreateModal">
+        <i class="bi bi-plus-lg"></i> 新規追加
+      </button>
+      <a href="{% url 'leads:vehicle_list_csv' %}?{{ search_qs }}"
+         class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-download"></i> CSV出力
+      </a>
+    </div>
   </div>
 
   <div class="card search-card mb-3">
@@ -31,11 +37,11 @@
           <input type="text" name="customer_name" class="form-control" value="{{ customer_name }}">
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label">成約日（から）</label>
+          <label class="form-label">成約日 / 登録日（から）</label>
           <input type="date" name="date_from" class="form-control" value="{{ date_from }}">
         </div>
         <div class="col-6 col-md-3">
-          <label class="form-label">成約日（まで）</label>
+          <label class="form-label">成約日 / 登録日（まで）</label>
           <input type="date" name="date_to" class="form-control" value="{{ date_to }}">
         </div>
         <div class="col-12 col-md-auto">
@@ -53,47 +59,60 @@
       <table class="table table-hover table-striped mb-0 mobile-card-table">
         <thead class="table-dark sticky-top">
           <tr>
+            <th>区分</th>
             <th>メーカー / 車種</th>
             <th>年式</th>
-            <th>走行距離</th>
-            <th>カラー</th>
-            <th>車体番号</th>
+            <th class="d-mobile-none">走行距離</th>
+            <th class="d-mobile-none">カラー</th>
+            <th class="d-mobile-none">車体番号</th>
             <th>顧客名</th>
-            <th>担当者</th>
+            <th class="d-mobile-none">担当者</th>
             <th>成約日</th>
-            <th>買取金額（税込）</th>
+            <th class="d-mobile-none">買取金額（税込）</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {% for a in page_obj %}
-          <tr style="cursor:pointer" onclick="location.href='{% url 'leads:case_detail' a.pk %}'">
-            <td class="card-title">{{ a.vehicle.maker }} {{ a.vehicle.car_model }}</td>
-            <td data-label="年式">{{ a.vehicle.year }}</td>
-            <td data-label="走行距離">{{ a.vehicle.mileage }}</td>
-            <td data-label="カラー">{{ a.vehicle.color|default:"-" }}</td>
-            <td data-label="車体番号">{{ a.vehicle.chassis_number|default:"-" }}</td>
-            <td data-label="顧客名">{{ a.customer.name }}</td>
-            <td class="d-mobile-none" data-label="担当者">{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}</td>
-            <td data-label="成約日">{{ a.contract.contract_date|default:"-" }}</td>
-            <td class="d-mobile-none" data-label="買取金額（税込）">
-              {% if a.contract.purchase_price_incl_tax %}
-                ¥{{ a.contract.purchase_price_incl_tax|floatformat:0 }}
+          {% for v in page_obj %}
+          {% if v.assessment_pk %}
+          <tr style="cursor:pointer" onclick="location.href='{% url 'leads:case_detail' v.assessment_pk %}'">
+          {% else %}
+          <tr>
+          {% endif %}
+            <td data-label="区分">
+              {% if v.assessment_pk %}
+              <span class="badge bg-success">案件連携</span>
               {% else %}
-                -
+              <span class="badge bg-secondary">手動登録</span>
               {% endif %}
             </td>
-            <td class="d-mobile-none">
-              <a href="{% url 'leads:case_detail' a.pk %}"
-                 class="btn btn-sm btn-outline-primary"
-                 onclick="event.stopPropagation()">
+            <td class="card-title">{{ v.maker }} {{ v.car_model }}</td>
+            <td data-label="年式">{{ v.year|default:"-" }}</td>
+            <td class="d-mobile-none" data-label="走行距離">{{ v.mileage|default:"-" }}</td>
+            <td class="d-mobile-none" data-label="カラー">{{ v.color|default:"-" }}</td>
+            <td class="d-mobile-none" data-label="車体番号">{{ v.chassis_number|default:"-" }}</td>
+            <td data-label="顧客名">{{ v.ann_customer_name|default:"-" }}</td>
+            <td class="d-mobile-none" data-label="担当者">
+              {% if v.ann_assigned_last or v.ann_assigned_first %}
+                {{ v.ann_assigned_last }}{{ v.ann_assigned_first }}
+              {% else %}-{% endif %}
+            </td>
+            <td data-label="成約日">{{ v.ann_contract_date|default:"-" }}</td>
+            <td class="d-mobile-none" data-label="買取金額（税込）">
+              {% if v.ann_purchase_price %}¥{{ v.ann_purchase_price|floatformat:0|intcomma }}{% else %}-{% endif %}
+            </td>
+            <td class="d-mobile-none" onclick="event.stopPropagation()">
+              {% if v.assessment_pk %}
+              <a href="{% url 'leads:case_detail' v.assessment_pk %}"
+                 class="btn btn-sm btn-outline-primary">
                 <i class="bi bi-eye"></i> 詳細
               </a>
+              {% endif %}
             </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="10" class="text-center text-muted py-4">成約済みの車両が見つかりません</td>
+            <td colspan="11" class="text-center text-muted py-4">車両が見つかりません</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -127,4 +146,94 @@
   </nav>
   {% endif %}
 </div>
+
+{# ── 車両新規追加モーダル ────────────────────────────────── #}
+<div class="modal fade" id="vehicleCreateModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-car-front"></i> 車両を新規登録</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label fw-semibold">メーカー <span class="text-danger">*</span></label>
+            <input type="text" id="vcMaker" class="form-control" placeholder="例：トヨタ">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-semibold">車種 <span class="text-danger">*</span></label>
+            <input type="text" id="vcCarModel" class="form-control" placeholder="例：プリウス">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">年式</label>
+            <select id="vcYear" class="form-select">
+              <option value="">-</option>
+              {% for y in year_choices %}
+              <option value="{{ y }}">{{ y }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">走行距離</label>
+            <div class="input-group">
+              <input type="number" id="vcMileageNum" class="form-control" min="0" step="0.1" placeholder="例：5.2">
+              <span class="input-group-text">万km</span>
+            </div>
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">グレード</label>
+            <input type="text" id="vcGrade" class="form-control" placeholder="例：S">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">カラー</label>
+            <input type="text" id="vcColor" class="form-control" placeholder="例：パールホワイト">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">排気量</label>
+            <input type="text" id="vcDisplacement" class="form-control" placeholder="例：1800cc">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">駆動方式</label>
+            <input type="text" id="vcDriveType" class="form-control" placeholder="例：FF">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">ボディタイプ</label>
+            <input type="text" id="vcBodyType" class="form-control" placeholder="例：セダン">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">乗車定員</label>
+            <input type="text" id="vcPassengerCount" class="form-control" placeholder="例：5">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">車台番号</label>
+            <input type="text" id="vcChassisNumber" class="form-control">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">登録番号（ナンバー）</label>
+            <input type="text" id="vcRegistrationNumber" class="form-control" placeholder="例：品川 300 あ 1234">
+          </div>
+          <div class="col-6 col-md-4">
+            <label class="form-label">車検有効期限</label>
+            <input type="date" id="vcInspectionExpiry" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">備考</label>
+            <textarea id="vcRemarks" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="submitVehicleCreate()">
+          <i class="bi bi-save"></i> 登録する
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/vehicle_list.js' %}?v={% now 'U' %}"></script>
 {% endblock %}
