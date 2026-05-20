@@ -1,7 +1,8 @@
 """
-views/vehicle.py — 車両一覧（案件連携 + 手動登録）・CSV出力
+views/vehicle.py — 車両一覧（案件連携 + 手動登録）・CSV/PDF出力
 """
 import csv
+import io
 import json
 import logging
 import urllib.parse
@@ -261,4 +262,104 @@ def vehicle_list_csv(request):
             purchase_price,
         ])
 
+    return response
+
+
+@login_required
+def vehicle_list_pdf(request):
+    """車両一覧 PDF ダウンロード"""
+    import unicodedata
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
+    FONT = 'HeiseiKakuGo-W5'
+
+    # NFD（分解済み）文字をNFC（合成済み）に正規化してからPDFへ渡す
+    def n(text):
+        return unicodedata.normalize('NFC', str(text)) if text else ''
+
+    maker, car_model, chassis_number, customer_name, date_from, date_to = _parse_search_params(request)
+    qs = _build_vehicle_qs(request, maker, car_model, chassis_number, customer_name, date_from, date_to)
+
+    buf = io.BytesIO()
+    # A4横: 印刷可能幅 = 297mm - 左右余白20mm = 277mm
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=landscape(A4),
+        rightMargin=10 * mm, leftMargin=10 * mm,
+        topMargin=14 * mm, bottomMargin=14 * mm,
+    )
+
+    title_style = ParagraphStyle('T', fontName=FONT, fontSize=13, spaceAfter=4)
+    sub_style   = ParagraphStyle('S', fontName=FONT, fontSize=8, spaceAfter=2,
+                                 textColor=colors.HexColor('#6c757d'))
+    # テーブルセル用スタイル（CJK折り返し対応）
+    cell_style  = ParagraphStyle('C', fontName=FONT, fontSize=7.5, leading=10,
+                                 wordWrap='CJK', spaceAfter=0, spaceBefore=0)
+    head_style  = ParagraphStyle('H', fontName=FONT, fontSize=8, leading=10,
+                                 wordWrap='CJK', textColor=colors.white,
+                                 spaceAfter=0, spaceBefore=0)
+
+    def cell(text, style=None):
+        return Paragraph(n(text), style or cell_style)
+
+    elements = []
+    elements.append(Paragraph(n('車両一覧'), title_style))
+
+    filter_parts = []
+    if date_from or date_to:
+        filter_parts.append(f'期間: {date_from} ～ {date_to}')
+    if maker:         filter_parts.append(f'メーカー: {n(maker)}')
+    if car_model:     filter_parts.append(f'車種: {n(car_model)}')
+    if customer_name: filter_parts.append(f'顧客名: {n(customer_name)}')
+    if filter_parts:
+        elements.append(Paragraph('  '.join(filter_parts), sub_style))
+    elements.append(Spacer(1, 4 * mm))
+
+    # 列幅: 合計 277mm に収まるよう設定
+    headers_text = ['区分', 'メーカー', '車種', '年式', '走行距離', 'カラー', '車体番号', '顧客名', '担当者', '成約日', '買取金額\n（税込）']
+    col_widths   = [16*mm,  26*mm,     30*mm,  14*mm,   20*mm,     24*mm,    32*mm,     28*mm,    16*mm,    20*mm,    28*mm]
+    # 合計: 254mm ≤ 277mm ✓
+
+    header_row = [Paragraph(n(h), head_style) for h in headers_text]
+    data = [header_row]
+
+    for v in qs:
+        category = n('案件連携' if v.assessment_pk else '手動登録')
+        customer = n(v.ann_customer_name or '')
+        assigned = n(f'{v.ann_assigned_last or ""}{v.ann_assigned_first or ""}'.strip())
+        contract_date  = n(str(v.ann_contract_date) if v.ann_contract_date else '')
+        purchase_price = n(f'¥{int(v.ann_purchase_price):,}' if v.ann_purchase_price else '')
+        data.append([
+            cell(category), cell(n(v.maker)), cell(n(v.car_model)), cell(n(v.year)),
+            cell(n(v.mileage)), cell(n(v.color)), cell(n(v.chassis_number)),
+            cell(customer), cell(assigned), cell(contract_date), cell(purchase_price),
+        ])
+
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND',    (0, 0), (-1,  0), colors.HexColor('#343a40')),
+        ('ROWBACKGROUNDS',(0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+        ('ALIGN',         (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('GRID',          (0, 0), (-1, -1), 0.4, colors.HexColor('#dee2e6')),
+        ('TOPPADDING',    (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(table)
+
+    doc.build(elements)
+    pdf_bytes = buf.getvalue()
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="vehicle_list.pdf"'
+    response.write(pdf_bytes)
     return response
