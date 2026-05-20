@@ -55,9 +55,14 @@ urlpatterns = [
     path('api/advance-payments/<int:ap_id>/approve/',           views.approve_advance_payment,          name='approve_advance_payment'),
     path('api/contracts/<int:contract_id>/required-docs/',      views.update_required_docs,             name='update_required_docs'),
 
+    # ── 売掛管理 ─────────────────────────────────────────────
+    path('sales-process/',                              views.sales_process_list,         name='sales_process_list'),
+    path('api/sales-process/<int:process_id>/toggle/', views.toggle_sales_process_step,   name='toggle_sales_process_step'),
+
     # ── 車両一覧 ─────────────────────────────────────────────
     path('vehicles/',                views.vehicle_list,     name='vehicle_list'),
-    path('vehicles/export/',         views.vehicle_list_csv, name='vehicle_list_csv'),
+    path('vehicles/export/csv/',     views.vehicle_list_csv, name='vehicle_list_csv'),
+    path('vehicles/export/pdf/',     views.vehicle_list_pdf, name='vehicle_list_pdf'),
     path('api/vehicles/create/',     views.vehicle_create,   name='vehicle_create'),
 
     # ── 顧客一覧 ─────────────────────────────────────────────

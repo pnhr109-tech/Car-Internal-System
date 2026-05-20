@@ -754,3 +754,47 @@ class ContactHistory(models.Model):
 
     def __str__(self):
         return f"{self.assessment_request} / {self.contacted_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+# ---------------------------------------------------------------------------
+# 売掛管理（成約後の処理ステータス）
+# ---------------------------------------------------------------------------
+
+class SalesProcess(models.Model):
+    """売掛管理 — 成約契約ごとに書類〜振込までの8ステップを追跡する。
+    振込完了時はレコードごと削除される。"""
+
+    contract = models.OneToOneField(
+        PurchaseContract,
+        on_delete=models.CASCADE,
+        related_name='sales_process',
+        verbose_name='買取契約',
+    )
+
+    document_done  = models.BooleanField(default=False, verbose_name='書類')
+    intake_done    = models.BooleanField(default=False, verbose_name='入庫')
+    repair_done    = models.BooleanField(default=False, verbose_name='加修')
+    transport_done = models.BooleanField(default=False, verbose_name='陸送')
+    listing_done   = models.BooleanField(default=False, verbose_name='出品')
+    sale_done      = models.BooleanField(default=False, verbose_name='売却')
+    payment_done   = models.BooleanField(default=False, verbose_name='入金')
+    transfer_done  = models.BooleanField(default=False, verbose_name='振込')
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
+    updated_at = models.DateTimeField(auto_now=True,     verbose_name='更新日時')
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='updated_sales_processes',
+        verbose_name='更新者',
+    )
+
+    class Meta:
+        db_table = 'sales_processes'
+        verbose_name = '売掛管理'
+        verbose_name_plural = '売掛管理'
+        ordering = ['contract__assigned_to__last_name', 'contract__contract_date']
+
+    def __str__(self):
+        return f"{self.contract.customer} / {self.contract.vehicle}"

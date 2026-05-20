@@ -31,6 +31,7 @@ from ..models import (
     Customer,
     CustomerBankAccount,
     PurchaseContract,
+    SalesProcess,
     Vehicle,
 )
 from .utils import _parse_tristate, _parse_date, _sync_customer_from_contract
@@ -500,6 +501,7 @@ def approve_contract(request, contract_id):
         contract.approved_at = timezone.now()
         contract.status      = PurchaseContract.STATUS_CONTRACTED
         contract.save(update_fields=['approved_by', 'approved_at', 'status', 'updated_at'])
+        SalesProcess.objects.get_or_create(contract=contract)
         return JsonResponse({'success': True, 'message': '契約を承認しました'})
     elif action == 'reject':
         contract.cancel_reason             = reason
@@ -546,3 +548,86 @@ def approve_correction(request, contract_id):
         return JsonResponse({'success': True, 'message': '金額訂正を差し戻しました'})
 
     return JsonResponse({'success': False, 'message': 'action が不正です'}, status=400)
+
+
+# ---------------------------------------------------------------------------
+# 売掛管理
+# ---------------------------------------------------------------------------
+
+SALES_PROCESS_STEPS = [
+    ('document',  '書類'),
+    ('intake',    '入庫'),
+    ('repair',    '加修'),
+    ('transport', '陸送'),
+    ('listing',   '出品'),
+    ('sale',      '売却'),
+    ('payment',   '入金'),
+    ('transfer',  '振込'),
+]
+
+
+@login_required
+def sales_process_list(request):
+    """売掛管理一覧（承認者以上向け）"""
+    profile = getattr(request.user, 'profile', None)
+    is_approver = (profile and profile.can_approve) or request.user.is_superuser
+    if not is_approver:
+        messages.error(request, 'この画面はマネージャー以上のみアクセスできます')
+        return redirect('leads:case_list')
+
+    qs = SalesProcess.objects.select_related(
+        'contract',
+        'contract__customer',
+        'contract__vehicle',
+        'contract__assigned_to',
+    ).order_by('contract__assigned_to__last_name', 'contract__assigned_to__first_name', 'contract__contract_date')
+
+    sales_user_id = request.GET.get('sales_user', '').strip()
+    if sales_user_id:
+        qs = qs.filter(contract__assigned_to_id=sales_user_id)
+
+    User = get_user_model()
+    sales_users = User.objects.filter(
+        contracts__sales_process__isnull=False,
+    ).distinct().order_by('last_name', 'first_name')
+
+    return render(request, 'leads/sales_process_list.html', {
+        'processes':     qs,
+        'sales_users':   sales_users,
+        'sales_user_id': sales_user_id,
+        'steps':         SALES_PROCESS_STEPS,
+    })
+
+
+@login_required
+@require_POST
+def toggle_sales_process_step(request, process_id):
+    """売掛管理ステップ切り替え API（承認者以上のみ）"""
+    profile = getattr(request.user, 'profile', None)
+    is_approver = (profile and profile.can_approve) or request.user.is_superuser
+    if not is_approver:
+        return JsonResponse({'success': False, 'message': '権限がありません'}, status=403)
+
+    process = get_object_or_404(SalesProcess, pk=process_id)
+
+    try:
+        payload = json.loads(request.body)
+        step    = payload.get('step', '')
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    valid_steps = [s for s, _ in SALES_PROCESS_STEPS]
+    if step not in valid_steps:
+        return JsonResponse({'success': False, 'message': 'ステップが不正です'}, status=400)
+
+    field     = f'{step}_done'
+    new_value = not getattr(process, field)
+    setattr(process, field, new_value)
+    process.updated_by = request.user
+    process.save(update_fields=[field, 'updated_by', 'updated_at'])
+
+    if step == 'transfer' and new_value:
+        process.delete()
+        return JsonResponse({'success': True, 'deleted': True, 'message': '振込完了 — レコードを削除しました'})
+
+    return JsonResponse({'success': True, 'deleted': False, 'new_value': new_value})

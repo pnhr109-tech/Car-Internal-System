@@ -1,0 +1,168 @@
+{% extends 'base/internal_base.html' %}
+{% load static humanize %}
+{% block title %}売掛管理{% endblock %}
+
+{% comment %}
+  ステップバッジ用マクロ的ブロック。
+  各ボタンは data-process-id / data-step / data-label を持つ。
+  sales_process.js がクリックで AJAX トグルし、クラス・アイコンを書き換える。
+{% endcomment %}
+
+{% block content %}
+<div class="container-xxl py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-arrow-left-right text-primary"></i> 売掛管理</h4>
+  </div>
+
+  <div class="card search-card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-4">
+          <label class="form-label">担当営業</label>
+          <select name="sales_user" class="form-select">
+            <option value="">すべて</option>
+            {% for u in sales_users %}
+            <option value="{{ u.pk }}" {% if sales_user_id == u.pk|stringformat:"s" %}selected{% endif %}>
+              {{ u.get_full_name|default:u.username }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> 絞り込み</button>
+          <a href="{% url 'leads:sales_process_list' %}" class="btn btn-secondary ms-1">クリア</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <p class="text-muted small mb-2">{{ processes|length }}件</p>
+
+  <div class="mb-3 d-flex align-items-center gap-2 small text-muted flex-wrap">
+    <span class="step-badge step-badge--pending" style="cursor:default; pointer-events:none">
+      <i class="bi bi-circle"></i> 未済
+    </span>
+    <i class="bi bi-arrow-right"></i>
+    <span class="step-badge step-badge--done" style="cursor:default; pointer-events:none">
+      <i class="bi bi-check-circle-fill"></i> 済
+    </span>
+    <span class="text-muted">クリックで切り替え。振込完了でレコード削除。</span>
+  </div>
+
+  {% regroup processes by contract.assigned_to as sales_groups %}
+
+  {% for group in sales_groups %}
+  {% with sales_name=group.grouper.get_full_name|default:group.grouper.username %}
+  <div class="mb-4 sales-group-block">
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <i class="bi bi-person-fill text-primary"></i>
+      <span class="fw-bold">{{ sales_name }}</span>
+      <span class="badge bg-secondary sales-group-count">{{ group.list|length }}件</span>
+    </div>
+
+    <div class="card">
+      <div class="card-body p-0">
+
+        <!-- PC テーブル -->
+        <div class="d-none d-md-block">
+          <table class="table table-hover mb-0">
+            <thead class="table-dark">
+              <tr>
+                <th style="min-width:100px">顧客名</th>
+                <th style="min-width:120px">車両</th>
+                <th style="min-width:90px">成約日</th>
+                <th class="text-end" style="min-width:90px">買取価格</th>
+                <th>処理ステータス</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in group.list %}
+              <tr id="sp-row-{{ p.pk }}">
+                <td class="fw-semibold align-middle">{{ p.contract.customer.name }}</td>
+                <td class="align-middle text-muted small">
+                  {{ p.contract.vehicle.maker }} {{ p.contract.vehicle.car_model }}
+                  {% if p.contract.vehicle.year %}<br>{{ p.contract.vehicle.year }}{% endif %}
+                </td>
+                <td class="align-middle small">{{ p.contract.contract_date|date:"Y-m-d" }}</td>
+                <td class="align-middle text-end small">
+                  ¥{{ p.contract.purchase_price_incl_tax|floatformat:0|intcomma }}
+                </td>
+                <td class="align-middle py-2">
+                  <div class="step-badge-row">
+                    <button type="button" class="step-badge {% if p.document_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="document" data-label="書類"><i class="bi {% if p.document_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>書類</button>
+                    <button type="button" class="step-badge {% if p.intake_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="intake" data-label="入庫"><i class="bi {% if p.intake_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>入庫</button>
+                    <button type="button" class="step-badge {% if p.repair_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="repair" data-label="加修"><i class="bi {% if p.repair_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>加修</button>
+                    <button type="button" class="step-badge {% if p.transport_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="transport" data-label="陸送"><i class="bi {% if p.transport_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>陸送</button>
+                    <button type="button" class="step-badge {% if p.listing_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="listing" data-label="出品"><i class="bi {% if p.listing_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>出品</button>
+                    <button type="button" class="step-badge {% if p.sale_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="sale" data-label="売却"><i class="bi {% if p.sale_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>売却</button>
+                    <button type="button" class="step-badge {% if p.payment_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="payment" data-label="入金"><i class="bi {% if p.payment_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>入金</button>
+                    <button type="button" class="step-badge {% if p.transfer_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="transfer" data-label="振込"><i class="bi {% if p.transfer_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>振込</button>
+                  </div>
+                </td>
+                <td class="align-middle">
+                  <a href="{% url 'leads:case_detail' p.contract.assessment.pk %}?tab=contract"
+                     class="btn btn-sm btn-outline-secondary" target="_blank">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- スマホ カード -->
+        <div class="d-md-none">
+          {% for p in group.list %}
+          <div class="dash-feed-item" id="sp-card-{{ p.pk }}">
+            <div class="dash-feed-main">
+              <span class="dash-feed-name">{{ p.contract.customer.name }}</span>
+              <a href="{% url 'leads:case_detail' p.contract.assessment.pk %}?tab=contract"
+                 class="btn btn-sm btn-outline-secondary py-0 px-1 flex-shrink-0" target="_blank">
+                <i class="bi bi-box-arrow-up-right"></i>
+              </a>
+            </div>
+            <div class="dash-feed-vehicle">
+              <i class="bi bi-car-front"></i>
+              {{ p.contract.vehicle.maker }} {{ p.contract.vehicle.car_model }}
+              {% if p.contract.vehicle.year %}
+              <span class="dash-feed-chip">{{ p.contract.vehicle.year }}</span>
+              {% endif %}
+            </div>
+            <div class="dash-feed-meta">
+              <i class="bi bi-calendar3"></i> {{ p.contract.contract_date|date:"Y-m-d" }}
+              &nbsp;·&nbsp; ¥{{ p.contract.purchase_price_incl_tax|floatformat:0|intcomma }}
+            </div>
+            <div class="step-badge-row mt-1" style="overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px;">
+              <button type="button" class="step-badge {% if p.document_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="document" data-label="書類" style="flex-shrink:0"><i class="bi {% if p.document_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>書類</button>
+              <button type="button" class="step-badge {% if p.intake_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="intake" data-label="入庫" style="flex-shrink:0"><i class="bi {% if p.intake_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>入庫</button>
+              <button type="button" class="step-badge {% if p.repair_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="repair" data-label="加修" style="flex-shrink:0"><i class="bi {% if p.repair_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>加修</button>
+              <button type="button" class="step-badge {% if p.transport_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="transport" data-label="陸送" style="flex-shrink:0"><i class="bi {% if p.transport_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>陸送</button>
+              <button type="button" class="step-badge {% if p.listing_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="listing" data-label="出品" style="flex-shrink:0"><i class="bi {% if p.listing_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>出品</button>
+              <button type="button" class="step-badge {% if p.sale_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="sale" data-label="売却" style="flex-shrink:0"><i class="bi {% if p.sale_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>売却</button>
+              <button type="button" class="step-badge {% if p.payment_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="payment" data-label="入金" style="flex-shrink:0"><i class="bi {% if p.payment_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>入金</button>
+              <button type="button" class="step-badge {% if p.transfer_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="transfer" data-label="振込" style="flex-shrink:0"><i class="bi {% if p.transfer_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>振込</button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+      </div>
+    </div>
+  </div>
+  {% endwith %}
+  {% empty %}
+  <div class="card">
+    <div class="card-body text-center text-muted py-5">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+      売掛管理中の案件はありません
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/sales_process.js' %}"></script>
+{% endblock %}

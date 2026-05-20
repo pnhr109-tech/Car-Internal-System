@@ -892,3 +892,37 @@ h6, .h6 { font-size: var(--font-base); font-weight: 700; }
   color: var(--c-primary);
   font-weight: 700;
 }
+/* ── 売掛管理ステップバッジ ──────────────────────────── */
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: var(--radius);
+  font-size: var(--font-xs);
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #fff;
+  transition: filter 0.15s, transform 0.12s, box-shadow 0.12s;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+  letter-spacing: 0.02em;
+}
+
+.step-badge:hover        { filter: brightness(0.88); box-shadow: 0 2px 6px rgba(0,0,0,0.22); }
+.step-badge:active       { transform: scale(0.94); box-shadow: none; filter: brightness(0.82); }
+.step-badge:focus-visible { outline: 2px solid var(--c-focus); outline-offset: 2px; }
+
+.step-badge--pending { background: var(--c-danger); }
+.step-badge--done    { background: var(--c-success); }
+.step-badge--loading { opacity: 0.45; pointer-events: none; }
+
+.step-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
