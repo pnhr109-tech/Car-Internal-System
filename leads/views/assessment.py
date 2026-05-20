@@ -29,6 +29,7 @@ from ..models import (
     CarAssessmentRequest,
     ContactHistory,
     Customer,
+    PurchaseContract,
     Vehicle,
 )
 from .utils import (
@@ -37,6 +38,50 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# 内部ヘルパー
+# ---------------------------------------------------------------------------
+
+def _auto_create_assessment_for_request(req, user):
+    """商談予定ステータス遷移時に Assessment を自動生成する（既存の場合はスキップ）。"""
+    try:
+        _ = req.assessment
+        return
+    except Assessment.DoesNotExist:
+        pass
+
+    if not req.customer:
+        customer = Customer.objects.create(
+            name=req.customer_name,
+            phone_number=req.phone_number,
+            email=req.email or '',
+            postal_code=req.postal_code or '',
+            address=req.address or '',
+            updated_by=user,
+        )
+        req.customer = customer
+        req.save(update_fields=['customer', 'updated_at'])
+
+    if not req.vehicle:
+        vehicle = Vehicle.objects.create(
+            maker=req.maker or '',
+            car_model=req.car_model or '',
+            year=req.year or '',
+            mileage=req.mileage or '',
+            updated_by=user,
+        )
+        req.vehicle = vehicle
+        req.save(update_fields=['vehicle', 'updated_at'])
+
+    Assessment.objects.create(
+        assessment_request=req,
+        customer=req.customer,
+        vehicle=req.vehicle,
+        assigned_to=req.assigned_to or user,
+        assessment_datetime=req.reservation_datetime,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -66,17 +111,16 @@ def assessment_detail(request, pk):
     """査定申込詳細・変更（S02）"""
     req = get_object_or_404(CarAssessmentRequest, pk=pk)
     histories = req.contact_histories.select_related('recorded_by').order_by('-contacted_at')
-    profile = getattr(request.user, 'profile', None)
-    can_approve = (profile and profile.can_approve) or request.user.is_superuser
-    can_promote = (
-        req.follow_status == CarAssessmentRequest.STATUS_APPOINTMENT
-        and not hasattr(req, 'assessment')
-        and can_approve
-    )
     try:
         linked_assessment = req.assessment
+        has_assessment = True
     except Assessment.DoesNotExist:
         linked_assessment = None
+        has_assessment = False
+    can_promote = (
+        req.follow_status == CarAssessmentRequest.STATUS_APPOINTMENT
+        and not has_assessment
+    )
 
     return render(request, 'leads/assessment_detail.html', {
         'req': req,
@@ -531,6 +575,25 @@ def update_assessment_follow_status(request, request_id):
             if not target:
                 return JsonResponse({'success': False, 'message': '対象データが存在しません'}, status=404)
 
+            old_follow_status = target.follow_status
+
+            # 商談予定 → 他ステータスへの変更: 自動生成した Assessment を削除
+            if (old_follow_status == CarAssessmentRequest.STATUS_APPOINTMENT
+                    and follow_status != CarAssessmentRequest.STATUS_APPOINTMENT):
+                try:
+                    existing_assessment = target.assessment
+                    has_contract = PurchaseContract.objects.filter(
+                        assessment=existing_assessment,
+                    ).exclude(status=PurchaseContract.STATUS_CANCELLED).exists()
+                    if existing_assessment.status == Assessment.STATUS_CONTRACTED or has_contract:
+                        return JsonResponse(
+                            {'success': False, 'message': '成約済みまたは契約書が作成されているため、商談予定から戻せません'},
+                            status=400,
+                        )
+                    existing_assessment.delete()
+                except Assessment.DoesNotExist:
+                    pass
+
             update_fields = ['follow_status', 'sales_note', 'status_updated_by', 'status_updated_at', 'updated_at']
 
             if reservation_dt is not None:
@@ -571,6 +634,11 @@ def update_assessment_follow_status(request, request_id):
             target.status_updated_by = sales_name
             target.status_updated_at = now
             target.save(update_fields=update_fields)
+
+            # 商談予定へ遷移したら Assessment を自動生成
+            if follow_status == CarAssessmentRequest.STATUS_APPOINTMENT:
+                _auto_create_assessment_for_request(target, request.user)
+
     except Exception as exc:
         logger.error(f'update_assessment_follow_status failed: request_id={request_id}, error={exc}')
         return JsonResponse({'success': False, 'message': 'ステータス更新に失敗しました'}, status=500)
@@ -581,11 +649,7 @@ def update_assessment_follow_status(request, request_id):
 @login_required
 @require_POST
 def promote_to_case(request, request_id):
-    """査定申込 → 案件 昇格 API（承認権限者のみ）"""
-    profile = getattr(request.user, 'profile', None)
-    if not ((profile and profile.can_approve) or request.user.is_superuser):
-        return JsonResponse({'success': False, 'message': '商談昇格には承認権限が必要です'}, status=403)
-
+    """査定申込 → 案件 昇格 API（手動フォールバック）"""
     req = get_object_or_404(CarAssessmentRequest, pk=request_id)
 
     try:
