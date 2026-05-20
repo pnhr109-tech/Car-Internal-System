@@ -41,11 +41,19 @@ def google_login_page(request):
         return redirect(settings.LOGIN_REDIRECT_URL)
 
     login_uri = request.build_absolute_uri('/login/google/')
+    error_code = request.GET.get('error', '')
+    error_messages = {
+        'not_registered': 'このメールアドレスはシステムに登録されていません。管理者に社員登録を依頼してください。',
+        'inactive': 'このアカウントは無効化されています。管理者にお問い合わせください。',
+        'domain': 'gigicompanyのアカウントのみログイン可能です。',
+        'token': 'Google認証に失敗しました。もう一度お試しください。',
+    }
 
     return render(request, 'accounts/google_login.html', {
         'google_client_id': settings.GOOGLE_CLIENT_ID,
         'allowed_domain': settings.ALLOWED_GOOGLE_DOMAIN,
         'login_uri': login_uri,
+        'error_message': error_messages.get(error_code, ''),
     })
 
 
@@ -84,21 +92,17 @@ def google_login(request):
         is_allowed_domain = is_allowed_domain and hosted_domain == allowed_domain
 
     if not email or not email_verified or not is_allowed_domain:
-        return HttpResponse('gigicompanyのアカウントのみログイン可能です', status=403)
+        return redirect('/login/?error=domain')
 
     User = get_user_model()
-    user, _ = User.objects.get_or_create(
-        username=email,
-        defaults={
-            'email': email,
-            'first_name': idinfo.get('given_name', ''),
-            'last_name': idinfo.get('family_name', ''),
-            'is_active': True,
-        }
-    )
+    try:
+        user = User.objects.get(username=email)
+    except User.DoesNotExist:
+        logger.info(f'google_login: unregistered email attempted login: {email}')
+        return redirect('/login/?error=not_registered')
 
     if not user.is_active:
-        return HttpResponse('このアカウントは無効化されています', status=403)
+        return redirect('/login/?error=inactive')
 
     updated = False
     if not user.first_name and idinfo.get('given_name'):
@@ -252,11 +256,12 @@ def employee_create(request):
                 'is_edit': False,
             })
 
-        user = User.objects.create(
+        user = User.objects.create_user(
             username=email,
             email=email,
             first_name=first_name,
             last_name=last_name,
+            password=None,
             is_active=True,
         )
         UserProfile.objects.create(
@@ -265,7 +270,7 @@ def employee_create(request):
             role=role,
             employee_number=employee_number,
         )
-        messages.success(request, f'{last_name} {first_name} さんを登録しました')
+        messages.success(request, f'{last_name} {first_name} さんを登録しました。Googleアカウント（{email}）でログインできます。')
         return redirect('accounts:employee_list')
 
     return render(request, 'accounts/employee_form.html', {
@@ -322,7 +327,8 @@ def employee_edit(request, pk):
         user.last_name = last_name
         user.email = email
         user.username = email
-        user.save(update_fields=['first_name', 'last_name', 'email', 'username'])
+        user.is_active = is_active_employee  # 退職済みはログイン不可にする
+        user.save(update_fields=['first_name', 'last_name', 'email', 'username', 'is_active'])
 
         profile.store_id = store_id
         profile.role = role

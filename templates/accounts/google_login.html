@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ログイン - gigicompany社内システム</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'ui/tokens.css' %}">
     <link rel="stylesheet" href="{% static 'ui/components.css' %}">
     <link rel="stylesheet" href="{% static 'ui/bootstrap-overrides.css' %}">
@@ -18,6 +19,12 @@
                     <div class="card-body p-4">
                         <h4 class="mb-3">gigicompany 社内システム</h4>
                         <p class="text-muted mb-4">Googleアカウントでログインしてください。<br>許可ドメイン: {{ allowed_domain }}</p>
+
+                        {% if error_message %}
+                        <div class="alert alert-danger" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error_message }}
+                        </div>
+                        {% endif %}
 
                             <div id="googleSignInButton"></div>
                             <div id="googleSignInFallback" class="alert alert-warning mt-3 d-none" role="alert">
