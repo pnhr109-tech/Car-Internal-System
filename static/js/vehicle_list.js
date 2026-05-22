@@ -82,21 +82,29 @@ function selectExportDoc(btn) {
   });
 }
 
+// 資料キー → 出力形式 → URL要素ID のマッピング
+const EXPORT_URL_MAP = {
+  vehicle_list: { csv: 'exportUrlCsv',          pdf: 'exportUrlPdf' },
+  inventory:    { csv: 'exportUrlInventoryCsv',  pdf: 'exportUrlInventoryPdf' },
+  ledger:       { csv: 'exportUrlLedgerCsv',     pdf: 'exportUrlLedgerPdf' },
+};
+
 /**
  * CSV または PDF を出力する。
  * @param {'csv'|'pdf'} format
  */
 function doExport(format) {
-  const urlEl = format === 'pdf'
-    ? document.getElementById('exportUrlPdf')
-    : document.getElementById('exportUrlCsv');
-
+  const urlMap = EXPORT_URL_MAP[_currentDocKey];
+  if (!urlMap) {
+    showToast('エラー', '資料の種類が未選択です', 'danger');
+    return;
+  }
+  const urlEl = document.getElementById(urlMap[format]);
   if (!urlEl) {
     showToast('エラー', '出力URLが見つかりません', 'danger');
     return;
   }
 
-  // モーダルを閉じてからダウンロード
   bootstrap.Modal.getOrCreateInstance(document.getElementById('exportModal')).hide();
   window.location.href = urlEl.dataset.url;
 }

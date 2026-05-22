@@ -57,13 +57,19 @@ urlpatterns = [
 
     # ── 売掛管理 ─────────────────────────────────────────────
     path('sales-process/',                              views.sales_process_list,         name='sales_process_list'),
-    path('api/sales-process/<int:process_id>/toggle/', views.toggle_sales_process_step,   name='toggle_sales_process_step'),
+    path('api/sales-process/<int:process_id>/toggle/',      views.toggle_sales_process_step, name='toggle_sales_process_step'),
+    path('api/sales-process/<int:process_id>/step/',        views.toggle_case_sales_step,    name='toggle_case_sales_step'),
+    path('api/sales-process/<int:process_id>/update-info/', views.update_sales_info,         name='update_sales_info'),
 
     # ── 車両一覧 ─────────────────────────────────────────────
-    path('vehicles/',                views.vehicle_list,     name='vehicle_list'),
-    path('vehicles/export/csv/',     views.vehicle_list_csv, name='vehicle_list_csv'),
-    path('vehicles/export/pdf/',     views.vehicle_list_pdf, name='vehicle_list_pdf'),
-    path('api/vehicles/create/',     views.vehicle_create,   name='vehicle_create'),
+    path('vehicles/',                          views.vehicle_list,         name='vehicle_list'),
+    path('vehicles/export/csv/',               views.vehicle_list_csv,     name='vehicle_list_csv'),
+    path('vehicles/export/pdf/',               views.vehicle_list_pdf,     name='vehicle_list_pdf'),
+    path('vehicles/export/inventory/csv/',     views.inventory_table_csv,  name='inventory_table_csv'),
+    path('vehicles/export/inventory/pdf/',     views.inventory_table_pdf,  name='inventory_table_pdf'),
+    path('vehicles/export/ledger/csv/',        views.ledger_csv,           name='ledger_csv'),
+    path('vehicles/export/ledger/pdf/',        views.ledger_pdf,           name='ledger_pdf'),
+    path('api/vehicles/create/',               views.vehicle_create,       name='vehicle_create'),
 
     # ── 顧客一覧 ─────────────────────────────────────────────
     path('customers/',                                          views.customer_list,              name='customer_list'),

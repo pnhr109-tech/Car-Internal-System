@@ -29,12 +29,14 @@ from ..models import (
     AdvancePayment,
     Assessment,
     AssessmentCheckItem,
+    AuctionVenue,
     CarAssessmentRequest,
     ContactHistory,
     Customer,
     CustomerBankAccount,
     OwnershipRelease,
     PurchaseContract,
+    SalesProcess,
     Vehicle,
 )
 from .utils import _current_user_display_name
@@ -106,6 +108,19 @@ def case_detail(request, pk):
     primary_bank_account = bank_accounts.filter(is_primary=True).first() or bank_accounts.first()
     ownership_release = getattr(contract, 'ownership_release', None) if contract else None
     advance_payments  = contract.advance_payments.select_related('approved_by').all() if contract else []
+    sales_process = getattr(contract, 'sales_process', None) if contract else None
+    repair_flag   = contract.repair_flag if contract else False
+    if sales_process:
+        sp = sales_process
+        step_available = {
+            'intake':    sp.document_done,
+            'repair':    sp.intake_done if repair_flag else None,  # None = 対象外
+            'transport': (sp.repair_done if repair_flag else sp.intake_done),
+            'listing':   sp.transport_done,
+            'payment':   True,
+        }
+    else:
+        step_available = {}
     vehicle_images = assessment.vehicle.images.all()
 
     active_tab = request.GET.get('tab', 'assessment')
@@ -156,6 +171,10 @@ def case_detail(request, pk):
         'ownership_release':             ownership_release,
         'ownership_release_status_choices': OwnershipRelease.STATUS_CHOICES,
         'advance_payments':              advance_payments,
+        'sales_process':                 sales_process,
+        'step_available':                step_available,
+        'disposition_choices':           SalesProcess.DISPOSITION_CHOICES,
+        'auction_venues':                AuctionVenue.objects.all(),
         'required_doc_fields': [
             ('inkan',    '印鑑証明', contract.required_inkan_count    if contract else 0, contract.inkan_received    if contract else False),
             ('juminhyo', '住民票',   contract.required_juminhyo_count if contract else 0, contract.juminhyo_received if contract else False),
@@ -779,4 +798,30 @@ def update_required_docs(request, contract_id):
         update_fields.append('updated_at')
         contract.save(update_fields=update_fields)
 
-    return JsonResponse({'success': True, 'message': '受取状況を更新しました'})
+    # 必要通数が1通以上の書類がすべて受取済なら document_done を自動完了
+    auto_doc_done = False
+    doc_fields_with_count = [
+        ('inkan', contract.required_inkan_count, contract.inkan_received),
+        ('juminhyo', contract.required_juminhyo_count, contract.juminhyo_received),
+        ('jotohyo', contract.required_jotohyo_count, contract.jotohyo_received),
+        ('ininjyo', contract.required_ininjyo_count, contract.ininjyo_received),
+        ('jotosho', contract.required_jotosho_count, contract.jotosho_received),
+        ('kanpu', contract.required_kanpu_count, contract.kanpu_received),
+    ]
+    required = [(name, received) for name, count, received in doc_fields_with_count if count > 0]
+    if required and all(received for _, received in required):
+        try:
+            sp = SalesProcess.objects.get(contract=contract)
+            if not sp.document_done:
+                sp.document_done = True
+                sp.updated_by = request.user
+                sp.save(update_fields=['document_done', 'updated_by', 'updated_at'])
+                auto_doc_done = True
+        except SalesProcess.DoesNotExist:
+            pass
+
+    return JsonResponse({
+        'success': True,
+        'message': '受取状況を更新しました',
+        'auto_doc_done': auto_doc_done,
+    })

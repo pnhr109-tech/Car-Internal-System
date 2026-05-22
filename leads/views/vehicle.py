@@ -18,7 +18,7 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from ..models import Assessment, PurchaseContract, Vehicle
+from ..models import Assessment, PurchaseContract, SalesProcess, Vehicle
 
 logger = logging.getLogger(__name__)
 
@@ -362,4 +362,347 @@ def vehicle_list_pdf(request):
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = 'attachment; filename="vehicle_list.pdf"'
     response.write(pdf_bytes)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# 在庫管理表・古物台帳 共通クエリ
+# ---------------------------------------------------------------------------
+
+def _build_contract_export_qs(request, maker, car_model, chassis_number, customer_name, date_from, date_to):
+    """承認済み契約を主軸に在庫管理表・古物台帳向けのクエリを構築する。"""
+    qs = PurchaseContract.objects.select_related(
+        'vehicle',
+        'customer',
+        'assigned_to__profile__store',
+        'sales_process',
+        'sales_process__sold_destination',
+    ).filter(
+        approved_by__isnull=False,
+    ).order_by('-contract_date')
+
+    profile = getattr(request.user, 'profile', None)
+    if profile and not profile.has_global_access:
+        if profile.role == profile.ROLE_GENERAL:
+            qs = qs.filter(assigned_to=request.user)
+        else:
+            store_users = profile.store.members.values_list('user_id', flat=True) if profile.store else []
+            qs = qs.filter(assigned_to__in=store_users)
+
+    if maker:
+        qs = qs.filter(vehicle__maker__icontains=maker)
+    if car_model:
+        qs = qs.filter(vehicle__car_model__icontains=car_model)
+    if chassis_number:
+        qs = qs.filter(vehicle__chassis_number__icontains=chassis_number)
+    if customer_name:
+        qs = qs.filter(customer__name__icontains=customer_name)
+    if date_from:
+        qs = qs.filter(contract_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(contract_date__lte=date_to)
+
+    return qs
+
+
+def _tristate_label(value):
+    if value is True:
+        return 'あり'
+    if value is False:
+        return 'なし'
+    return ''
+
+
+# ---------------------------------------------------------------------------
+# 在庫管理表
+# ---------------------------------------------------------------------------
+
+@login_required
+def inventory_table_csv(request):
+    """在庫管理表 CSV ダウンロード"""
+    params = _parse_search_params(request)
+    qs = _build_contract_export_qs(request, *params)
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = 'attachment; filename="inventory_table.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['車名', '車体番号', '買取金額（税込）', '契約日', '区分', '店舗名', '担当営業'])
+
+    for c in qs:
+        v = c.vehicle
+        sp = getattr(c, 'sales_process', None)
+        store_name  = ''
+        try:
+            store_name = c.assigned_to.profile.store.name if c.assigned_to.profile.store else ''
+        except Exception:
+            pass
+        writer.writerow([
+            f'{v.maker} {v.car_model}'.strip(),
+            v.chassis_number,
+            str(int(c.purchase_price_incl_tax)) if c.purchase_price_incl_tax else '',
+            str(c.contract_date) if c.contract_date else '',
+            sp.get_vehicle_disposition_display() if sp and sp.vehicle_disposition else '',
+            store_name,
+            c.assigned_to.get_full_name() if c.assigned_to else '',
+        ])
+
+    return response
+
+
+@login_required
+def inventory_table_pdf(request):
+    """在庫管理表 PDF ダウンロード"""
+    import unicodedata
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
+    FONT = 'HeiseiKakuGo-W5'
+
+    def n(text):
+        return unicodedata.normalize('NFC', str(text)) if text else ''
+
+    params = _parse_search_params(request)
+    maker, car_model, chassis_number, customer_name, date_from, date_to = params
+    qs = _build_contract_export_qs(request, *params)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=landscape(A4),
+        rightMargin=10 * mm, leftMargin=10 * mm,
+        topMargin=14 * mm, bottomMargin=14 * mm,
+    )
+
+    title_style = ParagraphStyle('T', fontName=FONT, fontSize=13, spaceAfter=4)
+    sub_style   = ParagraphStyle('S', fontName=FONT, fontSize=8, spaceAfter=2,
+                                 textColor=colors.HexColor('#6c757d'))
+    cell_style  = ParagraphStyle('C', fontName=FONT, fontSize=8, leading=11,
+                                 wordWrap='CJK', spaceAfter=0, spaceBefore=0)
+    head_style  = ParagraphStyle('H', fontName=FONT, fontSize=8.5, leading=11,
+                                 wordWrap='CJK', textColor=colors.white,
+                                 spaceAfter=0, spaceBefore=0)
+
+    def cell(text):
+        return Paragraph(n(text), cell_style)
+
+    elements = []
+    elements.append(Paragraph(n('在庫管理表'), title_style))
+
+    filter_parts = []
+    if date_from or date_to:
+        filter_parts.append(f'期間: {date_from} ～ {date_to}')
+    if maker:         filter_parts.append(f'メーカー: {n(maker)}')
+    if car_model:     filter_parts.append(f'車種: {n(car_model)}')
+    if customer_name: filter_parts.append(f'顧客名: {n(customer_name)}')
+    if filter_parts:
+        elements.append(Paragraph('  '.join(filter_parts), sub_style))
+    elements.append(Spacer(1, 4 * mm))
+
+    headers_text = ['車名', '車体番号', '買取金額（税込）', '契約日', '区分', '店舗名', '担当営業']
+    col_widths   = [52*mm,  38*mm,     34*mm,             22*mm,    18*mm,  40*mm,   34*mm]
+    # 合計: 238mm ≤ 277mm ✓
+
+    header_row = [Paragraph(n(h), head_style) for h in headers_text]
+    data = [header_row]
+
+    for c in qs:
+        v = c.vehicle
+        sp = getattr(c, 'sales_process', None)
+        store_name = ''
+        try:
+            store_name = c.assigned_to.profile.store.name if c.assigned_to.profile.store else ''
+        except Exception:
+            pass
+        price = f'¥{int(c.purchase_price_incl_tax):,}' if c.purchase_price_incl_tax else ''
+        data.append([
+            cell(f'{n(v.maker)} {n(v.car_model)}'.strip()),
+            cell(n(v.chassis_number)),
+            cell(price),
+            cell(str(c.contract_date) if c.contract_date else ''),
+            cell(n(sp.get_vehicle_disposition_display()) if sp and sp.vehicle_disposition else ''),
+            cell(n(store_name)),
+            cell(n(c.assigned_to.get_full_name()) if c.assigned_to else ''),
+        ])
+
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND',    (0, 0), (-1,  0), colors.HexColor('#343a40')),
+        ('ROWBACKGROUNDS',(0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+        ('ALIGN',         (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('GRID',          (0, 0), (-1, -1), 0.4, colors.HexColor('#dee2e6')),
+        ('TOPPADDING',    (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(table)
+
+    doc.build(elements)
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="inventory_table.pdf"'
+    response.write(buf.getvalue())
+    return response
+
+
+# ---------------------------------------------------------------------------
+# 古物台帳
+# ---------------------------------------------------------------------------
+
+@login_required
+def ledger_csv(request):
+    """古物台帳 CSV ダウンロード"""
+    params = _parse_search_params(request)
+    qs = _build_contract_export_qs(request, *params)
+
+    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    response['Content-Disposition'] = 'attachment; filename="ledger.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        '車種名', '契約日', '車体番号', '車両ナンバー', '買取金額（税込）',
+        '顧客名', '住所', '免許証番号', 'Tナンバー有無', '職業', '生年月日',
+        '車両売却日', '車両売却金額', '車両売却先',
+    ])
+
+    for c in qs:
+        v  = c.vehicle
+        cu = c.customer
+        sp = getattr(c, 'sales_process', None)
+        writer.writerow([
+            f'{v.maker} {v.car_model}'.strip(),
+            str(c.contract_date) if c.contract_date else '',
+            v.chassis_number,
+            v.registration_number,
+            str(int(c.purchase_price_incl_tax)) if c.purchase_price_incl_tax else '',
+            cu.name if cu else '',
+            cu.address if cu else '',
+            cu.license_number if cu else '',
+            _tristate_label(c.qualified_invoice_registered),
+            cu.occupation if cu else '',
+            str(cu.birth_date) if cu and cu.birth_date else '',
+            str(sp.sold_at) if sp and sp.sold_at else '',
+            str(int(sp.sold_price)) if sp and sp.sold_price else '',
+            sp.sold_destination.name if sp and sp.sold_destination else '',
+        ])
+
+    return response
+
+
+@login_required
+def ledger_pdf(request):
+    """古物台帳 PDF ダウンロード"""
+    import unicodedata
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
+    FONT = 'HeiseiKakuGo-W5'
+
+    def n(text):
+        return unicodedata.normalize('NFC', str(text)) if text else ''
+
+    params = _parse_search_params(request)
+    maker, car_model, chassis_number, customer_name, date_from, date_to = params
+    qs = _build_contract_export_qs(request, *params)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=landscape(A4),
+        rightMargin=8 * mm, leftMargin=8 * mm,
+        topMargin=12 * mm, bottomMargin=12 * mm,
+    )
+
+    title_style = ParagraphStyle('T', fontName=FONT, fontSize=13, spaceAfter=4)
+    sub_style   = ParagraphStyle('S', fontName=FONT, fontSize=8, spaceAfter=2,
+                                 textColor=colors.HexColor('#6c757d'))
+    cell_style  = ParagraphStyle('C', fontName=FONT, fontSize=6.5, leading=9,
+                                 wordWrap='CJK', spaceAfter=0, spaceBefore=0)
+    head_style  = ParagraphStyle('H', fontName=FONT, fontSize=7, leading=9,
+                                 wordWrap='CJK', textColor=colors.white,
+                                 spaceAfter=0, spaceBefore=0)
+
+    def cell(text):
+        return Paragraph(n(text), cell_style)
+
+    elements = []
+    elements.append(Paragraph(n('古物台帳'), title_style))
+
+    filter_parts = []
+    if date_from or date_to:
+        filter_parts.append(f'期間: {date_from} ～ {date_to}')
+    if maker:         filter_parts.append(f'メーカー: {n(maker)}')
+    if car_model:     filter_parts.append(f'車種: {n(car_model)}')
+    if customer_name: filter_parts.append(f'顧客名: {n(customer_name)}')
+    if filter_parts:
+        elements.append(Paragraph('  '.join(filter_parts), sub_style))
+    elements.append(Spacer(1, 4 * mm))
+
+    # 合計 281mm（余白込みで A4 横 = 297-16 = 281mm に収める）
+    headers_text = [
+        '車種名', '契約日', '車体番号', '車両\nナンバー', '買取金額\n（税込）',
+        '顧客名', '住所', '免許証番号', 'T\nナンバー', '職業', '生年月日',
+        '売却日', '売却金額', '売却先',
+    ]
+    col_widths = [
+        24*mm, 16*mm, 28*mm, 18*mm, 20*mm,
+        20*mm, 32*mm, 20*mm, 12*mm, 16*mm, 16*mm,
+        16*mm, 20*mm, 19*mm,
+    ]
+    # 合計: 277mm ✓
+
+    header_row = [Paragraph(n(h), head_style) for h in headers_text]
+    data = [header_row]
+
+    for c in qs:
+        v  = c.vehicle
+        cu = c.customer
+        sp = getattr(c, 'sales_process', None)
+        price = f'¥{int(c.purchase_price_incl_tax):,}' if c.purchase_price_incl_tax else ''
+        data.append([
+            cell(f'{n(v.maker)} {n(v.car_model)}'.strip()),
+            cell(str(c.contract_date) if c.contract_date else ''),
+            cell(n(v.chassis_number)),
+            cell(n(v.registration_number)),
+            cell(price),
+            cell(n(cu.name) if cu else ''),
+            cell(n(cu.address) if cu else ''),
+            cell(n(cu.license_number) if cu else ''),
+            cell(_tristate_label(c.qualified_invoice_registered)),
+            cell(n(cu.occupation) if cu else ''),
+            cell(str(cu.birth_date) if cu and cu.birth_date else ''),
+            cell(str(sp.sold_at) if sp and sp.sold_at else ''),
+            cell(f'¥{int(sp.sold_price):,}' if sp and sp.sold_price else ''),
+            cell(n(sp.sold_destination.name) if sp and sp.sold_destination else ''),
+        ])
+
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ('BACKGROUND',    (0, 0), (-1,  0), colors.HexColor('#343a40')),
+        ('ROWBACKGROUNDS',(0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+        ('ALIGN',         (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('GRID',          (0, 0), (-1, -1), 0.4, colors.HexColor('#dee2e6')),
+        ('TOPPADDING',    (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING',   (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING',  (0, 0), (-1, -1), 3),
+    ]))
+    elements.append(table)
+
+    doc.build(elements)
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="ledger.pdf"'
+    response.write(buf.getvalue())
     return response

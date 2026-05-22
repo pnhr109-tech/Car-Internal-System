@@ -26,6 +26,7 @@ from django.views.decorators.http import require_POST
 
 from ..models import (
     Assessment,
+    AuctionVenue,
     CarAssessmentRequest,
     ContactHistory,
     Customer,
@@ -627,7 +628,166 @@ def toggle_sales_process_step(request, process_id):
     process.save(update_fields=[field, 'updated_by', 'updated_at'])
 
     if step == 'transfer' and new_value:
+        if not process.payment_done:
+            return JsonResponse({'success': False, 'message': '「入金」が完了していません'}, status=400)
+        if not process.transfer_approved_by:
+            return JsonResponse({'success': False, 'message': '振込承認が必要です。先に承認申請を行ってください'}, status=400)
         process.delete()
         return JsonResponse({'success': True, 'deleted': True, 'message': '振込完了 — レコードを削除しました'})
 
     return JsonResponse({'success': True, 'deleted': False, 'new_value': new_value})
+
+
+_MANUAL_STEPS = {'intake', 'repair', 'transport', 'listing', 'payment'}
+
+# 各ステップを完了にするための前提ステップ（True=前提OK の判定関数）
+def _prerequisite_ok(step, sp, contract):
+    """(ok, error_msg)"""
+    repair_flag = contract.repair_flag if contract else False
+    if step == 'intake':
+        if not sp.document_done:
+            return False, '「書類」が完了していません'
+    elif step == 'repair':
+        if not sp.intake_done:
+            return False, '「入庫」が完了していません'
+    elif step == 'transport':
+        prev_ok = sp.repair_done if repair_flag else sp.intake_done
+        label   = '加修' if repair_flag else '入庫'
+        if not prev_ok:
+            return False, f'「{label}」が完了していません'
+    elif step == 'listing':
+        if not sp.transport_done:
+            return False, '「陸送」が完了していません'
+    elif step == 'payment':
+        if not sp.sale_done:
+            return False, '「売却」が完了していません'
+    return True, ''
+
+
+# 各ステップを取消するとき、後続が完了済なら取消不可
+_STEP_SUCCESSORS = {
+    'intake':    ['repair_done', 'transport_done', 'listing_done', 'sale_done'],
+    'repair':    ['transport_done', 'listing_done', 'sale_done'],
+    'transport': ['listing_done', 'sale_done'],
+    'listing':   ['sale_done'],
+    'payment':   [],
+}
+_STEP_LABELS = {
+    'repair': '加修', 'transport': '陸送', 'listing': '出品',
+    'sale': '売却', 'payment': '入金',
+}
+
+def _successor_ok(step, sp):
+    """取消時に後続が完了していないか確認。(ok, error_msg)"""
+    for field in _STEP_SUCCESSORS.get(step, []):
+        if getattr(sp, field):
+            label = _STEP_LABELS.get(field.replace('_done', ''), field)
+            return False, f'「{label}」が完了しているため取消できません'
+    return True, ''
+
+
+@login_required
+@require_POST
+def toggle_case_sales_step(request, process_id):
+    """売却フロー 手動ステップ完了/取消 API（案件担当者 or 承認権限者が操作可）"""
+    process = get_object_or_404(
+        SalesProcess.objects.select_related('contract__assessment__assigned_to', 'contract'),
+        pk=process_id,
+    )
+    try:
+        payload = json.loads(request.body)
+        step    = payload.get('step', '')
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    if step not in _MANUAL_STEPS:
+        return JsonResponse({'success': False, 'message': 'ステップが不正です'}, status=400)
+
+    profile     = getattr(request.user, 'profile', None)
+    can_approve = (profile and profile.can_approve) or request.user.is_superuser
+    is_assigned = process.contract.assessment.assigned_to == request.user
+    if not (is_assigned or can_approve):
+        return JsonResponse({'success': False, 'message': 'この案件の担当者のみ操作できます'}, status=403)
+
+    current   = getattr(process, f'{step}_done')
+    new_value = not current
+
+    if new_value:
+        ok, msg = _prerequisite_ok(step, process, process.contract)
+        if not ok:
+            return JsonResponse({'success': False, 'message': msg}, status=400)
+    else:
+        ok, msg = _successor_ok(step, process)
+        if not ok:
+            return JsonResponse({'success': False, 'message': msg}, status=400)
+
+    field = f'{step}_done'
+    setattr(process, field, new_value)
+    process.updated_by = request.user
+    process.save(update_fields=[field, 'updated_by', 'updated_at'])
+
+    return JsonResponse({'success': True, 'new_value': new_value})
+
+
+@login_required
+@require_POST
+def update_sales_info(request, process_id):
+    """売却情報（区分・売却日・売却金額・売却先）更新 API"""
+    process = get_object_or_404(SalesProcess, pk=process_id)
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    valid_dispositions = {d for d, _ in SalesProcess.DISPOSITION_CHOICES}
+    disposition = payload.get('vehicle_disposition', '').strip()
+    if disposition and disposition not in valid_dispositions:
+        return JsonResponse({'success': False, 'message': '区分が不正です'}, status=400)
+
+    update_fields = ['updated_at']
+
+    process.vehicle_disposition = disposition
+    update_fields.append('vehicle_disposition')
+
+    raw_sold_at = payload.get('sold_at', '')
+    process.sold_at = _parse_date(raw_sold_at)
+    update_fields.append('sold_at')
+
+    raw_price = payload.get('sold_price', '')
+    if raw_price != '':
+        try:
+            process.sold_price = Decimal(str(raw_price))
+        except (InvalidOperation, ValueError):
+            return JsonResponse({'success': False, 'message': '売却金額の形式が不正です'}, status=400)
+    else:
+        process.sold_price = None
+    update_fields.append('sold_price')
+
+    raw_venue_id = payload.get('sold_destination_id', '')
+    if raw_venue_id:
+        try:
+            process.sold_destination = AuctionVenue.objects.get(pk=int(raw_venue_id))
+        except (AuctionVenue.DoesNotExist, ValueError):
+            return JsonResponse({'success': False, 'message': 'オークション会場が不正です'}, status=400)
+    else:
+        process.sold_destination = None
+    update_fields.append('sold_destination')
+
+    process.updated_by = request.user
+    update_fields.append('updated_by')
+
+    # sold_at が入力されたら sale_done を自動完了（出品完了が前提）
+    if process.sold_at:
+        if not process.listing_done:
+            return JsonResponse({'success': False, 'message': '「出品」が完了していません'}, status=400)
+        if not process.sale_done:
+            process.sale_done = True
+            update_fields.append('sale_done')
+
+    process.save(update_fields=update_fields)
+
+    return JsonResponse({
+        'success': True,
+        'message': '売却情報を保存しました',
+        'sale_done': process.sale_done,
+    })

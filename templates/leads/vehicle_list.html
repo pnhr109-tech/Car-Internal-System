@@ -251,7 +251,18 @@
                   onclick="selectExportDoc(this)">
             <i class="bi bi-table me-1"></i>車両一覧表
           </button>
-          {# 将来の資料種類はここに追加 #}
+          <button type="button"
+                  class="btn btn-outline-primary btn-sm export-doc-btn"
+                  data-doc="inventory"
+                  onclick="selectExportDoc(this)">
+            <i class="bi bi-boxes me-1"></i>在庫管理表
+          </button>
+          <button type="button"
+                  class="btn btn-outline-primary btn-sm export-doc-btn"
+                  data-doc="ledger"
+                  onclick="selectExportDoc(this)">
+            <i class="bi bi-journal-text me-1"></i>古物台帳
+          </button>
         </div>
 
         {# ── 出力形式 ── #}
@@ -276,12 +287,12 @@
 </div>
 
 {# 出力 URL（JS に渡す） #}
-<span id="exportUrlCsv"
-      data-url="{% url 'leads:vehicle_list_csv' %}?{{ search_qs }}"
-      style="display:none"></span>
-<span id="exportUrlPdf"
-      data-url="{% url 'leads:vehicle_list_pdf' %}?{{ search_qs }}"
-      style="display:none"></span>
+<span id="exportUrlCsv"           data-url="{% url 'leads:vehicle_list_csv' %}?{{ search_qs }}"      style="display:none"></span>
+<span id="exportUrlPdf"           data-url="{% url 'leads:vehicle_list_pdf' %}?{{ search_qs }}"      style="display:none"></span>
+<span id="exportUrlInventoryCsv"  data-url="{% url 'leads:inventory_table_csv' %}?{{ search_qs }}"  style="display:none"></span>
+<span id="exportUrlInventoryPdf"  data-url="{% url 'leads:inventory_table_pdf' %}?{{ search_qs }}"  style="display:none"></span>
+<span id="exportUrlLedgerCsv"     data-url="{% url 'leads:ledger_csv' %}?{{ search_qs }}"           style="display:none"></span>
+<span id="exportUrlLedgerPdf"     data-url="{% url 'leads:ledger_pdf' %}?{{ search_qs }}"           style="display:none"></span>
 {% endblock %}
 
 {% block extra_scripts %}

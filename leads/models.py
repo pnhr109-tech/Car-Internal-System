@@ -757,6 +757,25 @@ class ContactHistory(models.Model):
 
 
 # ---------------------------------------------------------------------------
+# オークション会場マスタ
+# ---------------------------------------------------------------------------
+
+class AuctionVenue(models.Model):
+    """オークション会場マスタ"""
+    name       = models.CharField(max_length=100, unique=True, verbose_name='会場名')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
+
+    class Meta:
+        db_table     = 'auction_venues'
+        verbose_name = 'オークション会場'
+        verbose_name_plural = 'オークション会場'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+# ---------------------------------------------------------------------------
 # 売掛管理（成約後の処理ステータス）
 # ---------------------------------------------------------------------------
 
@@ -764,11 +783,32 @@ class SalesProcess(models.Model):
     """売掛管理 — 成約契約ごとに書類〜振込までの8ステップを追跡する。
     振込完了時はレコードごと削除される。"""
 
+    DISPOSITION_AA        = 'aa'
+    DISPOSITION_DISPLAY   = 'display'
+    DISPOSITION_LOANER    = 'loaner'
+    DISPOSITION_RETAIL    = 'retail'
+    DISPOSITION_SCRAP     = 'scrap'
+
+    DISPOSITION_CHOICES = [
+        (DISPOSITION_AA,      'AA'),
+        (DISPOSITION_DISPLAY, '展示'),
+        (DISPOSITION_LOANER,  '代車'),
+        (DISPOSITION_RETAIL,  '販売'),
+        (DISPOSITION_SCRAP,   'ラップ'),
+    ]
+
     contract = models.OneToOneField(
         PurchaseContract,
         on_delete=models.CASCADE,
         related_name='sales_process',
         verbose_name='買取契約',
+    )
+
+    vehicle_disposition = models.CharField(
+        max_length=10,
+        choices=DISPOSITION_CHOICES,
+        blank=True,
+        verbose_name='区分',
     )
 
     document_done  = models.BooleanField(default=False, verbose_name='書類')
@@ -779,6 +819,26 @@ class SalesProcess(models.Model):
     sale_done      = models.BooleanField(default=False, verbose_name='売却')
     payment_done   = models.BooleanField(default=False, verbose_name='入金')
     transfer_done  = models.BooleanField(default=False, verbose_name='振込')
+
+    sold_at          = models.DateField(null=True, blank=True, verbose_name='車両売却日')
+    sold_price       = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='売却金額')
+    sold_destination = models.ForeignKey(
+        'AuctionVenue',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='sales_processes',
+        verbose_name='売却先（会場）',
+    )
+
+    transfer_approval_requested_at = models.DateTimeField(null=True, blank=True, verbose_name='振込承認申請日時')
+    transfer_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='transfer_approved_processes',
+        verbose_name='振込承認者',
+    )
+    transfer_approved_at = models.DateTimeField(null=True, blank=True, verbose_name='振込承認日時')
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
     updated_at = models.DateTimeField(auto_now=True,     verbose_name='更新日時')

@@ -62,6 +62,8 @@ from .contract import (
     approve_correction,
     sales_process_list,
     toggle_sales_process_step,
+    toggle_case_sales_step,
+    update_sales_info,
 )
 
 # --- 顧客マスタ管理 ---
@@ -78,6 +80,10 @@ from .vehicle import (
     vehicle_list,
     vehicle_list_csv,
     vehicle_list_pdf,
+    inventory_table_csv,
+    inventory_table_pdf,
+    ledger_csv,
+    ledger_pdf,
     vehicle_create,
 )
 
@@ -104,12 +110,14 @@ __all__ = [
     'contract_list', 'approval_list', 'contract_print',
     'create_contract', 'update_contract',
     'request_contract_approval', 'approve_contract', 'approve_correction',
-    'sales_process_list', 'toggle_sales_process_step',
+    'sales_process_list', 'toggle_sales_process_step', 'toggle_case_sales_step', 'update_sales_info',
     # customer
     'customer_list', 'customer_detail',
     'update_customer_direct', 'save_bank_account_direct', 'delete_bank_account_direct',
     # vehicle
-    'vehicle_list', 'vehicle_list_csv', 'vehicle_list_pdf', 'vehicle_create',
+    'vehicle_list', 'vehicle_list_csv', 'vehicle_list_pdf',
+    'inventory_table_csv', 'inventory_table_pdf', 'ledger_csv', 'ledger_pdf',
+    'vehicle_create',
     # scraper api
     'scraper_ingest_navikuru',
 ]

@@ -67,6 +67,12 @@
       </a>
     </li>
     <li class="nav-item">
+      <a class="nav-link {% if active_tab == 'sale' %}active{% endif %}" href="?tab=sale">
+        <i class="bi bi-currency-yen"></i> 売却情報
+        {% if sales_process and not sales_process.vehicle_disposition %}<span class="badge bg-secondary ms-1">未設定</span>{% endif %}
+      </a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link {% if active_tab == 'history' %}active{% endif %}" href="?tab=history">
         <i class="bi bi-chat-left-text"></i> 連絡履歴
       </a>
@@ -679,7 +685,216 @@
     </div>
   </div>
 
-  {# ── タブ⑤: 連絡履歴 ───────────────────────────────── #}
+  {# ── タブ⑤: 売却情報 ───────────────────────────────── #}
+  {% elif active_tab == 'sale' %}
+  {% if sales_process %}
+
+  {# ── フロー進捗 ── #}
+  <div class="card mb-3">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-diagram-3"></i> 買取後フロー</h6></div>
+    <div class="card-body">
+
+      {% comment %}
+      8ステップの定義：
+        書類(自動)・入庫(手動)・加修(手動/スキップ)・陸送(手動)・出品(手動)・売却(自動)・入金(手動)・振込(売掛管理一覧)
+      {% endcomment %}
+
+      <div class="row g-2 text-center" id="salesFlowRow">
+
+        {# 書類（自動） #}
+        <div class="col" id="step-card-document">
+          <div class="p-2 rounded border {% if sales_process.document_done %}bg-success text-white{% else %}bg-light text-muted{% endif %}">
+            <div class="small fw-semibold">書類</div>
+            <div class="small mt-1">
+              {% if sales_process.document_done %}<i class="bi bi-check-circle-fill"></i> 完了{% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
+            </div>
+            <div class="small mt-1 opacity-75">自動</div>
+          </div>
+        </div>
+
+        {# 入庫（手動） #}
+        {% with avail=step_available.intake done=sales_process.intake_done %}
+        <div class="col" id="step-card-intake">
+          <div class="p-2 rounded border {% if done %}bg-success text-white{% elif not avail %}bg-light text-muted opacity-50{% else %}bg-light text-muted{% endif %}">
+            <div class="small fw-semibold">入庫</div>
+            <div class="small mt-1">
+              {% if done %}<i class="bi bi-check-circle-fill"></i> 完了
+              {% elif not avail %}<i class="bi bi-lock"></i> 未解放
+              {% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
+            </div>
+            <button class="btn btn-sm mt-1 w-100 {% if done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
+              onclick="toggleStep('intake', this)"
+              id="step-btn-intake"
+              {% if not done and not avail %}disabled title="「書類」を完了してください"{% endif %}>
+              {% if done %}取消{% else %}完了にする{% endif %}
+            </button>
+          </div>
+        </div>
+        {% endwith %}
+
+        {# 加修（手動/スキップ） #}
+        <div class="col" id="step-card-repair">
+          {% if contract and contract.repair_flag %}
+          {% with avail=step_available.repair done=sales_process.repair_done %}
+          <div class="p-2 rounded border {% if done %}bg-success text-white{% elif not avail %}bg-light text-muted opacity-50{% else %}bg-light text-muted{% endif %}">
+            <div class="small fw-semibold">加修</div>
+            <div class="small mt-1">
+              {% if done %}<i class="bi bi-check-circle-fill"></i> 完了
+              {% elif not avail %}<i class="bi bi-lock"></i> 未解放
+              {% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
+            </div>
+            <button class="btn btn-sm mt-1 w-100 {% if done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
+              onclick="toggleStep('repair', this)"
+              id="step-btn-repair"
+              {% if not done and not avail %}disabled title="「入庫」を完了してください"{% endif %}>
+              {% if done %}取消{% else %}完了にする{% endif %}
+            </button>
+          </div>
+          {% endwith %}
+          {% else %}
+          <div class="p-2 rounded border bg-secondary text-white opacity-50">
+            <div class="small fw-semibold">加修</div>
+            <div class="small mt-1"><i class="bi bi-dash-circle"></i> 対象外</div>
+          </div>
+          {% endif %}
+        </div>
+
+        {# 陸送（手動） #}
+        {% with avail=step_available.transport done=sales_process.transport_done %}
+        <div class="col" id="step-card-transport">
+          <div class="p-2 rounded border {% if done %}bg-success text-white{% elif not avail %}bg-light text-muted opacity-50{% else %}bg-light text-muted{% endif %}">
+            <div class="small fw-semibold">陸送</div>
+            <div class="small mt-1">
+              {% if done %}<i class="bi bi-check-circle-fill"></i> 完了
+              {% elif not avail %}<i class="bi bi-lock"></i> 未解放
+              {% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
+            </div>
+            <button class="btn btn-sm mt-1 w-100 {% if done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
+              onclick="toggleStep('transport', this)"
+              id="step-btn-transport"
+              {% if not done and not avail %}disabled title="前のステップを完了してください"{% endif %}>
+              {% if done %}取消{% else %}完了にする{% endif %}
+            </button>
+          </div>
+        </div>
+        {% endwith %}
+
+        {# 出品（手動） #}
+        {% with avail=step_available.listing done=sales_process.listing_done %}
+        <div class="col" id="step-card-listing">
+          <div class="p-2 rounded border {% if done %}bg-success text-white{% elif not avail %}bg-light text-muted opacity-50{% else %}bg-light text-muted{% endif %}">
+            <div class="small fw-semibold">出品</div>
+            <div class="small mt-1">
+              {% if done %}<i class="bi bi-check-circle-fill"></i> 完了
+              {% elif not avail %}<i class="bi bi-lock"></i> 未解放
+              {% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
+            </div>
+            <button class="btn btn-sm mt-1 w-100 {% if done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
+              onclick="toggleStep('listing', this)"
+              id="step-btn-listing"
+              {% if not done and not avail %}disabled title="「陸送」を完了してください"{% endif %}>
+              {% if done %}取消{% else %}完了にする{% endif %}
+            </button>
+          </div>
+        </div>
+        {% endwith %}
+
+        {# 売却（自動: sold_at 入力で確定） #}
+        <div class="col" id="step-card-sale">
+          <div class="p-2 rounded border {% if sales_process.sale_done %}bg-success text-white{% else %}bg-light text-muted{% endif %}">
+            <div class="small fw-semibold">売却</div>
+            <div class="small mt-1">
+              {% if sales_process.sale_done %}<i class="bi bi-check-circle-fill"></i> 完了{% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
+            </div>
+            <div class="small mt-1 opacity-75">自動</div>
+          </div>
+        </div>
+
+        {# 入金（手動） #}
+        <div class="col" id="step-card-payment">
+          <div class="p-2 rounded border {% if sales_process.payment_done %}bg-success text-white{% else %}bg-light text-muted{% endif %}">
+            <div class="small fw-semibold">入金</div>
+            <div class="small mt-1">
+              {% if sales_process.payment_done %}<i class="bi bi-check-circle-fill"></i> 完了{% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
+            </div>
+            <button class="btn btn-sm mt-1 w-100 {% if sales_process.payment_done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
+              onclick="toggleStep('payment', this)"
+              id="step-btn-payment">
+              {% if sales_process.payment_done %}取消{% else %}完了にする{% endif %}
+            </button>
+          </div>
+        </div>
+
+        {# 振込（売掛管理一覧で最終完了） #}
+        <div class="col">
+          <div class="p-2 rounded border {% if sales_process.transfer_done %}bg-success text-white{% else %}bg-light text-muted{% endif %}">
+            <div class="small fw-semibold">振込</div>
+            <div class="small mt-1">
+              {% if sales_process.transfer_done %}<i class="bi bi-check-circle-fill"></i> 完了{% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
+            </div>
+            <a href="{% url 'leads:sales_process_list' %}" class="btn btn-sm btn-outline-secondary mt-1 w-100">管理一覧</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {# ── 売却情報入力フォーム ── #}
+  <div class="card">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-currency-yen"></i> 売却情報</h6></div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">区分</label>
+          <select id="saleDisposition" class="form-select">
+            <option value="">— 未設定 —</option>
+            {% for val, label in disposition_choices %}
+            <option value="{{ val }}"{% if sales_process.vehicle_disposition == val %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">車両売却日 <small class="text-muted fw-normal">（入力で「売却」が自動完了）</small></label>
+          <input type="date" id="saleSoldAt" class="form-control"
+            value="{{ sales_process.sold_at|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">売却金額</label>
+          <div class="input-group">
+            <input type="number" id="saleSoldPrice" class="form-control" min="0" step="1"
+              value="{{ sales_process.sold_price|default:'' }}" placeholder="0">
+            <span class="input-group-text">円</span>
+          </div>
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+          <button class="btn btn-primary w-100" onclick="saveSaleInfo()">
+            <i class="bi bi-save"></i> 保存
+          </button>
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold">売却先（AA会場）</label>
+          <select id="saleSoldDestination" class="form-select">
+            <option value="">― 選択してください ―</option>
+            {% for venue in auction_venues %}
+            <option value="{{ venue.pk }}"
+              {% if sales_process.sold_destination_id == venue.pk %}selected{% endif %}>
+              {{ venue.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle"></i> 売却情報は契約作成後に入力できます。
+  </div>
+  {% endif %}
+
+  {# ── タブ⑥: 連絡履歴 ───────────────────────────────── #}
   {% elif active_tab == 'history' %}
   <div class="d-flex justify-content-end mb-2">
     <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#historyModal">
@@ -1767,6 +1982,7 @@
 const ASSESSMENT_ID = {{ assessment.pk }};
 const REQUEST_ID    = {{ assessment.assessment_request.pk }};
 {% if contract %}const CONTRACT_ID = {{ contract.pk }};{% endif %}
+{% if sales_process %}const SALES_PROCESS_ID = {{ sales_process.pk }};{% endif %}
 const ASSESSMENT_STATUS = '{{ assessment.status }}';
 const ASSESSMENT_APPROVAL_REQUESTED_TO_ID = {{ assessment.approval_requested_to_id|default:0 }};
 {% if contract %}const CONTRACT_APPROVAL_REQUESTED_TO_ID = {{ contract.approval_requested_to_id|default:0 }};{% endif %}
@@ -1799,6 +2015,100 @@ function saveAssigneeChange() {
     }
   })
   .catch(err => alert('通信エラー: ' + err.message));
+}
+{% endif %}
+
+{% if sales_process %}
+function saveSaleInfo() {
+  apiFetch(`/sateiinfo/api/sales-process/${SALES_PROCESS_ID}/update-info/`, {
+    method: 'POST',
+    body: JSON.stringify({
+      vehicle_disposition: document.getElementById('saleDisposition').value,
+      sold_at:             document.getElementById('saleSoldAt').value,
+      sold_price:          document.getElementById('saleSoldPrice').value,
+      sold_destination_id: document.getElementById('saleSoldDestination').value,
+    }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      showToast('成功', d.message, 'success');
+      if (d.sale_done) {
+        _updateStepCard('sale', true);
+      }
+    } else {
+      alert(d.message);
+    }
+  })
+  .catch(err => alert('通信エラー: ' + err.message));
+}
+
+// ステップ順序定義（repair_flag=false のとき repair はスキップ）
+const REPAIR_FLAG = {{ contract.repair_flag|yesno:"true,false" }};
+const STEP_NEXT = {
+  document:  'intake',
+  intake:    REPAIR_FLAG ? 'repair' : 'transport',
+  repair:    'transport',
+  transport: 'listing',
+  listing:   'sale',
+  sale:      null,
+  payment:   null,
+};
+
+function toggleStep(step, btn) {
+  apiFetch(`/sateiinfo/api/sales-process/${SALES_PROCESS_ID}/step/`, {
+    method: 'POST',
+    body: JSON.stringify({ step }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      _updateStepCard(step, d.new_value);
+      const next = STEP_NEXT[step];
+      if (next && next !== 'sale') {
+        _setStepAvailable(next, d.new_value);
+      }
+    } else {
+      showToast('エラー', d.message, 'danger');
+    }
+  })
+  .catch(err => alert('通信エラー: ' + err.message));
+}
+
+function _updateStepCard(step, done) {
+  const card = document.getElementById(`step-card-${step}`);
+  const btn  = document.getElementById(`step-btn-${step}`);
+  if (!card) return;
+  const inner = card.querySelector('div');
+  if (done) {
+    inner.classList.remove('bg-light', 'text-muted', 'opacity-50');
+    inner.classList.add('bg-success', 'text-white');
+    inner.querySelector('.small.mt-1').innerHTML = '<i class="bi bi-check-circle-fill"></i> 完了';
+    if (btn) { btn.textContent = '取消'; btn.disabled = false; btn.classList.remove('btn-outline-secondary'); btn.classList.add('btn-outline-light'); }
+  } else {
+    inner.classList.remove('bg-success', 'text-white');
+    inner.classList.add('bg-light', 'text-muted');
+    inner.querySelector('.small.mt-1').innerHTML = '<i class="bi bi-hourglass"></i> 待機';
+    if (btn) { btn.textContent = '完了にする'; btn.classList.remove('btn-outline-light'); btn.classList.add('btn-outline-secondary'); }
+  }
+}
+
+function _setStepAvailable(step, available) {
+  const card = document.getElementById(`step-card-${step}`);
+  const btn  = document.getElementById(`step-btn-${step}`);
+  if (!card || !btn) return;
+  const inner = card.querySelector('div');
+  const statusEl = inner.querySelector('.small.mt-1');
+  if (available) {
+    inner.classList.remove('opacity-50');
+    statusEl.innerHTML = '<i class="bi bi-hourglass"></i> 待機';
+    btn.disabled = false;
+    btn.removeAttribute('title');
+  } else {
+    inner.classList.add('opacity-50');
+    statusEl.innerHTML = '<i class="bi bi-lock"></i> 未解放';
+    btn.disabled = true;
+  }
 }
 {% endif %}
 </script>

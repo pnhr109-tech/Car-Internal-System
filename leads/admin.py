@@ -4,6 +4,7 @@ from .models import (
     AdvancePayment,
     Assessment,
     AssessmentCheckItem,
+    AuctionVenue,
     CarAssessmentRequest,
     ContactHistory,
     Customer,
@@ -180,4 +181,15 @@ class ContactHistoryAdmin(admin.ModelAdmin):
     list_filter   = ['contact_method', 'contacted_at']
     search_fields = ['assessment_request__customer_name', 'content']
     raw_id_fields = ['assessment_request', 'customer', 'recorded_by']
+    readonly_fields = ['created_at']
+
+
+# ---------------------------------------------------------------------------
+# オークション会場マスタ
+# ---------------------------------------------------------------------------
+
+@admin.register(AuctionVenue)
+class AuctionVenueAdmin(admin.ModelAdmin):
+    list_display  = ['name', 'created_at']
+    search_fields = ['name']
     readonly_fields = ['created_at']

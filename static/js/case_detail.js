@@ -761,7 +761,12 @@ function toggleRequiredDoc(key, received) {
         btn.onclick = () => toggleRequiredDoc(key, !received);
         btn.disabled = false;
       }
-      showToast('保存', received ? '受領済にしました' : '未済に戻しました', 'success');
+      if (d.auto_doc_done) {
+        showToast('保存', '全書類受取済 — 書類ステップが自動完了しました', 'success');
+        if (typeof _updateStepCard === 'function') _updateStepCard('document', true);
+      } else {
+        showToast('保存', received ? '受領済にしました' : '未済に戻しました', 'success');
+      }
     } else {
       showToast('エラー', d.message || '更新に失敗しました', 'danger');
       if (btn) btn.disabled = false;
