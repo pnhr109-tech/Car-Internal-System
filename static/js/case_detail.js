@@ -507,59 +507,33 @@ function deleteCheckItem(id) {
 
 // ── ステータス変更・承認申請 ──────────────────────────────────────────────
 
-let statusChangeModal;
-document.addEventListener('DOMContentLoaded', () => {
-  const el = document.getElementById('statusChangeModal');
-  if (el) {
-    statusChangeModal = new bootstrap.Modal(el);
-    // モーダルを開くたびに初期状態にリセット
-    el.addEventListener('show.bs.modal', () => {
-      const select = document.getElementById('newStatusSelect');
-      if (select) handleStatusSelectChange(select.value);
-    });
-  }
-});
-
-function handleStatusSelectChange(val) {
-  const approverSection = document.getElementById('approverSection');
-  const submitBtn       = document.getElementById('statusChangeSubmitBtn');
-  if (!approverSection || !submitBtn) return;
-  if (val === 'contracted') {
-    approverSection.style.display = '';
-    submitBtn.textContent = '承認申請';
-  } else {
-    approverSection.style.display = 'none';
-    submitBtn.textContent = '変更する';
-  }
-}
-
 function submitStatusChange() {
   const status = document.getElementById('newStatusSelect').value;
-  if (status === 'contracted') {
-    const approverId = document.getElementById('approverSelect').value;
-    if (!approverId) { showToast('エラー', '承認申請先を選択してください', 'danger'); return; }
-    apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/request-approval/`, {
-      method: 'POST',
-      body: JSON.stringify({ approver_id: parseInt(approverId) }),
-    })
-    .then(r => r.json())
-    .then(d => {
-      if (d.success) location.reload();
-      else showToast('エラー', d.message, 'danger');
-    })
-    .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
-  } else {
-    apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/update/`, {
-      method: 'POST',
-      body: JSON.stringify({ status }),
-    })
-    .then(r => r.json())
-    .then(d => {
-      if (d.success) location.reload();
-      else showToast('エラー', d.message, 'danger');
-    })
-    .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
-  }
+  apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/update/`, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) location.reload();
+    else showToast('エラー', d.message, 'danger');
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
+}
+
+function submitCancelContracted() {
+  const reason = (document.getElementById('cancelContractedReason')?.value || '').trim();
+  if (!reason) { showToast('エラー', 'キャンセル理由を入力してください', 'danger'); return; }
+  apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/cancel-contracted/`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) location.reload();
+    else showToast('エラー', d.message, 'danger');
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
 }
 
 // ── 査定承認 ─────────────────────────────────────────────────────────────

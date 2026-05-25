@@ -1,4 +1,5 @@
 {% extends 'base/internal_base.html' %}
+{% load humanize %}
 
 {% block title %}トップページ - gigicompany{% endblock %}
 {% block body_class %}bg-light{% endblock %}
@@ -39,7 +40,7 @@
                             {% endif %}
                             <div class="sales-kpi-card">
                                 <div class="sales-kpi-label">MQ</div>
-                                <div class="sales-kpi-value" id="kpiMq">{{ monthly_kpis.mq }}</div>
+                                <div class="sales-kpi-value {% if monthly_kpis.operating_profit >= 0 %}text-success{% else %}text-danger{% endif %}" id="kpiOperatingProfit">{{ monthly_kpis.operating_profit|intcomma }} 円</div>
                             </div>
                             <div class="sales-kpi-card">
                                 <div class="sales-kpi-label">管理数</div>
@@ -120,13 +121,13 @@
                                 <div class="store-mq-card">
                                     <div class="store-mq-name">{{ store_item.store }}</div>
                                     <div class="store-mq-value-row"><span>MQ</span><strong>{{ store_item.mq }}</strong></div>
+                                    <div class="store-mq-value-row"><span>経常利益</span><strong class="{% if store_item.operating_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ store_item.operating_profit|intcomma }}円</strong></div>
                                     <div class="store-mq-value-row"><span>商談</span><strong>{{ store_item.appointments }}</strong></div>
                                     <div class="store-mq-value-row"><span>契約</span><strong>{{ store_item.contracts }}</strong></div>
-                                    <div class="store-mq-value-row"><span>契約率</span><strong>{{ store_item.close_rate }}%</strong></div>
-                                    {% if store_item.self_cc_ratio %}<div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>{% endif %}
+                                    <div class="store-mq-value-row"><span>成約率</span><strong>{{ store_item.close_rate }}%</strong></div>
                                     <div class="store-mq-value-row"><span>管理数</span><strong>{{ store_item.managed_count }}</strong></div>
                                     <div class="store-mq-value-row"><span>没数</span><strong>{{ store_item.lost_count }}</strong></div>
-                                    <div class="store-mq-value-row"><span>査定前キャンセル数</span><strong>{{ store_item.pre_assessment_cancel_count }}</strong></div>
+                                    <div class="store-mq-value-row"><span>査定前キャンセル</span><strong>{{ store_item.pre_assessment_cancel_count }}</strong></div>
                                 </div>
                                 {% endfor %}
                             </div>
@@ -256,13 +257,32 @@
                                 <div class="store-mq-card">
                                     <div class="store-mq-name">{{ store_item.store }}</div>
                                     <div class="store-mq-value-row"><span>成約率</span><strong>{{ store_item.close_rate }}%</strong></div>
-                                    {% if store_item.self_cc_ratio %}<div class="store-mq-value-row"><span>自アポ：CC</span><strong>{{ store_item.self_cc_ratio }}</strong></div>{% endif %}
+                                    <div class="store-mq-value-row"><span>経常利益</span><strong class="{% if store_item.operating_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ store_item.operating_profit|intcomma }}円</strong></div>
                                 </div>
                                 {% endfor %}
                             </div>
                             <div class="board-detail-link-row"><a href="{% url 'home:board_detail' 'store-performance' %}" class="board-detail-link">詳細へ⇒</a></div>
                         </div>
                     </div>
+                </div>
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="sales-hero-section-ribbon">💼 売掛管理 — 次のステップ</div>
+                        <a href="{% url 'leads:sales_process_list' %}" class="board-detail-link">一覧へ ⇒</a>
+                    </div>
+                    {% if sales_process_steps %}
+                    <div class="ar-widget-list">
+                        {% for sp in sales_process_steps %}
+                        <a href="{% url 'leads:sales_process_list' %}" class="ar-widget-item">
+                            <span class="ar-widget-step-label">{{ sp.next_step }}</span>
+                            <div class="ar-widget-item-name">{{ sp.customer_name }}</div>
+                            <div class="ar-widget-item-vehicle"><i class="bi bi-car-front me-1"></i>{{ sp.vehicle_info }}</div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="workspace-empty text-start py-2">売掛管理の未完了案件はありません</div>
+                    {% endif %}
                 </div>
                 <div class="card mt-3">
                     <div class="card-header d-flex justify-content-between align-items-center bg-success-subtle border-success-subtle">
@@ -621,10 +641,16 @@
             setText('kpiContracts', data.contracts ?? 0);
             setText('kpiCloseRate', `${data.close_rate ?? 0}%`);
             if (data.self_cc_ratio) setText('kpiSelfCcRatio', data.self_cc_ratio);
-            setText('kpiMq', data.mq ?? 0);
             setText('kpiManagedCount', data.managed_count ?? 0);
             setText('kpiLostCount', data.lost_count ?? 0);
             setText('kpiPreCancelCount', data.pre_assessment_cancel_count ?? 0);
+
+            const profitEl = document.getElementById('kpiOperatingProfit');
+            if (profitEl) {
+                const profit = data.operating_profit ?? 0;
+                profitEl.textContent = profit.toLocaleString('ja-JP') + ' 円';
+                profitEl.className = 'sales-kpi-value ' + (profit >= 0 ? 'text-success' : 'text-danger');
+            }
 
             document.querySelectorAll('.personal-period-btn').forEach((btn) => {
                 const isActive = btn.dataset.period === periodKey;

@@ -926,3 +926,55 @@ h6, .h6 { font-size: var(--font-base); font-weight: 700; }
   gap: 5px;
   align-items: center;
 }
+
+/* ── 売掛管理ウィジェット ────────────────────────────── */
+.ar-widget-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+}
+
+.ar-widget-item {
+  border: 0;
+  border-left: 6px solid var(--c-warning);
+  border-radius: 10px;
+  background: var(--c-white);
+  padding: 0.36rem 0.55rem;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.12s;
+}
+
+.ar-widget-item:hover {
+  background: var(--c-secondary-hover-bg);
+  color: inherit;
+  text-decoration: none;
+}
+
+.ar-widget-step-label {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--c-warning-bg);
+  color: var(--c-primary);
+  padding: 0.08rem 0.45rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.18rem;
+}
+
+.ar-widget-item-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--c-text);
+}
+
+.ar-widget-item-vehicle {
+  margin-top: 0.08rem;
+  font-size: 0.7rem;
+  line-height: 1.15;
+  color: var(--c-text-muted);
+}

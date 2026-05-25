@@ -1,0 +1,84 @@
+{% extends 'base/internal_base.html' %}
+{% load humanize %}
+{% block title %}管理開放案件一覧{% endblock %}
+
+{% block content %}
+<div class="container-xxl py-4">
+
+  <div class="page-nav mb-3">
+    <a href="{% url 'leads:case_list' %}" class="page-back-link"><i class="bi bi-chevron-left"></i> 案件一覧へ</a>
+    <h4 class="page-nav-title mb-0"><i class="bi bi-unlock text-warning me-2"></i>管理開放案件</h4>
+  </div>
+
+  <div class="alert alert-warning d-flex align-items-start gap-2 mb-3" role="alert">
+    <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+    <div class="small">
+      管理ステータスになってから <strong>4日以上</strong> 経過した案件です。<br>
+      担当者に関わらず全営業が対応できます。商談予定を組む場合は案件詳細からステータスを更新してください。
+    </div>
+  </div>
+
+  {% if assessments %}
+  <div class="card">
+    <div class="card-body p-0">
+      {% for a in assessments %}
+      {% with owner=a.assigned_to.get_full_name|default:a.assigned_to.username elapsed=a.managed_at|timesince %}
+      <div class="dash-feed-item" onclick="location.href='{% url 'leads:case_detail' a.pk %}'">
+
+        <div class="dash-feed-main">
+          <span class="dash-feed-name">{{ a.customer.name }}</span>
+          <div class="d-flex align-items-center gap-1 flex-shrink-0">
+            <span class="ui-badge ui-badge--warning">管理</span>
+            <span class="dash-feed-chip text-danger fw-bold">{{ elapsed }}経過</span>
+            {% if owner %}<span class="dash-feed-owner">元担当: {{ owner }}</span>{% endif %}
+          </div>
+        </div>
+
+        {% with v=a.vehicle %}
+        {% if v.maker or v.car_model %}
+        <div class="dash-feed-vehicle">
+          <i class="bi bi-car-front"></i>
+          {{ v.maker }} {{ v.car_model }}
+          {% if v.year %}<span class="dash-feed-chip">{{ v.year }}</span>{% endif %}
+          {% if v.mileage %}<span class="dash-feed-chip">{{ v.mileage }}</span>{% endif %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="dash-feed-meta">
+          {% if a.assessment_request.address %}<i class="bi bi-geo-alt"></i> {{ a.assessment_request.address }} &nbsp;·&nbsp; {% endif %}
+          <i class="bi bi-calendar-check"></i> 管理開始: {{ a.managed_at|date:"Y/m/d" }}
+          {% if a.assessment_price %} &nbsp;·&nbsp; <i class="bi bi-tag"></i> 査定額: {{ a.assessment_price|floatformat:0|intcomma }}円{% endif %}
+        </div>
+
+        <div class="dash-feed-actions">
+          <a href="{% url 'leads:case_detail' a.pk %}" class="btn btn-sm btn-primary" onclick="event.stopPropagation()">
+            <i class="bi bi-arrow-right-circle"></i> 案件詳細・対応する
+          </a>
+          {% if a.assessment_request.phone_number %}
+          <a href="tel:{{ a.assessment_request.phone_number }}" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation()">
+            <i class="bi bi-telephone-fill"></i> {{ a.assessment_request.phone_number }}
+          </a>
+          {% endif %}
+        </div>
+
+      </div>
+      {% endwith %}
+      {% endfor %}
+    </div>
+  </div>
+
+  {% else %}
+  <div class="card">
+    <div class="card-body text-center py-5">
+      <i class="bi bi-check-circle text-success" style="font-size: 2.5rem;"></i>
+      <p class="mt-3 mb-0 text-muted">現在、管理開放対象の案件はありません</p>
+      <p class="text-muted small">（管理ステータスになってから4日未満の案件は表示されません）</p>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{# ステータス一括変更用モーダル（案件詳細へ誘導するので不要だが、将来の拡張用にコメントアウト） #}
+{% endblock %}

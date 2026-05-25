@@ -190,6 +190,6 @@ class ContactHistoryAdmin(admin.ModelAdmin):
 
 @admin.register(AuctionVenue)
 class AuctionVenueAdmin(admin.ModelAdmin):
-    list_display  = ['name', 'created_at']
+    list_display  = ['name', 'entry_fee', 'contract_fee', 'created_at']
     search_fields = ['name']
     readonly_fields = ['created_at']

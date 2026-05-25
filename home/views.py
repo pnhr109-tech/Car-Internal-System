@@ -20,6 +20,7 @@ from .services import (
     get_recent_sale_updates,
     get_store_performance_summary,
     get_user_period_kpis,
+    get_user_sales_process_next_steps,
     get_upcoming_calendar_events,
     get_recent_chat_messages,
 )
@@ -35,9 +36,10 @@ def dashboard(request):
     recent_sale_updates = get_recent_sale_updates(limit=3)
     closed_rankings = get_closed_rankings(limit=3)
     mq_rankings = get_mq_rankings(limit=3)
-    period_kpis = get_user_period_kpis(current_user_display_name)
+    period_kpis = get_user_period_kpis(current_user_display_name, user=request.user)
     monthly_kpis = period_kpis.get('month', {})
     store_performance_summary = get_store_performance_summary()
+    sales_process_steps = get_user_sales_process_next_steps(request.user)
 
     return render(request, 'home/dashboard.html', {
         'latest_assessments': latest_assessments,
@@ -49,6 +51,7 @@ def dashboard(request):
         'monthly_kpis': monthly_kpis,
         'period_kpis': period_kpis,
         'store_performance_summary': store_performance_summary,
+        'sales_process_steps': sales_process_steps,
         'current_user_display_name': current_user_display_name,
         'follow_status_choices': [
             c[0] for c in CarAssessmentRequest.FOLLOW_STATUS_CHOICES
@@ -98,7 +101,7 @@ def board_detail(request, section):
         rows = get_monthly_store_performance_detail()
         context = {
             'page_title': '店舗別実績 詳細（当月）',
-            'headers': ['店舗', 'MQ', '商談数', '契約数', '契約率', '自アポ：CC'],
+            'headers': ['店舗', 'MQ', '商談数', '契約数', '契約率', '管理数', '没数', '査定前キャンセル', '売却件数', '売却金額', '経常利益'],
             'records': [
                 [
                     row.get('store'),
@@ -106,7 +109,12 @@ def board_detail(request, section):
                     row.get('appointments'),
                     row.get('contracts'),
                     f"{row.get('close_rate')}%",
-                    row.get('self_cc_ratio'),
+                    row.get('managed_count'),
+                    row.get('lost_count'),
+                    row.get('pre_assessment_cancel_count'),
+                    row.get('sold_count'),
+                    f"{row.get('sold_amount', 0):,}円",
+                    f"{row.get('operating_profit', 0):,}円",
                 ] for row in rows
             ],
             'datetime_indexes': [],

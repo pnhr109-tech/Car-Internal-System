@@ -3,13 +3,16 @@ import json
 from datetime import date, datetime, timedelta
 
 from django.utils import timezone
-from django.db.models import Count, F, IntegerField, Subquery, OuterRef
+from django.db.models import (
+    Case, Count, DecimalField, F, IntegerField, Subquery, OuterRef, Sum, Value, When,
+)
+from django.db.models.functions import Coalesce
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from leads.models import CarAssessmentRequest, Assessment
+from leads.models import CarAssessmentRequest, Assessment, SalesProcess
 
 
 CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
@@ -21,6 +24,106 @@ CHAT_SCOPES = [
 
 def _self_cc_ratio_text(self_appointments, cc_appointments):
     return None
+
+
+def _build_sales_financial_kpis(qs):
+    """SalesProcess クエリセットから売却・経常利益集計を返す（int 値で返す）"""
+    _dec = DecimalField(max_digits=14, decimal_places=0)
+    effective_purchase = Case(
+        When(
+            contract__amount_correction_flag=True,
+            contract__corrected_price__isnull=False,
+            then=F('contract__corrected_price'),
+        ),
+        default=F('contract__purchase_price_excl_tax'),
+        output_field=_dec,
+    )
+    totals = qs.aggregate(
+        sold_count=Count('id'),
+        sold_amount=Coalesce(Sum('sold_price'), Value(0), output_field=_dec),
+        purchase_amount=Coalesce(Sum(effective_purchase), Value(0), output_field=_dec),
+        total_entry_fee=Coalesce(Sum('sold_destination__entry_fee'), Value(0), output_field=_dec),
+        total_contract_fee=Coalesce(Sum('sold_destination__contract_fee'), Value(0), output_field=_dec),
+        total_transport_personal=Coalesce(Sum('transport_fee_personal'), Value(0), output_field=_dec),
+        total_transport_auction=Coalesce(Sum('transport_fee_auction'), Value(0), output_field=_dec),
+        total_other_fee=Coalesce(Sum('other_fee'), Value(0), output_field=_dec),
+    )
+    sold_amount = int(totals['sold_amount'] or 0)
+    total_cost = int(
+        (totals['purchase_amount'] or 0) +
+        (totals['total_entry_fee'] or 0) +
+        (totals['total_contract_fee'] or 0) +
+        (totals['total_transport_personal'] or 0) +
+        (totals['total_transport_auction'] or 0) +
+        (totals['total_other_fee'] or 0)
+    )
+    return {
+        'sold_count': totals['sold_count'],
+        'sold_amount': sold_amount,
+        'operating_profit': sold_amount - total_cost,
+    }
+
+
+def _build_user_financial_kpis(user, period_start, period_end):
+    """ユーザー担当契約の期間内売却・利益集計"""
+    if user is None:
+        return {'sold_count': 0, 'sold_amount': 0, 'operating_profit': 0}
+    qs = SalesProcess.objects.filter(
+        sale_done=True,
+        sold_price__isnull=False,
+        contract__assigned_to=user,
+        sold_at__gte=period_start.date(),
+        sold_at__lt=period_end.date(),
+    )
+    return _build_sales_financial_kpis(qs)
+
+
+def _build_store_kpis(store, period_start, period_end):
+    """Store オブジェクトと期間から、所属社員の Assessment ステータス別KPIと財務KPIを返す"""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    store_users = User.objects.filter(
+        profile__store=store,
+        profile__is_active_employee=True,
+        is_active=True,
+    )
+
+    base_qs = Assessment.objects.filter(
+        assigned_to__in=store_users,
+        created_at__gte=period_start,
+        created_at__lt=period_end,
+    )
+
+    appointments = base_qs.count()
+    contracts    = base_qs.filter(status=Assessment.STATUS_CONTRACTED).count()
+    lost_count   = base_qs.filter(status=Assessment.STATUS_LOST).count()
+    managed_count = base_qs.filter(status=Assessment.STATUS_MANAGED).count()
+    pre_cancel   = base_qs.filter(status=Assessment.STATUS_PRE_CANCEL).count()
+    close_rate   = round((contracts / appointments) * 100, 1) if appointments else 0.0
+
+    financial_qs = SalesProcess.objects.filter(
+        sale_done=True,
+        sold_price__isnull=False,
+        contract__assigned_to__in=store_users,
+        sold_at__gte=period_start.date(),
+        sold_at__lt=period_end.date(),
+    )
+    financial = _build_sales_financial_kpis(financial_qs)
+
+    return {
+        'store': store.name,
+        'mq': appointments,
+        'appointments': appointments,
+        'contracts': contracts,
+        'close_rate': close_rate,
+        'managed_count': managed_count,
+        'lost_count': lost_count,
+        'pre_assessment_cancel_count': pre_cancel,
+        'self_cc_ratio': None,
+        'cc_appointments': 0,
+        **financial,
+    }
 
 
 def _week_of_month(dt_value):
@@ -41,54 +144,24 @@ def _current_year_range():
     return year_start, next_year_start
 
 
-def _build_user_kpis(display_name, period_start, period_end, period_label):
-    appointment_count = CarAssessmentRequest.objects.filter(
-        follow_status=CarAssessmentRequest.STATUS_APPOINTMENT,
-        status_updated_by=display_name,
-        status_updated_at__gte=period_start,
-        status_updated_at__lt=period_end,
-    ).count()
-
-    contract_count = CarAssessmentRequest.objects.filter(
-        follow_status=CarAssessmentRequest.STATUS_CLOSED,
-        status_updated_by=display_name,
-        status_updated_at__gte=period_start,
-        status_updated_at__lt=period_end,
-    ).count()
-
-    mq_count = CarAssessmentRequest.objects.filter(
-        sales_owner_name=display_name,
-        application_datetime__gte=period_start,
-        application_datetime__lt=period_end,
-    ).count()
-
-    self_appointments = CarAssessmentRequest.objects.filter(
-        follow_status=CarAssessmentRequest.STATUS_APPOINTMENT,
-        status_updated_by=display_name,
-        status_updated_at__gte=period_start,
-        status_updated_at__lt=period_end,
-        sales_owner_name=display_name,
-    ).count()
-    cc_appointments = max(appointment_count - self_appointments, 0)
-    managed_count = CarAssessmentRequest.objects.filter(
-        sales_owner_name=display_name,
-        application_datetime__gte=period_start,
-        application_datetime__lt=period_end,
-    ).count()
-    lost_count = CarAssessmentRequest.objects.filter(
-        follow_status=CarAssessmentRequest.STATUS_LOST,
-        status_updated_by=display_name,
-        status_updated_at__gte=period_start,
-        status_updated_at__lt=period_end,
-    ).count()
-    pre_assessment_cancel_count = CarAssessmentRequest.objects.filter(
-        sales_owner_name=display_name,
-        status_updated_at__gte=period_start,
-        status_updated_at__lt=period_end,
-        sales_note__icontains='査定前キャンセル',
-    ).count()
+def _build_user_kpis(display_name, period_start, period_end, period_label, user=None):
+    if user is not None:
+        base_qs = Assessment.objects.filter(
+            assigned_to=user,
+            created_at__gte=period_start,
+            created_at__lt=period_end,
+        )
+        appointment_count           = base_qs.count()
+        contract_count              = base_qs.filter(status=Assessment.STATUS_CONTRACTED).count()
+        lost_count                  = base_qs.filter(status=Assessment.STATUS_LOST).count()
+        managed_count               = base_qs.filter(status=Assessment.STATUS_MANAGED).count()
+        pre_assessment_cancel_count = base_qs.filter(status=Assessment.STATUS_PRE_CANCEL).count()
+        mq_count = appointment_count
+    else:
+        appointment_count = contract_count = lost_count = managed_count = pre_assessment_cancel_count = mq_count = 0
 
     close_rate = round((contract_count / appointment_count) * 100, 1) if appointment_count else 0.0
+    financial  = _build_user_financial_kpis(user, period_start, period_end)
 
     return {
         'period_label': period_label,
@@ -96,12 +169,13 @@ def _build_user_kpis(display_name, period_start, period_end, period_label):
         'contracts': contract_count,
         'close_rate': close_rate,
         'mq': mq_count,
-        'self_appointments': self_appointments,
-        'cc_appointments': cc_appointments,
-        'self_cc_ratio': _self_cc_ratio_text(self_appointments, cc_appointments),
+        'self_appointments': 0,
+        'cc_appointments': 0,
+        'self_cc_ratio': None,
         'managed_count': managed_count,
         'lost_count': lost_count,
         'pre_assessment_cancel_count': pre_assessment_cancel_count,
+        **financial,
     }
 
 
@@ -132,109 +206,84 @@ def get_user_monthly_kpis(display_name):
     }
 
 
-def get_user_period_kpis(display_name):
+def get_user_period_kpis(display_name, user=None):
     now = timezone.localtime()
     year_start, next_year_start = _current_year_range()
     month_start, next_month_start = _current_month_range()
     week_start, next_week_start = _current_week_range()
 
     return {
-        'year': _build_user_kpis(display_name, year_start, next_year_start, f'{now.year}年'),
-        'month': _build_user_kpis(display_name, month_start, next_month_start, f'{now.year}年{now.month}月'),
-        'week': _build_user_kpis(display_name, week_start, next_week_start, f'{now.month}月第{_week_of_month(now)}週'),
+        'year': _build_user_kpis(display_name, year_start, next_year_start, f'{now.year}年', user=user),
+        'month': _build_user_kpis(display_name, month_start, next_month_start, f'{now.year}年{now.month}月', user=user),
+        'week': _build_user_kpis(display_name, week_start, next_week_start, f'{now.month}月第{_week_of_month(now)}週', user=user),
     }
+
+
+_SALES_STORE_CODES = ('TSUKUBA', 'MITO', 'OYAMA', 'UTSUNOMIYA')
+
+
+def _get_sales_stores():
+    from accounts.models import Store
+    return list(Store.objects.filter(code__in=_SALES_STORE_CODES, is_active=True))
 
 
 def get_store_performance_summary():
     month_start, next_month_start = _current_month_range()
-    month_queryset = CarAssessmentRequest.objects.filter(
-        application_datetime__gte=month_start,
-        application_datetime__lt=next_month_start,
-    )
-
-    stores = [
-        ('つくば', 'つくば'),
-        ('水戸', '水戸'),
-        ('小山', '小山'),
-    ]
-
-    summary = []
-    for label, keyword in stores:
-        store_queryset = month_queryset.filter(address__icontains=keyword)
-        mq = store_queryset.count()
-        appointments = store_queryset.filter(follow_status=CarAssessmentRequest.STATUS_APPOINTMENT).count()
-        contracts = store_queryset.filter(follow_status=CarAssessmentRequest.STATUS_CLOSED).count()
-        self_appointments = store_queryset.filter(
-            follow_status=CarAssessmentRequest.STATUS_APPOINTMENT,
-            sales_owner_name=F('status_updated_by'),
-        ).count()
-        cc_appointments = max(appointments - self_appointments, 0)
-        managed_count = store_queryset.exclude(sales_owner_name='').count()
-        lost_count = store_queryset.filter(follow_status=CarAssessmentRequest.STATUS_LOST).count()
-        pre_assessment_cancel_count = store_queryset.filter(sales_note__icontains='査定前キャンセル').count()
-        close_rate = round((contracts / appointments) * 100, 1) if appointments else 0.0
-        self_appointment_rate = round((self_appointments / appointments) * 100, 1) if appointments else 0.0
-        cc_rate = round((cc_appointments / appointments) * 100, 1) if appointments else 0.0
-        self_cc_ratio = _self_cc_ratio_text(self_appointments, cc_appointments)
-        summary.append({
-            'store': label,
-            'mq': mq,
-            'appointments': appointments,
-            'contracts': contracts,
-            'close_rate': close_rate,
-            'self_appointments': self_appointments,
-            'cc_appointments': cc_appointments,
-            'self_appointment_rate': self_appointment_rate,
-            'cc_rate': cc_rate,
-            'self_cc_ratio': self_cc_ratio,
-            'managed_count': managed_count,
-            'lost_count': lost_count,
-            'pre_assessment_cancel_count': pre_assessment_cancel_count,
-        })
-    return summary
+    return [_build_store_kpis(store, month_start, next_month_start) for store in _get_sales_stores()]
 
 
 def get_monthly_store_performance_detail():
     month_start, next_month_start = _current_month_range()
-    month_queryset = CarAssessmentRequest.objects.filter(
-        application_datetime__gte=month_start,
-        application_datetime__lt=next_month_start,
-    )
+    return [_build_store_kpis(store, month_start, next_month_start) for store in _get_sales_stores()]
 
-    records = []
-    for store_label, keyword in [('つくば', 'つくば'), ('水戸', '水戸'), ('小山', '小山')]:
-        store_queryset = month_queryset.filter(address__icontains=keyword)
-        mq = store_queryset.count()
-        appointments = store_queryset.filter(follow_status=CarAssessmentRequest.STATUS_APPOINTMENT).count()
-        contracts = store_queryset.filter(follow_status=CarAssessmentRequest.STATUS_CLOSED).count()
-        self_appointments = store_queryset.filter(
-            follow_status=CarAssessmentRequest.STATUS_APPOINTMENT,
-            sales_owner_name=F('status_updated_by'),
-        ).count()
-        cc_appointments = max(appointments - self_appointments, 0)
-        managed_count = store_queryset.exclude(sales_owner_name='').count()
-        lost_count = store_queryset.filter(follow_status=CarAssessmentRequest.STATUS_LOST).count()
-        pre_assessment_cancel_count = store_queryset.filter(sales_note__icontains='査定前キャンセル').count()
-        close_rate = round((contracts / appointments) * 100, 1) if appointments else 0.0
-        self_appointment_rate = round((self_appointments / appointments) * 100, 1) if appointments else 0.0
-        cc_rate = round((cc_appointments / appointments) * 100, 1) if appointments else 0.0
-        self_cc_ratio = _self_cc_ratio_text(self_appointments, cc_appointments)
-        records.append({
-            'store': store_label,
-            'mq': mq,
-            'appointments': appointments,
-            'contracts': contracts,
-            'close_rate': close_rate,
-            'self_appointments': self_appointments,
-            'cc_appointments': cc_appointments,
-            'self_appointment_rate': self_appointment_rate,
-            'cc_rate': cc_rate,
-            'self_cc_ratio': self_cc_ratio,
-            'managed_count': managed_count,
-            'lost_count': lost_count,
-            'pre_assessment_cancel_count': pre_assessment_cancel_count,
+
+_SALES_PROCESS_STEPS = [
+    ('document_done',  '書類'),
+    ('intake_done',    '入庫'),
+    ('repair_done',    '加修'),
+    ('transport_done', '陸送'),
+    ('listing_done',   '出品'),
+    ('sale_done',      '売却'),
+    ('payment_done',   '入金'),
+    ('transfer_done',  '振込'),
+]
+
+
+def get_user_sales_process_next_steps(user):
+    """ログインユーザーが担当する売掛管理の未完了レコードと次のステップを返す"""
+    if user is None:
+        return []
+
+    qs = SalesProcess.objects.filter(
+        contract__assigned_to=user,
+        transfer_done=False,
+    ).select_related(
+        'contract',
+        'contract__customer',
+        'contract__vehicle',
+    ).order_by('created_at')
+
+    results = []
+    for sp in qs:
+        repair_flag = getattr(sp.contract, 'repair_flag', False)
+        next_step = None
+        for field, label in _SALES_PROCESS_STEPS:
+            if field == 'repair_done' and not repair_flag:
+                continue
+            if not getattr(sp, field):
+                next_step = label
+                break
+
+        customer = getattr(sp.contract, 'customer', None)
+        vehicle  = getattr(sp.contract, 'vehicle', None)
+        results.append({
+            'id': sp.id,
+            'customer_name': customer.name if customer else '-',
+            'vehicle_info': f'{vehicle.maker} {vehicle.car_model}' if vehicle else '-',
+            'next_step': next_step or '完了待ち',
         })
-    return records
+
+    return results
 
 
 def get_recent_appointment_updates_detail(limit=50):

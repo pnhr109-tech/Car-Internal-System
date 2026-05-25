@@ -349,6 +349,7 @@ class Assessment(models.Model):
     management_status   = models.CharField(max_length=20, choices=MANAGEMENT_STATUS_CHOICES, blank=True, verbose_name='管理方針')
     cancel_reason       = models.CharField(max_length=255, blank=True, verbose_name='キャンセル理由')
     cancelled_at        = models.DateTimeField(null=True, blank=True, verbose_name='キャンセル日時')
+    managed_at          = models.DateTimeField(null=True, blank=True, verbose_name='管理開始日時')
     approved_by         = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -762,8 +763,10 @@ class ContactHistory(models.Model):
 
 class AuctionVenue(models.Model):
     """オークション会場マスタ"""
-    name       = models.CharField(max_length=100, unique=True, verbose_name='会場名')
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
+    name          = models.CharField(max_length=100, unique=True, verbose_name='会場名')
+    entry_fee     = models.DecimalField(max_digits=10, decimal_places=0, default=12100, verbose_name='出品費用（円）')
+    contract_fee  = models.DecimalField(max_digits=10, decimal_places=0, default=13200, verbose_name='成約費用（円）')
+    created_at    = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
 
     class Meta:
         db_table     = 'auction_venues'
@@ -829,6 +832,10 @@ class SalesProcess(models.Model):
         related_name='sales_processes',
         verbose_name='売却先（会場）',
     )
+
+    transport_fee_personal = models.DecimalField(max_digits=10, decimal_places=0, default=8800, null=True, blank=True, verbose_name='個人宅陸送費用（円）')
+    transport_fee_auction  = models.DecimalField(max_digits=10, decimal_places=0, default=8800, null=True, blank=True, verbose_name='オークション会場搬送費用（円）')
+    other_fee              = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='その他費用（円）')
 
     transfer_approval_requested_at = models.DateTimeField(null=True, blank=True, verbose_name='振込承認申請日時')
     transfer_approved_by = models.ForeignKey(

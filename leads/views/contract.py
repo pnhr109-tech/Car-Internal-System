@@ -732,7 +732,7 @@ def toggle_case_sales_step(request, process_id):
 @login_required
 @require_POST
 def update_sales_info(request, process_id):
-    """売却情報（区分・売却日・売却金額・売却先）更新 API"""
+    """売却情報（区分・売却日・売却金額・売却先・各種費用）更新 API"""
     process = get_object_or_404(SalesProcess, pk=process_id)
     try:
         payload = json.loads(request.body)
@@ -772,6 +772,17 @@ def update_sales_info(request, process_id):
     else:
         process.sold_destination = None
     update_fields.append('sold_destination')
+
+    for fee_field in ('transport_fee_personal', 'transport_fee_auction', 'other_fee'):
+        raw = payload.get(fee_field, '')
+        if raw != '' and raw is not None:
+            try:
+                setattr(process, fee_field, Decimal(str(raw)))
+            except (InvalidOperation, ValueError):
+                return JsonResponse({'success': False, 'message': f'{fee_field} の形式が不正です'}, status=400)
+        else:
+            setattr(process, fee_field, None)
+        update_fields.append(fee_field)
 
     process.updated_by = request.user
     update_fields.append('updated_by')

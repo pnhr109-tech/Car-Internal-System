@@ -138,12 +138,18 @@ def case_detail(request, pk):
         rate = round(float(contract.tax_amount / contract.purchase_price_excl_tax * 100))
         contract_tax_rate = rate if rate in (0, 8, 10) else 10
 
+    editable_status_choices = [
+        (s, l) for s, l in Assessment.STATUS_CHOICES
+        if s != Assessment.STATUS_CONTRACTED
+    ]
+
     return render(request, 'leads/case_detail.html', {
         'assessment':                   assessment,
         'contract':                     contract,
         'histories':                    histories,
         'check_items':                  check_items,
         'documents':                    documents,
+        'editable_status_choices':      editable_status_choices,
         'identity_docs':                identity_docs,
         'bank_accounts':                bank_accounts,
         'vehicle_images':               vehicle_images,
@@ -228,7 +234,11 @@ def update_assessment_info(request, assessment_id):
     except (json.JSONDecodeError, AttributeError):
         return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
 
-    allowed_statuses = {s for s, _ in Assessment.STATUS_CHOICES}
+    # contracted → ステータス変更は専用 cancel-contracted API で行う
+    if assessment.status == Assessment.STATUS_CONTRACTED:
+        return JsonResponse({'success': False, 'message': '成約中の案件は成約キャンセル操作を使用してください'}, status=400)
+
+    allowed_statuses = {s for s, _ in Assessment.STATUS_CHOICES} - {Assessment.STATUS_CONTRACTED}
     status = payload.get('status', '').strip()
     if status and status not in allowed_statuses:
         return JsonResponse({'success': False, 'message': 'ステータスが不正です'}, status=400)
@@ -237,6 +247,9 @@ def update_assessment_info(request, assessment_id):
     if status:
         assessment.status = status
         update_fields.append('status')
+        if status == Assessment.STATUS_MANAGED and not assessment.managed_at:
+            assessment.managed_at = timezone.now()
+            update_fields.append('managed_at')
 
     assessment_datetime_raw = payload.get('assessment_datetime', '')
     if assessment_datetime_raw:
@@ -482,6 +495,7 @@ def delete_bank_account(request, account_id):
 def request_assessment_approval(request, assessment_id):
     """成約ステータス変更 + 承認申請 API（営業担当者が実行）"""
     assessment = get_object_or_404(Assessment, pk=assessment_id)
+
     try:
         payload     = json.loads(request.body)
         approver_id = payload.get('approver_id')
@@ -544,6 +558,61 @@ def approve_assessment(request, assessment_id):
         return JsonResponse({'success': True, 'message': '差し戻しました'})
 
     return JsonResponse({'success': False, 'message': 'action が不正です'}, status=400)
+
+
+@login_required
+@require_POST
+def cancel_contracted_assessment(request, assessment_id):
+    """成約キャンセル API — status を lost に変更し承認情報をクリアする"""
+    assessment = get_object_or_404(Assessment, pk=assessment_id)
+
+    if assessment.status != Assessment.STATUS_CONTRACTED:
+        return JsonResponse({'success': False, 'message': '成約ステータスの案件のみキャンセルできます'}, status=400)
+
+    try:
+        payload = json.loads(request.body)
+        reason  = (payload.get('reason') or '').strip()
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    if not reason:
+        return JsonResponse({'success': False, 'message': 'キャンセル理由を入力してください'}, status=400)
+
+    assessment.status                = Assessment.STATUS_LOST
+    assessment.cancel_reason         = reason
+    assessment.cancelled_at          = timezone.now()
+    assessment.approved_by           = None
+    assessment.approved_at           = None
+    assessment.approval_requested_to = None
+    assessment.approval_requested_at = None
+    assessment.save(update_fields=[
+        'status', 'cancel_reason', 'cancelled_at',
+        'approved_by', 'approved_at',
+        'approval_requested_to', 'approval_requested_at',
+        'updated_at',
+    ])
+    return JsonResponse({'success': True, 'message': '成約をキャンセルしました（没案件）'})
+
+
+@login_required
+def managed_release_list(request):
+    """管理開放一覧 — 管理ステータスになってから4日以上経過した案件"""
+    from datetime import timedelta
+    cutoff = timezone.now() - timedelta(days=4)
+    qs = Assessment.objects.filter(
+        status=Assessment.STATUS_MANAGED,
+        managed_at__lte=cutoff,
+    ).select_related(
+        'assessment_request', 'customer', 'vehicle', 'assigned_to',
+    ).order_by('managed_at')
+
+    return render(request, 'leads/managed_release_list.html', {
+        'assessments': qs,
+        'editable_status_choices': [
+            (s, l) for s, l in Assessment.STATUS_CHOICES
+            if s != Assessment.STATUS_CONTRACTED
+        ],
+    })
 
 
 @login_required

@@ -99,11 +99,17 @@
               <span class="badge bg-{% if assessment.status == 'contracted' %}success{% elif assessment.status == 'lost' or assessment.status == 'pre_cancel' %}danger{% elif assessment.status == 'managed' %}secondary{% else %}primary{% endif %}">
                 {{ assessment.get_status_display }}
               </span>
-              {% if not assessment.approved_by %}
+              {% if assessment.status != 'contracted' %}
               <button class="btn btn-sm btn-outline-secondary ms-1 py-0 px-1"
                       data-bs-toggle="modal" data-bs-target="#statusChangeModal"
                       title="ステータスを変更">
                 <i class="bi bi-pencil-square"></i>
+              </button>
+              {% else %}
+              <button class="btn btn-sm btn-outline-danger ms-1 py-0 px-2"
+                      data-bs-toggle="modal" data-bs-target="#cancelContractedModal"
+                      title="成約キャンセル">
+                <i class="bi bi-x-circle me-1"></i>成約キャンセル
               </button>
               {% endif %}
             </dd>
@@ -115,6 +121,7 @@
             <dd class="col-7">{% if assessment.market_price %}{{ assessment.market_price|floatformat:0|intcomma }}円{% else %}-{% endif %}</dd>
             <dt class="col-5 text-muted">総合評価</dt>
             <dd class="col-7">{% if assessment.overall_rating %}{{ assessment.overall_rating }} / 5{% else %}-{% endif %}</dd>
+            {% if assessment.status != 'lost' and assessment.status != 'pre_cancel' %}
             <dt class="col-5 text-muted">承認</dt>
             <dd class="col-7">
               {% if assessment.approved_by %}
@@ -133,6 +140,7 @@
               <span class="text-muted small">-</span>
               {% endif %}
             </dd>
+            {% endif %}
           </dl>
           {% if assessment.remarks %}
           <div class="mt-3 p-2 bg-light rounded">{{ assessment.remarks|linebreaksbr }}</div>
@@ -863,7 +871,8 @@
           <label class="form-label fw-semibold">売却金額</label>
           <div class="input-group">
             <input type="number" id="saleSoldPrice" class="form-control" min="0" step="1"
-              value="{{ sales_process.sold_price|default:'' }}" placeholder="0">
+              value="{{ sales_process.sold_price|default:'' }}" placeholder="0"
+              oninput="updateSaleProfit()">
             <span class="input-group-text">円</span>
           </div>
         </div>
@@ -872,9 +881,11 @@
             <i class="bi bi-save"></i> 保存
           </button>
         </div>
-        <div class="col-12">
+
+        {# 売却先（AA会場）と会場費用 #}
+        <div class="col-md-6">
           <label class="form-label fw-semibold">売却先（AA会場）</label>
-          <select id="saleSoldDestination" class="form-select">
+          <select id="saleSoldDestination" class="form-select" onchange="onVenueChange()">
             <option value="">― 選択してください ―</option>
             {% for venue in auction_venues %}
             <option value="{{ venue.pk }}"
@@ -883,6 +894,63 @@
             </option>
             {% endfor %}
           </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">出品費用 <small class="text-muted fw-normal">（会場マスタ）</small></label>
+          <div class="input-group">
+            <input type="text" id="saleEntryFee" class="form-control bg-light" readonly
+              value="{{ sales_process.sold_destination.entry_fee|default:0 }}">
+            <span class="input-group-text">円</span>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">成約費用 <small class="text-muted fw-normal">（会場マスタ）</small></label>
+          <div class="input-group">
+            <input type="text" id="saleContractFee" class="form-control bg-light" readonly
+              value="{{ sales_process.sold_destination.contract_fee|default:0 }}">
+            <span class="input-group-text">円</span>
+          </div>
+        </div>
+
+        {# 陸送・搬送費用（編集可） #}
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">個人宅陸送費用</label>
+          <div class="input-group">
+            <input type="number" id="saleTransportFeePersonal" class="form-control" min="0" step="1"
+              value="{{ sales_process.transport_fee_personal|default:'8800' }}" placeholder="8800"
+              oninput="updateSaleProfit()">
+            <span class="input-group-text">円</span>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">AA会場搬送費用</label>
+          <div class="input-group">
+            <input type="number" id="saleTransportFeeAuction" class="form-control" min="0" step="1"
+              value="{{ sales_process.transport_fee_auction|default:'8800' }}" placeholder="8800"
+              oninput="updateSaleProfit()">
+            <span class="input-group-text">円</span>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">その他費用</label>
+          <div class="input-group">
+            <input type="number" id="saleOtherFee" class="form-control" min="0" step="1"
+              value="{{ sales_process.other_fee|default:'' }}" placeholder="0"
+              oninput="updateSaleProfit()">
+            <span class="input-group-text">円</span>
+          </div>
+        </div>
+
+        {# 経常利益 #}
+        <div class="col-12">
+          <hr class="my-1">
+          <div class="d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+            <div>
+              <span class="fw-semibold">経常利益（概算）</span>
+              <div class="text-muted small">売却金額 − 買取金額 − 出品費用 − 成約費用 − 個人宅陸送費用 − AA会場搬送費用 − その他費用</div>
+            </div>
+            <span id="saleProfit" class="fs-4 fw-bold text-muted">---</span>
+          </div>
         </div>
       </div>
     </div>
@@ -1880,8 +1948,8 @@
 </div>
 {% endif %}
 
-{# ステータス変更・承認申請モーダル #}
-{% if not assessment.approved_by %}
+{# ステータス変更モーダル（成約以外のすべてのステータスから使用可） #}
+{% if assessment.status != 'contracted' %}
 <div class="modal fade" id="statusChangeModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -1892,30 +1960,45 @@
       <div class="modal-body">
         <div class="mb-3">
           <label class="form-label fw-semibold">新しいステータス</label>
-          <select id="newStatusSelect" class="form-select" onchange="handleStatusSelectChange(this.value)">
-            {% for val, label in assessment_status_choices %}
+          <select id="newStatusSelect" class="form-select">
+            {% for val, label in editable_status_choices %}
             <option value="{{ val }}"{% if val == assessment.status %} selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>
-        <div id="approverSection" class="mb-3" style="display:none">
-          <label class="form-label fw-semibold">承認申請先 <span class="text-danger">*</span></label>
-          <select id="approverSelect" class="form-select">
-            <option value="">-- 承認者を選択してください --</option>
-            {% for u in all_users %}
-            <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
-            {% endfor %}
-          </select>
-          <div class="form-text text-muted">成約の場合、承認者に承認申請が送られます。</div>
-        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-        <button type="button" class="btn btn-primary" id="statusChangeSubmitBtn" onclick="submitStatusChange()">変更する</button>
+        <button type="button" class="btn btn-primary" onclick="submitStatusChange()">変更する</button>
       </div>
     </div>
   </div>
 </div>
+
+{# 成約キャンセルモーダル #}
+{% if assessment.status == 'contracted' %}
+<div class="modal fade" id="cancelContractedModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger"><i class="bi bi-x-circle me-2"></i>成約キャンセル</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">成約をキャンセルすると、この案件は<strong>没</strong>となります。</p>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">キャンセル理由 <span class="text-danger">*</span></label>
+          <textarea id="cancelContractedReason" class="form-control" rows="3" placeholder="例：お客様都合によるキャンセル"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-danger" onclick="submitCancelContracted()">成約キャンセルを確定する</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endif %}
 
 {# 契約承認申請モーダル #}
@@ -1989,6 +2072,17 @@ const ASSESSMENT_APPROVAL_REQUESTED_TO_ID = {{ assessment.approval_requested_to_
 // 査定システム取込データ（いずれも円単位）
 const SATEI_PRICE_YEN   = {{ assessment.assessment_price|default:0 }};
 const SATEI_RECYCLE_YEN = {{ assessment.assessment_system_recycle_amount|default:0 }};
+// 買取金額（経常利益計算用）
+{% if contract %}
+const PURCHASE_PRICE = {% if contract.amount_correction_flag and contract.corrected_price %}{{ contract.corrected_price }}{% else %}{{ contract.purchase_price_excl_tax|default:0 }}{% endif %};
+{% else %}
+const PURCHASE_PRICE = 0;
+{% endif %}
+// オークション会場マスタ費用データ
+const AUCTION_VENUE_FEES = {
+  {% for venue in auction_venues %}{{ venue.pk }}: {entry: {{ venue.entry_fee }}, contract: {{ venue.contract_fee }} },
+  {% endfor %}
+};
 
 {% if can_approve %}
 let changeAssigneeModal;
@@ -2019,14 +2113,44 @@ function saveAssigneeChange() {
 {% endif %}
 
 {% if sales_process %}
+function onVenueChange() {
+  const venueId = document.getElementById('saleSoldDestination').value;
+  const fees = AUCTION_VENUE_FEES[venueId] || {entry: 0, contract: 0};
+  document.getElementById('saleEntryFee').value = fees.entry;
+  document.getElementById('saleContractFee').value = fees.contract;
+  updateSaleProfit();
+}
+
+function updateSaleProfit() {
+  const soldPrice      = parseFloat(document.getElementById('saleSoldPrice').value) || 0;
+  const entryFee       = parseFloat(document.getElementById('saleEntryFee').value) || 0;
+  const contractFee    = parseFloat(document.getElementById('saleContractFee').value) || 0;
+  const transPersonal  = parseFloat(document.getElementById('saleTransportFeePersonal').value) || 0;
+  const transAuction   = parseFloat(document.getElementById('saleTransportFeeAuction').value) || 0;
+  const otherFee       = parseFloat(document.getElementById('saleOtherFee').value) || 0;
+  const totalCost = PURCHASE_PRICE + entryFee + contractFee + transPersonal + transAuction + otherFee;
+  const profit = soldPrice - totalCost;
+  const el = document.getElementById('saleProfit');
+  if (soldPrice === 0 && totalCost === 0) {
+    el.textContent = '---';
+    el.className = 'fs-4 fw-bold text-muted';
+  } else {
+    el.textContent = profit.toLocaleString('ja-JP') + ' 円';
+    el.className = 'fs-4 fw-bold ' + (profit >= 0 ? 'text-success' : 'text-danger');
+  }
+}
+
 function saveSaleInfo() {
   apiFetch(`/sateiinfo/api/sales-process/${SALES_PROCESS_ID}/update-info/`, {
     method: 'POST',
     body: JSON.stringify({
-      vehicle_disposition: document.getElementById('saleDisposition').value,
-      sold_at:             document.getElementById('saleSoldAt').value,
-      sold_price:          document.getElementById('saleSoldPrice').value,
-      sold_destination_id: document.getElementById('saleSoldDestination').value,
+      vehicle_disposition:    document.getElementById('saleDisposition').value,
+      sold_at:                document.getElementById('saleSoldAt').value,
+      sold_price:             document.getElementById('saleSoldPrice').value,
+      sold_destination_id:    document.getElementById('saleSoldDestination').value,
+      transport_fee_personal: document.getElementById('saleTransportFeePersonal').value,
+      transport_fee_auction:  document.getElementById('saleTransportFeeAuction').value,
+      other_fee:              document.getElementById('saleOtherFee').value,
     }),
   })
   .then(r => r.json())
@@ -2042,6 +2166,8 @@ function saveSaleInfo() {
   })
   .catch(err => alert('通信エラー: ' + err.message));
 }
+
+document.addEventListener('DOMContentLoaded', updateSaleProfit);
 
 // ステップ順序定義（repair_flag=false のとき repair はスキップ）
 const REPAIR_FLAG = {{ contract.repair_flag|yesno:"true,false" }};
