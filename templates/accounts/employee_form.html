@@ -62,11 +62,11 @@
 
         <div class="mb-3">
           <label class="form-label">社員番号</label>
-          <input type="text"
-                 name="employee_number"
-                 class="form-control"
-                 value="{% if is_edit and not form_data %}{{ profile.employee_number }}{% else %}{{ form_data.employee_number }}{% endif %}"
-                 placeholder="例: EMP001">
+          {% if is_edit %}
+          <input type="text" class="form-control" value="{{ profile.employee_number }}" readonly>
+          {% else %}
+          <input type="text" class="form-control" value="登録時に自動採番" disabled>
+          {% endif %}
         </div>
 
         <div class="mb-3">

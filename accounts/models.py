@@ -71,7 +71,7 @@ class UserProfile(models.Model):
         help_text='全権限ロールの場合はNULL',
     )
     role                = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_GENERAL, verbose_name='ロール')
-    employee_number     = models.CharField(max_length=20, blank=True, verbose_name='社員番号')
+    employee_number     = models.CharField(max_length=20, blank=True, unique=True, verbose_name='社員番号')
     is_active_employee  = models.BooleanField(default=True, verbose_name='在籍中')
     created_at          = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
     updated_at          = models.DateTimeField(auto_now=True, verbose_name='更新日時')

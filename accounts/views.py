@@ -3,11 +3,13 @@ import datetime
 import logging
 from collections import defaultdict
 
+from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -23,6 +25,25 @@ from .models import LoginActivity, Store, UserProfile
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
+
+
+def _generate_employee_number() -> str:
+    """社員番号を自動採番する（形式: YYNNNN 例: 260001）"""
+    NumberSequence = apps.get_model('leads', 'NumberSequence')
+    key = datetime.datetime.now().strftime('%y')  # 2桁年 e.g. '26'
+    with transaction.atomic():
+        NumberSequence.objects.get_or_create(
+            sequence_type='employee_number',
+            key=key,
+            defaults={'last_seq': 0},
+        )
+        obj = NumberSequence.objects.select_for_update().get(
+            sequence_type='employee_number',
+            key=key,
+        )
+        obj.last_seq += 1
+        obj.save(update_fields=['last_seq'])
+    return f'{key}{obj.last_seq:04d}'
 
 
 def _require_non_general(request):
@@ -230,7 +251,6 @@ def employee_create(request):
         first_name = request.POST.get('first_name', '').strip()
         last_name = request.POST.get('last_name', '').strip()
         email = request.POST.get('email', '').strip().lower()
-        employee_number = request.POST.get('employee_number', '').strip()
         store_id = request.POST.get('store_id') or None
         role = request.POST.get('role', UserProfile.ROLE_GENERAL)
 
@@ -256,6 +276,7 @@ def employee_create(request):
                 'is_edit': False,
             })
 
+        employee_number = _generate_employee_number()
         user = User.objects.create_user(
             username=email,
             email=email,
@@ -294,7 +315,6 @@ def employee_edit(request, pk):
         first_name = request.POST.get('first_name', '').strip()
         last_name = request.POST.get('last_name', '').strip()
         email = request.POST.get('email', '').strip().lower()
-        employee_number = request.POST.get('employee_number', '').strip()
         store_id = request.POST.get('store_id') or None
         role = request.POST.get('role', UserProfile.ROLE_GENERAL)
         is_active_employee = request.POST.get('is_active_employee') == 'on'
@@ -332,9 +352,8 @@ def employee_edit(request, pk):
 
         profile.store_id = store_id
         profile.role = role
-        profile.employee_number = employee_number
         profile.is_active_employee = is_active_employee
-        profile.save(update_fields=['store_id', 'role', 'employee_number', 'is_active_employee', 'updated_at'])
+        profile.save(update_fields=['store_id', 'role', 'is_active_employee', 'updated_at'])
 
         messages.success(request, f'{last_name} {first_name} さんの情報を更新しました')
         return redirect('accounts:employee_list')
