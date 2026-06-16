@@ -876,7 +876,7 @@
             <span class="input-group-text">円</span>
           </div>
         </div>
-        <div class="col-md-3 d-flex align-items-end">
+        <div class="col-md-3 d-none d-md-flex align-items-end">
           <button class="btn btn-primary w-100" onclick="saveSaleInfo()">
             <i class="bi bi-save"></i> 保存
           </button>
@@ -951,6 +951,13 @@
             </div>
             <span id="saleProfit" class="fs-4 fw-bold text-muted">---</span>
           </div>
+        </div>
+
+        {# 保存ボタン（モバイル：最下部） #}
+        <div class="col-12 d-md-none">
+          <button class="btn btn-primary w-100" onclick="saveSaleInfo()">
+            <i class="bi bi-save"></i> 保存
+          </button>
         </div>
       </div>
     </div>
