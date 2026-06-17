@@ -638,7 +638,7 @@ def toggle_sales_process_step(request, process_id):
     return JsonResponse({'success': True, 'deleted': False, 'new_value': new_value})
 
 
-_MANUAL_STEPS = {'intake', 'repair', 'transport', 'listing', 'payment'}
+_MANUAL_STEPS = {'intake', 'repair', 'transport', 'listing', 'payment', 'transfer'}
 
 # 各ステップを完了にするための前提ステップ（True=前提OK の判定関数）
 def _prerequisite_ok(step, sp, contract):
@@ -661,6 +661,9 @@ def _prerequisite_ok(step, sp, contract):
     elif step == 'payment':
         if not sp.sale_done:
             return False, '「売却」が完了していません'
+    elif step == 'transfer':
+        if not sp.payment_done:
+            return False, '「入金」が完了していません'
     return True, ''
 
 
@@ -670,7 +673,8 @@ _STEP_SUCCESSORS = {
     'repair':    ['transport_done', 'listing_done', 'sale_done'],
     'transport': ['listing_done', 'sale_done'],
     'listing':   ['sale_done'],
-    'payment':   [],
+    'payment':   ['transfer_done'],
+    'transfer':  [],
 }
 _STEP_LABELS = {
     'repair': '加修', 'transport': '陸送', 'listing': '出品',
@@ -721,12 +725,57 @@ def toggle_case_sales_step(request, process_id):
         if not ok:
             return JsonResponse({'success': False, 'message': msg}, status=400)
 
-    field = f'{step}_done'
-    setattr(process, field, new_value)
+    update_fields = [f'{step}_done', 'updated_by', 'updated_at']
+    setattr(process, f'{step}_done', new_value)
+
+    date_field = f'{step}_date'
+    if new_value:
+        date_raw = payload.get('date', '').strip()
+        if date_raw:
+            from datetime import date as _date
+            try:
+                setattr(process, date_field, _date.fromisoformat(date_raw))
+                update_fields.append(date_field)
+            except ValueError:
+                pass
+    else:
+        setattr(process, date_field, None)
+        update_fields.append(date_field)
+
     process.updated_by = request.user
-    process.save(update_fields=[field, 'updated_by', 'updated_at'])
+    process.save(update_fields=update_fields)
 
     return JsonResponse({'success': True, 'new_value': new_value})
+
+
+@login_required
+@require_POST
+def save_step_dates(request, process_id):
+    """各ステップ完了日保存 API"""
+    process = get_object_or_404(SalesProcess, pk=process_id)
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    from datetime import date as _date
+    step_date_fields = ['intake_date', 'repair_date', 'transport_date', 'listing_date', 'payment_date', 'transfer_date']
+    update_fields = ['updated_at']
+    for field in step_date_fields:
+        if field in payload:
+            raw = payload[field]
+            if raw:
+                try:
+                    setattr(process, field, _date.fromisoformat(raw))
+                    update_fields.append(field)
+                except ValueError:
+                    pass
+            else:
+                setattr(process, field, None)
+                update_fields.append(field)
+
+    process.save(update_fields=update_fields)
+    return JsonResponse({'success': True})
 
 
 @login_required
@@ -788,11 +837,20 @@ def update_sales_info(request, process_id):
     update_fields.append('updated_by')
 
     # sold_at が入力されたら sale_done を自動完了（出品完了が前提）
+    # sold_at が空になったら sale_done をリセット（入金・振込が未完了の場合のみ）
     if process.sold_at:
         if not process.listing_done:
             return JsonResponse({'success': False, 'message': '「出品」が完了していません'}, status=400)
         if not process.sale_done:
             process.sale_done = True
+            update_fields.append('sale_done')
+    else:
+        if process.sale_done:
+            if process.payment_done:
+                return JsonResponse({'success': False, 'message': '「入金」が完了しているため売却を取消できません'}, status=400)
+            if process.transfer_done:
+                return JsonResponse({'success': False, 'message': '「振込」が完了しているため売却を取消できません'}, status=400)
+            process.sale_done = False
             update_fields.append('sale_done')
 
     process.save(update_fields=update_fields)

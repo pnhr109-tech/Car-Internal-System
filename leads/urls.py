@@ -35,6 +35,7 @@ urlpatterns = [
     path('api/cases/<int:assessment_id>/change-assignee/',     views.change_case_assignee,              name='change_case_assignee'),
     path('api/cases/<int:assessment_id>/update-vehicle/',                views.update_vehicle_info,               name='update_vehicle_info'),
     path('api/cases/<int:assessment_id>/import-assessment-system/',  views.import_from_assessment_system,     name='import_from_assessment_system'),
+    path('api/cases/<int:assessment_id>/save-assessment-system-id/', views.save_assessment_system_id,         name='save_assessment_system_id'),
     path('api/cases/<int:assessment_id>/update-customer/',     views.update_customer_info,              name='update_customer_info'),
     path('api/cases/<int:assessment_id>/save-bank-account/',   views.save_bank_account,                 name='save_bank_account'),
     path('api/bank-accounts/<int:account_id>/delete/',         views.delete_bank_account,               name='delete_bank_account'),
@@ -60,8 +61,9 @@ urlpatterns = [
     # ── 売掛管理 ─────────────────────────────────────────────
     path('sales-process/',                              views.sales_process_list,         name='sales_process_list'),
     path('api/sales-process/<int:process_id>/toggle/',      views.toggle_sales_process_step, name='toggle_sales_process_step'),
-    path('api/sales-process/<int:process_id>/step/',        views.toggle_case_sales_step,    name='toggle_case_sales_step'),
-    path('api/sales-process/<int:process_id>/update-info/', views.update_sales_info,         name='update_sales_info'),
+    path('api/sales-process/<int:process_id>/step/',            views.toggle_case_sales_step,    name='toggle_case_sales_step'),
+    path('api/sales-process/<int:process_id>/update-info/',     views.update_sales_info,         name='update_sales_info'),
+    path('api/sales-process/<int:process_id>/save-step-dates/', views.save_step_dates,           name='save_step_dates'),
 
     # ── 車両一覧 ─────────────────────────────────────────────
     path('vehicles/',                          views.vehicle_list,         name='vehicle_list'),

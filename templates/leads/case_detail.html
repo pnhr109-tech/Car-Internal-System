@@ -117,6 +117,10 @@
             <dd class="col-7">{{ assessment.assessment_datetime|date:"Y-m-d H:i"|default:"-" }}</dd>
             <dt class="col-5 text-muted">査定額</dt>
             <dd class="col-7">{% if assessment.assessment_price %}{{ assessment.assessment_price|floatformat:0|intcomma }}円{% else %}-{% endif %}</dd>
+            {% if assessment.assessment_system_recycle_amount %}
+            <dt class="col-5 text-muted">リサイクル券金額</dt>
+            <dd class="col-7">{{ assessment.assessment_system_recycle_amount|floatformat:"0"|intcomma }}円</dd>
+            {% endif %}
             <dt class="col-5 text-muted">市場相場価格</dt>
             <dd class="col-7">{% if assessment.market_price %}{{ assessment.market_price|floatformat:0|intcomma }}円{% else %}-{% endif %}</dd>
             <dt class="col-5 text-muted">総合評価</dt>
@@ -202,12 +206,6 @@
           <p class="text-muted small mb-0">
             査定システムIDを入力して取り込むと、下記の車両情報が自動更新されます。成約後も再取り込み可能です。
           </p>
-          {% if assessment.assessment_system_recycle_amount %}
-          <div class="mt-2 p-2 bg-light rounded small">
-            <span class="text-muted">リサイクル券金額（取込値）：</span>
-            <strong>{{ assessment.assessment_system_recycle_amount|floatformat:"0" }} 円</strong>
-          </div>
-          {% endif %}
         </div>
       </div>
 
@@ -219,6 +217,12 @@
           </button>
         </div>
         <div class="card-body">
+          <div class="vehicle-assessment-system-id-row {% if not assessment.assessment_system_id %}d-none{% endif %}">
+            <dl class="row mb-0">
+              <dt class="col-5 text-muted">査定システムID</dt>
+              <dd class="col-7"><span class="font-monospace" id="vehicleAssessmentSystemId">{{ assessment.assessment_system_id }}</span></dd>
+            </dl>
+          </div>
           <dl class="row mb-0">
             <dt class="col-5 text-muted">メーカー</dt><dd class="col-7">{{ assessment.vehicle.maker }}</dd>
             <dt class="col-5 text-muted">車種</dt><dd class="col-7">{{ assessment.vehicle.car_model }}</dd>
@@ -573,23 +577,29 @@
   <div class="card mb-3">
     <div class="card-header"><h6 class="mb-0"><i class="bi bi-card-checklist"></i> 必要書類 受取確認</h6></div>
     <div class="card-body p-0">
-      <table class="table table-sm mb-0">
+      <table class="table table-sm mb-0 align-middle">
         <thead class="table-light">
           <tr>
             <th>書類</th>
             <th class="text-center" style="width:80px">必要通数</th>
             <th class="text-center" style="width:100px">ステータス</th>
+            <th style="width:120px">受領日</th>
             <th style="width:130px"></th>
           </tr>
         </thead>
         <tbody>
-          {% for key, label, count, received in required_doc_fields %}
+          {% for key, label, count, received, received_date in required_doc_fields %}
           <tr>
             <td>{{ label }}</td>
             <td class="text-center">{{ count }}通</td>
             <td class="text-center">
               <span id="doc_badge_{{ key }}" class="badge {% if received %}bg-success{% else %}bg-secondary{% endif %}">
                 {% if received %}✓ 受領済{% else %}未済{% endif %}
+              </span>
+            </td>
+            <td>
+              <span id="doc_date_text_{{ key }}" class="text-muted small">
+                {{ received_date|date:"Y/m/d"|default:"-" }}
               </span>
             </td>
             <td class="text-end">
@@ -607,33 +617,27 @@
       </table>
     </div>
   </div>
-  {% endif %}
 
-  <div class="card">
-    <div class="card-header"><h6 class="mb-0">書類一覧</h6></div>
-    <div class="card-body p-0">
-      {% if documents %}
-      <table class="table mb-0">
-        <thead class="table-light">
-          <tr><th>書類種別</th><th>必須</th><th>ステータス</th><th>後日品送付</th><th>受領日</th></tr>
-        </thead>
-        <tbody>
-          {% for doc in documents %}
-          <tr>
-            <td>{{ doc.document_type.name }}</td>
-            <td>{% if doc.document_type.required_flag %}<span class="badge bg-danger">必須</span>{% else %}<span class="badge bg-secondary">任意</span>{% endif %}</td>
-            <td>{{ doc.get_status_display }}</td>
-            <td>{{ doc.get_later_send_status_display }}</td>
-            <td>{{ doc.received_date|date:"Y-m-d"|default:"-" }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <p class="text-muted text-center py-4 mb-0">書類情報がありません</p>
-      {% endif %}
+  <div class="card mb-3">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-calendar-date"></i> 受領日入力</h6></div>
+    <div class="card-body">
+      <div class="row g-3">
+        {% for key, label, count, received, received_date in required_doc_fields %}
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold">{{ label }}</label>
+          <input type="date" id="doc_date_{{ key }}" class="form-control"
+            value="{{ received_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        {% endfor %}
+        <div class="col-12 d-flex justify-content-end">
+          <button class="btn btn-primary" onclick="saveAllDocDates()">
+            <i class="bi bi-save"></i> 保存
+          </button>
+        </div>
+      </div>
     </div>
   </div>
+  {% endif %}
 
   {# ── タブ④: 顧客 ──────────────────────────────── #}
   {% elif active_tab == 'customer' %}
@@ -730,6 +734,7 @@
               {% elif not avail %}<i class="bi bi-lock"></i> 未解放
               {% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
             </div>
+            <div class="small mt-1 opacity-75" id="step-date-text-intake">{% if sales_process.intake_date %}{{ sales_process.intake_date|date:"m/d" }}{% endif %}</div>
             <button class="btn btn-sm mt-1 w-100 {% if done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
               onclick="toggleStep('intake', this)"
               id="step-btn-intake"
@@ -751,6 +756,7 @@
               {% elif not avail %}<i class="bi bi-lock"></i> 未解放
               {% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
             </div>
+            <div class="small mt-1 opacity-75" id="step-date-text-repair">{% if sales_process.repair_date %}{{ sales_process.repair_date|date:"m/d" }}{% endif %}</div>
             <button class="btn btn-sm mt-1 w-100 {% if done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
               onclick="toggleStep('repair', this)"
               id="step-btn-repair"
@@ -777,6 +783,7 @@
               {% elif not avail %}<i class="bi bi-lock"></i> 未解放
               {% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
             </div>
+            <div class="small mt-1 opacity-75" id="step-date-text-transport">{% if sales_process.transport_date %}{{ sales_process.transport_date|date:"m/d" }}{% endif %}</div>
             <button class="btn btn-sm mt-1 w-100 {% if done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
               onclick="toggleStep('transport', this)"
               id="step-btn-transport"
@@ -797,6 +804,7 @@
               {% elif not avail %}<i class="bi bi-lock"></i> 未解放
               {% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
             </div>
+            <div class="small mt-1 opacity-75" id="step-date-text-listing">{% if sales_process.listing_date %}{{ sales_process.listing_date|date:"m/d" }}{% endif %}</div>
             <button class="btn btn-sm mt-1 w-100 {% if done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
               onclick="toggleStep('listing', this)"
               id="step-btn-listing"
@@ -811,9 +819,10 @@
         <div class="col" id="step-card-sale">
           <div class="p-2 rounded border {% if sales_process.sale_done %}bg-success text-white{% else %}bg-light text-muted{% endif %}">
             <div class="small fw-semibold">売却</div>
-            <div class="small mt-1">
+            <div class="small mt-1" id="step-status-sale">
               {% if sales_process.sale_done %}<i class="bi bi-check-circle-fill"></i> 完了{% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
             </div>
+            <div class="small mt-1 opacity-75" id="step-date-text-sale">{% if sales_process.sold_at %}{{ sales_process.sold_at|date:"m/d" }}{% endif %}</div>
             <div class="small mt-1 opacity-75">自動</div>
           </div>
         </div>
@@ -825,6 +834,7 @@
             <div class="small mt-1">
               {% if sales_process.payment_done %}<i class="bi bi-check-circle-fill"></i> 完了{% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
             </div>
+            <div class="small mt-1 opacity-75" id="step-date-text-payment">{% if sales_process.payment_date %}{{ sales_process.payment_date|date:"m/d" }}{% endif %}</div>
             <button class="btn btn-sm mt-1 w-100 {% if sales_process.payment_done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
               onclick="toggleStep('payment', this)"
               id="step-btn-payment">
@@ -833,17 +843,74 @@
           </div>
         </div>
 
-        {# 振込（売掛管理一覧で最終完了） #}
-        <div class="col">
-          <div class="p-2 rounded border {% if sales_process.transfer_done %}bg-success text-white{% else %}bg-light text-muted{% endif %}">
+        {# 振込（手動 + 売掛管理一覧） #}
+        {% with done=sales_process.transfer_done avail=sales_process.payment_done %}
+        <div class="col" id="step-card-transfer">
+          <div class="p-2 rounded border {% if done %}bg-success text-white{% elif not avail %}bg-light text-muted opacity-50{% else %}bg-light text-muted{% endif %}">
             <div class="small fw-semibold">振込</div>
             <div class="small mt-1">
-              {% if sales_process.transfer_done %}<i class="bi bi-check-circle-fill"></i> 完了{% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
+              {% if done %}<i class="bi bi-check-circle-fill"></i> 完了
+              {% elif not avail %}<i class="bi bi-lock"></i> 未解放
+              {% else %}<i class="bi bi-hourglass"></i> 待機{% endif %}
             </div>
+            <div class="small mt-1 opacity-75" id="step-date-text-transfer">{% if sales_process.transfer_date %}{{ sales_process.transfer_date|date:"m/d" }}{% endif %}</div>
+            <button class="btn btn-sm mt-1 w-100 {% if done %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
+              onclick="toggleStep('transfer', this)"
+              id="step-btn-transfer"
+              {% if not done and not avail %}disabled title="「入金」を完了してください"{% endif %}>
+              {% if done %}取消{% else %}完了にする{% endif %}
+            </button>
             <a href="{% url 'leads:sales_process_list' %}" class="btn btn-sm btn-outline-secondary mt-1 w-100">管理一覧</a>
           </div>
         </div>
+        {% endwith %}
 
+      </div>
+    </div>
+  </div>
+
+  {# ── 各ステップ完了日 ── #}
+  <div class="card mb-3">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-calendar-check"></i> 各ステップ完了日</h6></div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold">入庫日</label>
+          <input type="date" id="step-date-intake" class="form-control"
+            value="{{ sales_process.intake_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        {% if contract and contract.repair_flag %}
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold">加修完了日</label>
+          <input type="date" id="step-date-repair" class="form-control"
+            value="{{ sales_process.repair_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        {% endif %}
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold">陸送完了日</label>
+          <input type="date" id="step-date-transport" class="form-control"
+            value="{{ sales_process.transport_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold">出品日</label>
+          <input type="date" id="step-date-listing" class="form-control"
+            value="{{ sales_process.listing_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold">入金日</label>
+          <input type="date" id="step-date-payment" class="form-control"
+            value="{{ sales_process.payment_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label fw-semibold">振込日</label>
+          <input type="date" id="step-date-transfer" class="form-control"
+            value="{{ sales_process.transfer_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-12 d-flex justify-content-end">
+          <button class="btn btn-primary" onclick="saveStepDates()">
+            <i class="bi bi-save"></i> 保存
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -876,9 +943,13 @@
             <span class="input-group-text">円</span>
           </div>
         </div>
-        <div class="col-md-3 d-none d-md-flex align-items-end">
+        <div class="col-md-3 d-none d-md-flex align-items-end flex-column gap-1">
           <button class="btn btn-primary w-100" onclick="saveSaleInfo()">
             <i class="bi bi-save"></i> 保存
+          </button>
+          <button class="btn btn-outline-danger w-100 sale-cancel-btn{% if not sales_process.sale_done %} d-none{% endif %}"
+            onclick="cancelSaleDone()">
+            <i class="bi bi-x-circle"></i> 売却を取消
           </button>
         </div>
 
@@ -955,9 +1026,15 @@
 
         {# 保存ボタン（モバイル：最下部） #}
         <div class="col-12 d-md-none">
-          <button class="btn btn-primary w-100" onclick="saveSaleInfo()">
-            <i class="bi bi-save"></i> 保存
-          </button>
+          <div class="d-flex flex-column gap-2">
+            <button class="btn btn-primary w-100" onclick="saveSaleInfo()">
+              <i class="bi bi-save"></i> 保存
+            </button>
+            <button class="btn btn-outline-danger w-100 sale-cancel-btn{% if not sales_process.sale_done %} d-none{% endif %}"
+              onclick="cancelSaleDone()">
+              <i class="bi bi-x-circle"></i> 売却を取消
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -2164,14 +2241,44 @@ function saveSaleInfo() {
   .then(d => {
     if (d.success) {
       showToast('成功', d.message, 'success');
-      if (d.sale_done) {
-        _updateStepCard('sale', true);
-      }
+      _updateSaleCard(d.sale_done);
     } else {
       alert(d.message);
     }
   })
   .catch(err => alert('通信エラー: ' + err.message));
+}
+
+function _updateSaleCard(saleDone) {
+  const card    = document.getElementById('step-card-sale');
+  if (!card) return;
+  const inner   = card.querySelector('div');
+  const statusEl = document.getElementById('step-status-sale');
+  const dateEl  = document.getElementById('step-date-text-sale');
+  const soldAtVal = document.getElementById('saleSoldAt')?.value || '';
+
+  if (saleDone) {
+    inner.classList.remove('bg-light', 'text-muted');
+    inner.classList.add('bg-success', 'text-white');
+    if (statusEl) statusEl.innerHTML = '<i class="bi bi-check-circle-fill"></i> 完了';
+    if (dateEl && soldAtVal) {
+      const d = new Date(soldAtVal + 'T00:00:00');
+      dateEl.textContent = `${d.getMonth() + 1}/${d.getDate()}`;
+    }
+    document.querySelectorAll('.sale-cancel-btn').forEach(b => b.classList.remove('d-none'));
+  } else {
+    inner.classList.remove('bg-success', 'text-white');
+    inner.classList.add('bg-light', 'text-muted');
+    if (statusEl) statusEl.innerHTML = '<i class="bi bi-hourglass"></i> 待機';
+    if (dateEl) dateEl.textContent = '';
+    document.querySelectorAll('.sale-cancel-btn').forEach(b => b.classList.add('d-none'));
+  }
+}
+
+function cancelSaleDone() {
+  const soldAtInput = document.getElementById('saleSoldAt');
+  if (soldAtInput) soldAtInput.value = '';
+  saveSaleInfo();
 }
 
 document.addEventListener('DOMContentLoaded', updateSaleProfit);
@@ -2185,18 +2292,38 @@ const STEP_NEXT = {
   transport: 'listing',
   listing:   'sale',
   sale:      null,
-  payment:   null,
+  payment:   'transfer',
+  transfer:  null,
 };
 
+function _todayStr() {
+  const d = new Date(), pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function toggleStep(step, btn) {
+  const isCompleting = btn && btn.textContent.trim() === '完了にする';
+  const dateInput    = document.getElementById(`step-date-${step}`);
+
+  if (isCompleting && dateInput && !dateInput.value) {
+    dateInput.value = _todayStr();
+  }
+
+  const payload = { step };
+  if (dateInput && dateInput.value) payload.date = dateInput.value;
+
   apiFetch(`/sateiinfo/api/sales-process/${SALES_PROCESS_ID}/step/`, {
     method: 'POST',
-    body: JSON.stringify({ step }),
+    body: JSON.stringify(payload),
   })
   .then(r => r.json())
   .then(d => {
     if (d.success) {
-      _updateStepCard(step, d.new_value);
+      _updateStepCard(step, d.new_value, d.new_value ? (payload.date || null) : null);
+      if (!d.new_value) {
+        const dateInput = document.getElementById(`step-date-${step}`);
+        if (dateInput) dateInput.value = '';
+      }
       const next = STEP_NEXT[step];
       if (next && next !== 'sale') {
         _setStepAvailable(next, d.new_value);
@@ -2208,21 +2335,31 @@ function toggleStep(step, btn) {
   .catch(err => alert('通信エラー: ' + err.message));
 }
 
-function _updateStepCard(step, done) {
-  const card = document.getElementById(`step-card-${step}`);
-  const btn  = document.getElementById(`step-btn-${step}`);
+function _updateStepCard(step, done, dateStr) {
+  const card    = document.getElementById(`step-card-${step}`);
+  const btn     = document.getElementById(`step-btn-${step}`);
+  const dateEl  = document.getElementById(`step-date-text-${step}`);
   if (!card) return;
-  const inner = card.querySelector('div');
+  const inner    = card.querySelector('div');
+  const statusEl = inner.querySelector('.small.mt-1');
   if (done) {
     inner.classList.remove('bg-light', 'text-muted', 'opacity-50');
     inner.classList.add('bg-success', 'text-white');
-    inner.querySelector('.small.mt-1').innerHTML = '<i class="bi bi-check-circle-fill"></i> 完了';
+    statusEl.innerHTML = '<i class="bi bi-check-circle-fill"></i> 完了';
     if (btn) { btn.textContent = '取消'; btn.disabled = false; btn.classList.remove('btn-outline-secondary'); btn.classList.add('btn-outline-light'); }
   } else {
     inner.classList.remove('bg-success', 'text-white');
     inner.classList.add('bg-light', 'text-muted');
-    inner.querySelector('.small.mt-1').innerHTML = '<i class="bi bi-hourglass"></i> 待機';
+    statusEl.innerHTML = '<i class="bi bi-hourglass"></i> 待機';
     if (btn) { btn.textContent = '完了にする'; btn.classList.remove('btn-outline-light'); btn.classList.add('btn-outline-secondary'); }
+  }
+  if (dateEl) {
+    if (dateStr) {
+      const d = new Date(dateStr + 'T00:00:00');
+      dateEl.textContent = `${d.getMonth() + 1}/${d.getDate()}`;
+    } else if (!done) {
+      dateEl.textContent = '';
+    }
   }
 }
 
@@ -2230,7 +2367,7 @@ function _setStepAvailable(step, available) {
   const card = document.getElementById(`step-card-${step}`);
   const btn  = document.getElementById(`step-btn-${step}`);
   if (!card || !btn) return;
-  const inner = card.querySelector('div');
+  const inner    = card.querySelector('div');
   const statusEl = inner.querySelector('.small.mt-1');
   if (available) {
     inner.classList.remove('opacity-50');
@@ -2242,6 +2379,41 @@ function _setStepAvailable(step, available) {
     statusEl.innerHTML = '<i class="bi bi-lock"></i> 未解放';
     btn.disabled = true;
   }
+}
+
+function saveStepDates() {
+  const fields = ['intake', 'repair', 'transport', 'listing', 'payment', 'transfer'];
+  const payload = {};
+  fields.forEach(f => {
+    const el = document.getElementById(`step-date-${f}`);
+    if (el) payload[`${f}_date`] = el.value || null;
+  });
+  apiFetch(`/sateiinfo/api/sales-process/${SALES_PROCESS_ID}/save-step-dates/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      fields.forEach(f => {
+        const el = document.getElementById(`step-date-${f}`);
+        if (el) {
+          const dateEl = document.getElementById(`step-date-text-${f}`);
+          if (dateEl) {
+            if (el.value) {
+              const dt = new Date(el.value + 'T00:00:00');
+              dateEl.textContent = `${dt.getMonth() + 1}/${dt.getDate()}`;
+            } else {
+              dateEl.textContent = '';
+            }
+          }
+        }
+      });
+      showToast('保存', '各ステップ完了日を保存しました', 'success');
+    } else {
+      showToast('エラー', d.message || '保存に失敗しました', 'danger');
+    }
+  });
 }
 {% endif %}
 </script>

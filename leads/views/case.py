@@ -182,12 +182,12 @@ def case_detail(request, pk):
         'disposition_choices':           SalesProcess.DISPOSITION_CHOICES,
         'auction_venues':                AuctionVenue.objects.all(),
         'required_doc_fields': [
-            ('inkan',    '印鑑証明', contract.required_inkan_count    if contract else 0, contract.inkan_received    if contract else False),
-            ('juminhyo', '住民票',   contract.required_juminhyo_count if contract else 0, contract.juminhyo_received if contract else False),
-            ('jotohyo',  '除票',     contract.required_jotohyo_count  if contract else 0, contract.jotohyo_received  if contract else False),
-            ('ininjyo',  '委任状',   contract.required_ininjyo_count  if contract else 0, contract.ininjyo_received  if contract else False),
-            ('jotosho',  '譲渡書',   contract.required_jotosho_count  if contract else 0, contract.jotosho_received  if contract else False),
-            ('kanpu',    '還付',     contract.required_kanpu_count    if contract else 0, contract.kanpu_received    if contract else False),
+            ('inkan',    '印鑑証明', contract.required_inkan_count    if contract else 0, contract.inkan_received    if contract else False, contract.inkan_received_date    if contract else None),
+            ('juminhyo', '住民票',   contract.required_juminhyo_count if contract else 0, contract.juminhyo_received if contract else False, contract.juminhyo_received_date if contract else None),
+            ('jotohyo',  '除票',     contract.required_jotohyo_count  if contract else 0, contract.jotohyo_received  if contract else False, contract.jotohyo_received_date  if contract else None),
+            ('ininjyo',  '委任状',   contract.required_ininjyo_count  if contract else 0, contract.ininjyo_received  if contract else False, contract.ininjyo_received_date  if contract else None),
+            ('jotosho',  '譲渡書',   contract.required_jotosho_count  if contract else 0, contract.jotosho_received  if contract else False, contract.jotosho_received_date  if contract else None),
+            ('kanpu',    '還付',     contract.required_kanpu_count    if contract else 0, contract.kanpu_received    if contract else False, contract.kanpu_received_date    if contract else None),
         ],
     })
 
@@ -382,6 +382,22 @@ def import_from_assessment_system(request, assessment_id):
             if data['vehicle'].get('inspection_expiry') else ''
         },
     })
+
+
+@login_required
+@require_POST
+def save_assessment_system_id(request, assessment_id):
+    """査定システムID保存 API（取り込みなし）"""
+    assessment = get_object_or_404(Assessment, pk=assessment_id)
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    assessment_system_id = payload.get('assessment_system_id', '').strip()
+    assessment.assessment_system_id = assessment_system_id
+    assessment.save(update_fields=['assessment_system_id', 'updated_at'])
+    return JsonResponse({'success': True, 'assessment_system_id': assessment_system_id})
 
 
 @login_required
@@ -858,39 +874,59 @@ def update_required_docs(request, contract_id):
 
     update_fields = []
     for key in _REQUIRED_DOC_FIELDS:
-        field = f'{key}_received'
-        if field in payload:
-            setattr(contract, field, bool(payload[field]))
-            update_fields.append(field)
+        received_field = f'{key}_received'
+        date_field     = f'{key}_received_date'
+        if received_field in payload:
+            setattr(contract, received_field, bool(payload[received_field]))
+            update_fields.append(received_field)
+        if date_field in payload:
+            raw = payload[date_field]
+            if raw:
+                from datetime import date as _date
+                try:
+                    setattr(contract, date_field, _date.fromisoformat(raw))
+                except ValueError:
+                    pass
+            else:
+                setattr(contract, date_field, None)
+            update_fields.append(date_field)
 
     if update_fields:
         update_fields.append('updated_at')
         contract.save(update_fields=update_fields)
 
-    # 必要通数が1通以上の書類がすべて受取済なら document_done を自動完了
-    auto_doc_done = False
+    # 書類ステップの自動完了 / 自動取消
+    auto_doc_done   = False
+    auto_doc_undone = False
     doc_fields_with_count = [
-        ('inkan', contract.required_inkan_count, contract.inkan_received),
+        ('inkan',    contract.required_inkan_count,    contract.inkan_received),
         ('juminhyo', contract.required_juminhyo_count, contract.juminhyo_received),
-        ('jotohyo', contract.required_jotohyo_count, contract.jotohyo_received),
-        ('ininjyo', contract.required_ininjyo_count, contract.ininjyo_received),
-        ('jotosho', contract.required_jotosho_count, contract.jotosho_received),
-        ('kanpu', contract.required_kanpu_count, contract.kanpu_received),
+        ('jotohyo',  contract.required_jotohyo_count,  contract.jotohyo_received),
+        ('ininjyo',  contract.required_ininjyo_count,  contract.ininjyo_received),
+        ('jotosho',  contract.required_jotosho_count,  contract.jotosho_received),
+        ('kanpu',    contract.required_kanpu_count,    contract.kanpu_received),
     ]
     required = [(name, received) for name, count, received in doc_fields_with_count if count > 0]
-    if required and all(received for _, received in required):
-        try:
-            sp = SalesProcess.objects.get(contract=contract)
+    try:
+        sp = SalesProcess.objects.get(contract=contract)
+        if required and all(received for _, received in required):
             if not sp.document_done:
                 sp.document_done = True
                 sp.updated_by = request.user
                 sp.save(update_fields=['document_done', 'updated_by', 'updated_at'])
                 auto_doc_done = True
-        except SalesProcess.DoesNotExist:
-            pass
+        else:
+            if sp.document_done:
+                sp.document_done = False
+                sp.updated_by = request.user
+                sp.save(update_fields=['document_done', 'updated_by', 'updated_at'])
+                auto_doc_undone = True
+    except SalesProcess.DoesNotExist:
+        pass
 
     return JsonResponse({
-        'success': True,
-        'message': '受取状況を更新しました',
-        'auto_doc_done': auto_doc_done,
+        'success':        True,
+        'message':        '受取状況を更新しました',
+        'auto_doc_done':  auto_doc_done,
+        'auto_doc_undone': auto_doc_undone,
     })

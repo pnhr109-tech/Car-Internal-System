@@ -35,6 +35,7 @@ from .case import (
     change_case_assignee,
     update_vehicle_info,
     import_from_assessment_system,
+    save_assessment_system_id,
     update_customer_info,
     save_bank_account,
     delete_bank_account,
@@ -66,6 +67,7 @@ from .contract import (
     toggle_sales_process_step,
     toggle_case_sales_step,
     update_sales_info,
+    save_step_dates,
 )
 
 # --- 顧客マスタ管理 ---
@@ -102,7 +104,8 @@ __all__ = [
     'update_assessment_follow_status', 'promote_to_case',
     # case
     'case_list', 'case_detail',
-    'update_assessment_info', 'update_vehicle_info', 'update_customer_info',
+    'update_assessment_info', 'update_vehicle_info', 'import_from_assessment_system',
+    'save_assessment_system_id', 'update_customer_info',
     'save_bank_account', 'delete_bank_account',
     'request_assessment_approval', 'approve_assessment',
     'cancel_contracted_assessment', 'managed_release_list',
@@ -113,7 +116,7 @@ __all__ = [
     'contract_list', 'approval_list', 'contract_print',
     'create_contract', 'update_contract',
     'request_contract_approval', 'approve_contract', 'approve_correction',
-    'sales_process_list', 'toggle_sales_process_step', 'toggle_case_sales_step', 'update_sales_info',
+    'sales_process_list', 'toggle_sales_process_step', 'toggle_case_sales_step', 'update_sales_info', 'save_step_dates',
     # customer
     'customer_list', 'customer_detail',
     'update_customer_direct', 'save_bank_account_direct', 'delete_bank_account_direct',

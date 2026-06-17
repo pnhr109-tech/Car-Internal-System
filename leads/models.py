@@ -515,6 +515,12 @@ class PurchaseContract(models.Model):
     ininjyo_received  = models.BooleanField(default=False, verbose_name='委任状 受取済')
     jotosho_received  = models.BooleanField(default=False, verbose_name='譲渡書 受取済')
     kanpu_received    = models.BooleanField(default=False, verbose_name='還付 受取済')
+    inkan_received_date    = models.DateField(null=True, blank=True, verbose_name='印鑑証明 受領日')
+    juminhyo_received_date = models.DateField(null=True, blank=True, verbose_name='住民票 受領日')
+    jotohyo_received_date  = models.DateField(null=True, blank=True, verbose_name='除票 受領日')
+    ininjyo_received_date  = models.DateField(null=True, blank=True, verbose_name='委任状 受領日')
+    jotosho_received_date  = models.DateField(null=True, blank=True, verbose_name='譲渡書 受領日')
+    kanpu_received_date    = models.DateField(null=True, blank=True, verbose_name='還付 受領日')
 
     # ── 担当者・責任者（契約書表示用） ─────────────────────────────
     manager1 = models.ForeignKey(
@@ -822,6 +828,13 @@ class SalesProcess(models.Model):
     sale_done      = models.BooleanField(default=False, verbose_name='売却')
     payment_done   = models.BooleanField(default=False, verbose_name='入金')
     transfer_done  = models.BooleanField(default=False, verbose_name='振込')
+
+    intake_date    = models.DateField(null=True, blank=True, verbose_name='入庫日')
+    repair_date    = models.DateField(null=True, blank=True, verbose_name='加修完了日')
+    transport_date = models.DateField(null=True, blank=True, verbose_name='陸送完了日')
+    listing_date   = models.DateField(null=True, blank=True, verbose_name='出品日')
+    payment_date   = models.DateField(null=True, blank=True, verbose_name='入金日')
+    transfer_date  = models.DateField(null=True, blank=True, verbose_name='振込日')
 
     sold_at          = models.DateField(null=True, blank=True, verbose_name='車両売却日')
     sold_price       = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='売却金額')

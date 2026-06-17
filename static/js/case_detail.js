@@ -50,6 +50,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // 査定システムID: フォーカスアウト時に自動保存
+  const sateiIdInput = document.getElementById('assessmentSystemId');
+  if (sateiIdInput) {
+    sateiIdInput.dataset.original = sateiIdInput.value.trim();
+    sateiIdInput.addEventListener('blur', () => {
+      const newVal = sateiIdInput.value.trim();
+      if (newVal === sateiIdInput.dataset.original) return;
+      apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/save-assessment-system-id/`, {
+        method: 'POST',
+        body: JSON.stringify({ assessment_system_id: newVal }),
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          sateiIdInput.dataset.original = newVal;
+          _updateAssessmentSystemIdDisplay(newVal);
+        }
+      });
+    });
+  }
+
   // 契約作成モーダル: 価格入力変更時にリアルタイム計算
   ['contractPriceExcl', 'contractRecycleAmount', 'contractTaxRate'].forEach(id => {
     const el = document.getElementById(id);
@@ -395,6 +416,17 @@ function _hideImportOverlay() {
   if (overlay) overlay.style.display = 'none';
 }
 
+function _updateAssessmentSystemIdDisplay(newId) {
+  const el = document.getElementById('vehicleAssessmentSystemId');
+  if (!el) return;
+  if (newId) {
+    el.textContent = newId;
+    el.closest('div.vehicle-assessment-system-id-row').classList.remove('d-none');
+  } else {
+    el.closest('div.vehicle-assessment-system-id-row').classList.add('d-none');
+  }
+}
+
 function _showImportConfirmModal(data) {
   const v = data.vehicle || {};
   const rows = [
@@ -713,21 +745,44 @@ function approveAdvancePayment(apId) {
 
 // ── 必要書類 受取確認 ────────────────────────────────────────────────────
 
+function _formatDateDisplay(isoStr) {
+  if (!isoStr) return '-';
+  const d = new Date(isoStr + 'T00:00:00');
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function toggleRequiredDoc(key, received) {
-  const btn = document.getElementById(`doc_btn_${key}`);
+  const btn       = document.getElementById(`doc_btn_${key}`);
+  const dateInput = document.getElementById(`doc_date_${key}`);
   if (btn) btn.disabled = true;
+
+  const payload = { [`${key}_received`]: received };
+  if (received && dateInput && !dateInput.value) {
+    const today = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    dateInput.value = todayStr;
+    payload[`${key}_received_date`] = todayStr;
+  } else if (received && dateInput && dateInput.value) {
+    payload[`${key}_received_date`] = dateInput.value;
+  }
 
   apiFetch(`/sateiinfo/api/contracts/${CONTRACT_ID}/required-docs/`, {
     method: 'POST',
-    body: JSON.stringify({ [`${key}_received`]: received }),
+    body: JSON.stringify(payload),
   })
   .then(r => r.json())
   .then(d => {
     if (d.success) {
-      const badge = document.getElementById(`doc_badge_${key}`);
+      const badge   = document.getElementById(`doc_badge_${key}`);
+      const dateText = document.getElementById(`doc_date_text_${key}`);
+      const dateInput = document.getElementById(`doc_date_${key}`);
       if (badge) {
         badge.className = `badge ${received ? 'bg-success' : 'bg-secondary'}`;
         badge.textContent = received ? '✓ 受領済' : '未済';
+      }
+      if (dateText) {
+        dateText.textContent = received && dateInput ? _formatDateDisplay(dateInput.value) : '-';
       }
       if (btn) {
         btn.className = `btn btn-sm ${received ? 'btn-outline-secondary' : 'btn-success'}`;
@@ -738,12 +793,41 @@ function toggleRequiredDoc(key, received) {
       if (d.auto_doc_done) {
         showToast('保存', '全書類受取済 — 書類ステップが自動完了しました', 'success');
         if (typeof _updateStepCard === 'function') _updateStepCard('document', true);
+      } else if (d.auto_doc_undone) {
+        showToast('保存', '未受領の書類があります — 書類ステップを未完了に戻しました', 'warning');
+        if (typeof _updateStepCard === 'function') _updateStepCard('document', false);
       } else {
         showToast('保存', received ? '受領済にしました' : '未済に戻しました', 'success');
       }
     } else {
       showToast('エラー', d.message || '更新に失敗しました', 'danger');
       if (btn) btn.disabled = false;
+    }
+  });
+}
+
+function saveAllDocDates() {
+  const keys = ['inkan', 'juminhyo', 'jotohyo', 'ininjyo', 'jotosho', 'kanpu'];
+  const payload = {};
+  keys.forEach(key => {
+    const el = document.getElementById(`doc_date_${key}`);
+    if (el) payload[`${key}_received_date`] = el.value || null;
+  });
+  apiFetch(`/sateiinfo/api/contracts/${CONTRACT_ID}/required-docs/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      keys.forEach(key => {
+        const el      = document.getElementById(`doc_date_${key}`);
+        const dateText = document.getElementById(`doc_date_text_${key}`);
+        if (el && dateText) dateText.textContent = _formatDateDisplay(el.value);
+      });
+      showToast('保存', '受領日を保存しました', 'success');
+    } else {
+      showToast('エラー', d.message || '保存に失敗しました', 'danger');
     }
   });
 }
