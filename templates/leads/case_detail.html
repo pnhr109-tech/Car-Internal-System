@@ -1,5 +1,5 @@
 {% extends 'base/internal_base.html' %}
-{% load static humanize %}
+{% load static humanize leads_extras %}
 {% block title %}案件詳細 - {{ assessment.customer.name }}{% endblock %}
 
 {% block content %}
@@ -27,13 +27,16 @@
             </small>
           </h5>
           <span class="text-muted">{{ assessment.vehicle.maker }} {{ assessment.vehicle.car_model }}（{{ assessment.vehicle.year }} / {{ assessment.vehicle.mileage }}）</span>
+          {% if assessment.case_number %}
+          <div class="mt-1"><span class="badge bg-secondary"><i class="bi bi-hash"></i> {{ assessment.case_number }}</span></div>
+          {% endif %}
         </div>
         <div class="text-end">
           <span class="badge bg-{% if assessment.status == 'contracted' %}success{% elif assessment.status == 'lost' or assessment.status == 'pre_cancel' %}danger{% elif assessment.status == 'managed' %}secondary{% else %}primary{% endif %} fs-6">
             {{ assessment.get_status_display }}
           </span>
           <div class="text-muted small mt-1 d-flex align-items-center gap-2">
-            担当：<span id="assigneeName">{{ assessment.assigned_to.get_full_name|default:assessment.assigned_to.username }}</span>
+            担当：<span id="assigneeName">{{ assessment.assigned_to|ja_name }}</span>
             {% if can_approve %}
             <button class="btn btn-link btn-sm p-0 text-muted" onclick="openChangeAssigneeModal()" title="担当者変更"><i class="bi bi-pencil"></i></button>
             {% endif %}
@@ -129,10 +132,10 @@
             <dt class="col-5 text-muted">承認</dt>
             <dd class="col-7">
               {% if assessment.approved_by %}
-              <span class="text-success"><i class="bi bi-check-circle-fill"></i> {{ assessment.approved_by.get_full_name }} ({{ assessment.approved_at|date:"Y-m-d" }})</span>
+              <span class="text-success"><i class="bi bi-check-circle-fill"></i> {{ assessment.approved_by|ja_name }} ({{ assessment.approved_at|date:"Y-m-d" }})</span>
               {% elif assessment.status == 'contracted' %}
                 {% if assessment.approval_requested_to %}
-                  <span class="text-warning"><i class="bi bi-send"></i> {{ assessment.approval_requested_to.get_full_name }} に申請中</span>
+                  <span class="text-warning"><i class="bi bi-send"></i> {{ assessment.approval_requested_to|ja_name }} に申請中</span>
                   {% if assessment.approval_requested_to == request.user or request.user.is_superuser %}
                   <button class="btn btn-sm btn-success ms-2" onclick="approveAssessment('approve')">承認</button>
                   <button class="btn btn-sm btn-outline-danger ms-1" onclick="approveAssessment('reject')">差し戻し</button>
@@ -325,7 +328,7 @@
             <dd class="col-6">{% if contract.ownership_release_flag %}<span class="badge bg-warning text-dark">あり</span>{% else %}なし{% endif %}</dd>
             {# 必要書類通数 #}
             <dt class="col-12 fw-semibold text-muted border-top pt-2 mt-1">必要書類</dt>
-            {% for key, label, count, received in required_doc_fields %}
+            {% for key, label, count, received, received_date in required_doc_fields %}
             <dt class="col-6 text-muted ps-3">{{ label }}</dt>
             <dd class="col-6">{{ count }}通</dd>
             {% endfor %}
@@ -353,9 +356,9 @@
             <dt class="col-6 text-muted">承認</dt>
             <dd class="col-6">
               {% if contract.approved_by %}
-              <span class="text-success"><i class="bi bi-check-circle-fill"></i> {{ contract.approved_by.get_full_name }}</span>
+              <span class="text-success"><i class="bi bi-check-circle-fill"></i> {{ contract.approved_by|ja_name }}</span>
               {% elif contract.approval_requested_to %}
-              <span class="text-warning"><i class="bi bi-send"></i> {{ contract.approval_requested_to.get_full_name }} に申請中</span>
+              <span class="text-warning"><i class="bi bi-send"></i> {{ contract.approval_requested_to|ja_name }} に申請中</span>
               {% if contract.approval_requested_to == request.user or request.user.is_superuser %}
               <button class="btn btn-sm btn-success ms-2" onclick="approveContract('approve')">承認</button>
               <button class="btn btn-sm btn-outline-danger ms-1" onclick="approveContract('reject')">差し戻し</button>
@@ -369,9 +372,9 @@
               {% endif %}
             </dd>
             <dt class="col-6 text-muted">責任者1</dt>
-            <dd class="col-6">{% if contract.manager1 %}{{ contract.manager1.get_full_name|default:contract.manager1.username }}{% else %}-{% endif %}</dd>
+            <dd class="col-6">{% if contract.manager1 %}{{ contract.manager1|ja_name }}{% else %}-{% endif %}</dd>
             <dt class="col-6 text-muted">責任者2</dt>
-            <dd class="col-6">{% if contract.manager2 %}{{ contract.manager2.get_full_name|default:contract.manager2.username }}{% else %}-{% endif %}</dd>
+            <dd class="col-6">{% if contract.manager2 %}{{ contract.manager2|ja_name }}{% else %}-{% endif %}</dd>
             {% if contract.remarks %}
             <dt class="col-6 text-muted">備考</dt>
             <dd class="col-6">{{ contract.remarks }}</dd>
@@ -529,7 +532,7 @@
                 <span class="fw-bold">{{ ap.expected_amount|floatformat:0 }}円</span>
                 {% if ap.payment_date %}<span class="text-muted ms-2 small">入金日: {{ ap.payment_date|date:"Y年m月d日" }}</span>{% endif %}
                 {% if ap.approved_by %}
-                <span class="badge bg-success ms-2">承認済（{{ ap.approved_by.get_full_name }}）</span>
+                <span class="badge bg-success ms-2">承認済（{{ ap.approved_by|ja_name }}）</span>
                 {% else %}
                 <span class="badge bg-warning text-dark ms-2">未承認</span>
                 {% endif %}
@@ -1061,7 +1064,7 @@
         <li class="list-group-item">
           <div class="d-flex justify-content-between">
             <small class="text-muted">{{ h.contacted_at|date:"Y-m-d H:i" }} / {{ h.get_contact_method_display }}</small>
-            <small class="text-muted">{{ h.recorded_by.get_full_name|default:h.recorded_by.username }}</small>
+            <small class="text-muted">{{ h.recorded_by|ja_name }}</small>
           </div>
           <div class="mt-1">{{ h.content|linebreaksbr }}</div>
         </li>
@@ -1263,7 +1266,7 @@
             <select id="contractManager1" class="form-select">
               <option value="">— 選択してください —</option>
               {% for u in all_users %}
-              <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+              <option value="{{ u.pk }}">{{ u|ja_name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -1272,7 +1275,7 @@
             <select id="contractManager2" class="form-select">
               <option value="">— 選択してください —</option>
               {% for u in all_users %}
-              <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+              <option value="{{ u.pk }}">{{ u|ja_name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -1786,7 +1789,7 @@
             <select id="editContractManager1" class="form-select">
               <option value="">— 選択してください —</option>
               {% for u in all_users %}
-              <option value="{{ u.pk }}" {% if contract.manager1_id == u.pk %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+              <option value="{{ u.pk }}" {% if contract.manager1_id == u.pk %}selected{% endif %}>{{ u|ja_name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -1795,7 +1798,7 @@
             <select id="editContractManager2" class="form-select">
               <option value="">— 選択してください —</option>
               {% for u in all_users %}
-              <option value="{{ u.pk }}" {% if contract.manager2_id == u.pk %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+              <option value="{{ u.pk }}" {% if contract.manager2_id == u.pk %}selected{% endif %}>{{ u|ja_name }}</option>
               {% endfor %}
             </select>
           </div>
@@ -2032,7 +2035,7 @@
 </div>
 {% endif %}
 
-{# ステータス変更モーダル（成約以外のすべてのステータスから使用可） #}
+{# ステータス変更モーダル #}
 {% if assessment.status != 'contracted' %}
 <div class="modal fade" id="statusChangeModal" tabindex="-1">
   <div class="modal-dialog">
@@ -2044,11 +2047,21 @@
       <div class="modal-body">
         <div class="mb-3">
           <label class="form-label fw-semibold">新しいステータス</label>
-          <select id="newStatusSelect" class="form-select">
+          <select id="newStatusSelect" class="form-select" onchange="onStatusSelectChange()">
             {% for val, label in editable_status_choices %}
             <option value="{{ val }}"{% if val == assessment.status %} selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
+        </div>
+        <div id="approverSelectWrap" class="mb-3 d-none">
+          <label class="form-label fw-semibold">承認申請先 <span class="text-danger">*</span></label>
+          <select id="statusChangeApproverSelect" class="form-select">
+            <option value="">— 選択してください —</option>
+            {% for u in approvers %}
+            <option value="{{ u.pk }}">{% if u.last_name or u.first_name %}{{ u.last_name }} {{ u.first_name }}{% else %}{{ u.username }}{% endif %}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">承認申請すると、ステータスが「成約」に変わり、承認者に通知されます。</div>
         </div>
       </div>
       <div class="modal-footer">
@@ -2058,6 +2071,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 {# 成約キャンセルモーダル #}
 {% if assessment.status == 'contracted' %}
@@ -2069,11 +2083,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <p class="text-muted small mb-3">成約をキャンセルすると、この案件は<strong>没</strong>となります。</p>
-        <div class="mb-3">
-          <label class="form-label fw-semibold">キャンセル理由 <span class="text-danger">*</span></label>
-          <textarea id="cancelContractedReason" class="form-control" rows="3" placeholder="例：お客様都合によるキャンセル"></textarea>
-        </div>
+        <p class="mb-0">成約をキャンセルすると、ステータスが<strong>査定中</strong>に戻ります。よろしいですか？</p>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
@@ -2082,7 +2092,6 @@
     </div>
   </div>
 </div>
-{% endif %}
 {% endif %}
 
 {# 契約承認申請モーダル #}
@@ -2100,7 +2109,7 @@
           <option value="">-- 承認者を選択してください --</option>
           {% for u in all_users %}
           <option value="{{ u.pk }}"{% if contract.approval_requested_to and contract.approval_requested_to.pk == u.pk %} selected{% endif %}>
-            {{ u.get_full_name|default:u.username }}
+            {{ u|ja_name }}
           </option>
           {% endfor %}
         </select>
@@ -2128,7 +2137,7 @@
         <select id="newAssigneeSelect" class="form-select">
           {% for u in all_users %}
           <option value="{{ u.pk }}" {% if u.pk == assessment.assigned_to.pk %}selected{% endif %}>
-            {{ u.get_full_name|default:u.username }}
+            {{ u|ja_name }}
           </option>
           {% endfor %}
         </select>

@@ -55,6 +55,15 @@ def _generate_application_number(channel_type: str, today) -> str:
     return f'{ch_prefix}-{today.strftime("%Y%m%d")}-{seq:04d}'
 
 
+def generate_case_number() -> str:
+    """社内管理番号を生成（形式: YYMMDD-NNNN 例: 260617-0001）"""
+    from datetime import date
+    today = date.today()
+    key = today.strftime('%y%m%d')
+    seq = _next_seq('case_number', key)
+    return f'{key}-{seq:04d}'
+
+
 # ---------------------------------------------------------------------------
 # ユーザー
 # ---------------------------------------------------------------------------

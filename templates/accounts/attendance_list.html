@@ -1,5 +1,5 @@
 {% extends 'base/internal_base.html' %}
-{% load static attendance_tags %}
+{% load static attendance_tags leads_extras %}
 {% block title %}勤怠一覧 - {{ month_label }}{% endblock %}
 
 {% block content %}
@@ -86,7 +86,7 @@
         <tbody>
           {% for row in rows %}
           <tr>
-            <td class="card-title">{{ row.profile.user.get_full_name|default:row.profile.user.username }}</td>
+            <td class="card-title">{{ row.profile.user|ja_name }}</td>
             <td data-label="社員番号">{{ row.profile.employee_number|default:"-" }}</td>
             <td data-label="所属店舗">{{ row.profile.store.name|default:"なし" }}</td>
             <td data-label="出勤日数">{{ row.days }}日</td>

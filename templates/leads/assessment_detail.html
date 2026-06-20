@@ -1,4 +1,5 @@
 {% extends 'base/internal_base.html' %}
+{% load leads_extras %}
 {% block title %}査定申込詳細 - {{ req.application_number }}{% endblock %}
 
 {% block content %}
@@ -168,7 +169,7 @@
             <li class="list-group-item">
               <div class="d-flex justify-content-between">
                 <small class="text-muted">{{ h.contacted_at|date:"Y-m-d H:i" }} / {{ h.get_contact_method_display }}</small>
-                <small class="text-muted">{{ h.recorded_by.get_full_name|default:h.recorded_by.username }}</small>
+                <small class="text-muted">{{ h.recorded_by|ja_name }}</small>
               </div>
               <div class="mt-1">{{ h.content|linebreaksbr }}</div>
             </li>

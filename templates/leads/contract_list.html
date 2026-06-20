@@ -1,5 +1,5 @@
 {% extends 'base/internal_base.html' %}
-{% load humanize %}
+{% load humanize leads_extras %}
 {% block title %}契約一覧{% endblock %}
 
 {% block content %}
@@ -37,7 +37,7 @@
   <div class="card">
     <div class="card-body p-0">
       {% for c in page_obj %}
-      {% with owner=c.assigned_to.get_full_name|default:c.assigned_to.username %}
+      {% with owner=c.assigned_to|ja_name %}
       <div class="dash-feed-item" onclick="location.href='{% url 'leads:case_detail' c.assessment.pk %}?tab=contract'">
         <div class="dash-feed-main">
           <span class="dash-feed-name">{{ c.customer.name }}</span>

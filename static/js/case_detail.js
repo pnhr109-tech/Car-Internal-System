@@ -539,26 +539,46 @@ function deleteCheckItem(id) {
 
 // ── ステータス変更・承認申請 ──────────────────────────────────────────────
 
+function onStatusSelectChange() {
+  const status = document.getElementById('newStatusSelect').value;
+  const wrap = document.getElementById('approverSelectWrap');
+  wrap.classList.toggle('d-none', status !== 'contracted');
+}
+
 function submitStatusChange() {
   const status = document.getElementById('newStatusSelect').value;
-  apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/update/`, {
-    method: 'POST',
-    body: JSON.stringify({ status }),
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (d.success) location.reload();
-    else showToast('エラー', d.message, 'danger');
-  })
-  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
+
+  if (status === 'contracted') {
+    const approverId = document.getElementById('statusChangeApproverSelect').value;
+    if (!approverId) { showToast('エラー', '承認申請先を選択してください', 'danger'); return; }
+    apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/request-approval/`, {
+      method: 'POST',
+      body: JSON.stringify({ approver_id: parseInt(approverId) }),
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) location.reload();
+      else showToast('エラー', d.message, 'danger');
+    })
+    .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
+  } else {
+    apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/update/`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) location.reload();
+      else showToast('エラー', d.message, 'danger');
+    })
+    .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
+  }
 }
 
 function submitCancelContracted() {
-  const reason = (document.getElementById('cancelContractedReason')?.value || '').trim();
-  if (!reason) { showToast('エラー', 'キャンセル理由を入力してください', 'danger'); return; }
   apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/cancel-contracted/`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({}),
   })
   .then(r => r.json())
   .then(d => {
@@ -571,11 +591,9 @@ function submitCancelContracted() {
 // ── 査定承認 ─────────────────────────────────────────────────────────────
 
 function approveAssessment(action) {
-  const reason = action === 'reject' ? prompt('差し戻し理由を入力してください') : '';
-  if (action === 'reject' && !reason) return;
   apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/approve/`, {
     method: 'POST',
-    body: JSON.stringify({ action, reason }),
+    body: JSON.stringify({ action }),
   })
   .then(r => r.json())
   .then(d => {
@@ -666,11 +684,9 @@ function requestContractApproval() {
 // ── 契約承認 ─────────────────────────────────────────────────────────────
 
 function approveContract(action) {
-  const reason = action === 'reject' ? prompt('差し戻し理由を入力してください') : '';
-  if (action === 'reject' && !reason) return;
   apiFetch(`/sateiinfo/api/contracts/${CONTRACT_ID}/approve/`, {
     method: 'POST',
-    body: JSON.stringify({ action, reason }),
+    body: JSON.stringify({ action }),
   })
   .then(r => r.json())
   .then(d => {

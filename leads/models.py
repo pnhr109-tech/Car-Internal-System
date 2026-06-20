@@ -367,6 +367,7 @@ class Assessment(models.Model):
     )
     approval_requested_at = models.DateTimeField(null=True, blank=True, verbose_name='承認申請日時')
     remarks     = models.TextField(blank=True, verbose_name='備考')
+    case_number = models.CharField(max_length=20, blank=True, unique=True, null=True, db_index=True, verbose_name='社内管理番号')
 
     # 査定システム連携
     assessment_system_id             = models.CharField(max_length=10, blank=True, verbose_name='査定システムID')

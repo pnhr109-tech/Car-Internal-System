@@ -67,6 +67,7 @@ def case_list(request):
     status = request.GET.get('status', '').strip()
     if q:
         qs = qs.filter(
+            Q(case_number__icontains=q) |
             Q(customer__name__icontains=q) | Q(customer__phone_number__icontains=q) |
             Q(vehicle__maker__icontains=q) | Q(vehicle__car_model__icontains=q)
         )
@@ -132,16 +133,17 @@ def case_detail(request, pk):
 
     User      = get_user_model()
     all_users = User.objects.filter(is_active=True).order_by('last_name', 'first_name')
+    approvers = User.objects.filter(is_active=True).filter(
+        Q(is_superuser=True) |
+        Q(profile__role__in=['sub_leader', 'manager', 'superuser'])
+    ).distinct().order_by('last_name', 'first_name')
 
     contract_tax_rate = 10
     if contract and contract.purchase_price_excl_tax and contract.purchase_price_excl_tax > 0:
         rate = round(float(contract.tax_amount / contract.purchase_price_excl_tax * 100))
         contract_tax_rate = rate if rate in (0, 8, 10) else 10
 
-    editable_status_choices = [
-        (s, l) for s, l in Assessment.STATUS_CHOICES
-        if s != Assessment.STATUS_CONTRACTED
-    ]
+    editable_status_choices = Assessment.STATUS_CHOICES
 
     return render(request, 'leads/case_detail.html', {
         'assessment':                   assessment,
@@ -161,6 +163,7 @@ def case_detail(request, pk):
         'check_type_choices':           AssessmentCheckItem.CHECK_TYPE_CHOICES,
         'rating_choices':               rating_choices,
         'all_users':                    all_users,
+        'approvers':                    approvers,
         'contract_tax_rate':            contract_tax_rate,
         'bank_institution_type_choices': CustomerBankAccount.INSTITUTION_TYPE_CHOICES,
         'primary_bank_account':          primary_bank_account,
@@ -585,29 +588,19 @@ def cancel_contracted_assessment(request, assessment_id):
     if assessment.status != Assessment.STATUS_CONTRACTED:
         return JsonResponse({'success': False, 'message': '成約ステータスの案件のみキャンセルできます'}, status=400)
 
-    try:
-        payload = json.loads(request.body)
-        reason  = (payload.get('reason') or '').strip()
-    except (json.JSONDecodeError, AttributeError):
-        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
-
-    if not reason:
-        return JsonResponse({'success': False, 'message': 'キャンセル理由を入力してください'}, status=400)
-
-    assessment.status                = Assessment.STATUS_LOST
-    assessment.cancel_reason         = reason
+    assessment.status                = Assessment.STATUS_IN_PROGRESS
     assessment.cancelled_at          = timezone.now()
     assessment.approved_by           = None
     assessment.approved_at           = None
     assessment.approval_requested_to = None
     assessment.approval_requested_at = None
     assessment.save(update_fields=[
-        'status', 'cancel_reason', 'cancelled_at',
+        'status', 'cancelled_at',
         'approved_by', 'approved_at',
         'approval_requested_to', 'approval_requested_at',
         'updated_at',
     ])
-    return JsonResponse({'success': True, 'message': '成約をキャンセルしました（没案件）'})
+    return JsonResponse({'success': True, 'message': '成約をキャンセルしました（査定中に戻しました）'})
 
 
 @login_required

@@ -60,6 +60,7 @@ urlpatterns = [
 
     # ── 売掛管理 ─────────────────────────────────────────────
     path('sales-process/',                              views.sales_process_list,         name='sales_process_list'),
+    path('sale-info/',                                  views.sale_info_list,             name='sale_info_list'),
     path('api/sales-process/<int:process_id>/toggle/',      views.toggle_sales_process_step, name='toggle_sales_process_step'),
     path('api/sales-process/<int:process_id>/step/',            views.toggle_case_sales_step,    name='toggle_case_sales_step'),
     path('api/sales-process/<int:process_id>/update-info/',     views.update_sales_info,         name='update_sales_info'),

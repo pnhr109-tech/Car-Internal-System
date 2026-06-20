@@ -1,5 +1,5 @@
 {% extends 'base/internal_base.html' %}
-{% load static %}
+{% load static leads_extras %}
 {% block title %}社員一覧{% endblock %}
 
 {% block content %}
@@ -92,7 +92,7 @@
         <tbody>
           {% for profile in page_obj %}
           <tr>
-            <td class="card-title">{{ profile.user.get_full_name|default:profile.user.username }}</td>
+            <td class="card-title">{{ profile.user|ja_name }}</td>
             <td data-label="社員番号">{{ profile.employee_number|default:"-" }}</td>
             <td data-label="メール" class="d-mobile-none">{{ profile.user.email }}</td>
             <td data-label="所属店舗">{{ profile.store.name|default:"なし" }}</td>
@@ -113,7 +113,7 @@
                       data-bs-toggle="modal"
                       data-bs-target="#deleteModal"
                       data-delete-url="{% url 'accounts:employee_delete' profile.pk %}"
-                      data-name="{{ profile.user.get_full_name|default:profile.user.username }}">
+                      data-name="{{ profile.user|ja_name }}">
                 <i class="bi bi-trash"></i>
               </button>
             </td>

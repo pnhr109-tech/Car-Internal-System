@@ -1,0 +1,188 @@
+{% extends 'base/internal_base.html' %}
+{% load humanize leads_extras %}
+{% block title %}売却情報一覧{% endblock %}
+
+{% block content %}
+<div class="container-xxl py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h4 class="mb-0"><i class="bi bi-graph-up text-primary"></i> 売却情報一覧</h4>
+  </div>
+
+  {# 絞り込みフォーム #}
+  <div class="card search-card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        {% if has_global %}
+        <div class="col-md-2 col-6">
+          <label class="form-label">店舗</label>
+          <select name="store" class="form-select">
+            <option value="">すべて</option>
+            {% for store in stores %}
+            <option value="{{ store.pk }}" {% if f_store == store.pk|stringformat:"s" %}selected{% endif %}>{{ store.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% else %}
+        <div class="col-md-2 col-6">
+          <label class="form-label">店舗</label>
+          <input type="text" class="form-control" value="{{ my_store.name|default:'—' }}" disabled>
+        </div>
+        {% endif %}
+        <div class="col-md-2 col-6">
+          <label class="form-label">担当</label>
+          <select name="user" class="form-select">
+            <option value="">すべて</option>
+            {% for u in users %}
+            <option value="{{ u.pk }}" {% if f_user == u.pk|stringformat:"s" %}selected{% endif %}>{{ u|ja_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2 col-6">
+          <label class="form-label">AA会場</label>
+          <select name="venue" class="form-select">
+            <option value="">すべて</option>
+            {% for v in venues %}
+            <option value="{{ v.pk }}" {% if f_venue == v.pk|stringformat:"s" %}selected{% endif %}>{{ v.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2 col-6">
+          <label class="form-label">売却日（から）</label>
+          <input type="date" name="sold_from" class="form-control" value="{{ f_sold_from }}">
+        </div>
+        <div class="col-md-2 col-6">
+          <label class="form-label">売却日（まで）</label>
+          <input type="date" name="sold_to" class="form-control" value="{{ f_sold_to }}">
+        </div>
+        <div class="col-md-2 col-12">
+          <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search"></i> 検索</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <p class="text-muted small mb-2">{{ page_obj.paginator.count }}件</p>
+
+  <div class="card">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 mobile-card-table">
+          <thead class="table-light">
+            <tr>
+              <th>管理番号</th>
+              <th>店舗</th>
+              <th>担当</th>
+              <th>車種</th>
+              <th>区分</th>
+              <th>売却日</th>
+              <th class="text-end">売却金額</th>
+              <th>売却先（AA会場）</th>
+              <th class="text-end">出品費用</th>
+              <th class="text-end">成約費用</th>
+              <th class="text-end">個人宅陸送</th>
+              <th class="text-end">AA搬送費用</th>
+              <th class="text-end">その他費用</th>
+              <th class="text-end">経常利益（概算）</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for sp in page_obj %}
+            {% with a=sp.contract.assessment v=sp.contract.vehicle %}
+            {% with store=a.assigned_to.profile.store %}
+            <tr style="cursor:pointer" onclick="location.href='{% url 'leads:case_detail' a.pk %}?tab=sale'">
+              <td class="card-title" data-label="管理番号">
+                {% if a.case_number %}<span class="badge bg-secondary">{{ a.case_number }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+              <td data-label="店舗">{{ store.name|default:"—" }}</td>
+              <td data-label="担当">{{ a.assigned_to|ja_name }}</td>
+              <td data-label="車種">{{ v.maker }} {{ v.car_model }}</td>
+              <td data-label="区分">
+                {% if sp.vehicle_disposition %}
+                <span class="badge bg-light text-dark border">{{ sp.get_vehicle_disposition_display }}</span>
+                {% else %}—{% endif %}
+              </td>
+              <td data-label="売却日">{{ sp.sold_at|date:"Y/m/d"|default:"—" }}</td>
+              <td class="text-end" data-label="売却金額">
+                {% if sp.sold_price %}{{ sp.sold_price|floatformat:0|intcomma }}円{% else %}—{% endif %}
+              </td>
+              <td data-label="売却先（AA会場）">{{ sp.sold_destination.name|default:"—" }}</td>
+              <td class="text-end" data-label="出品費用">
+                {% if sp.sold_destination %}{{ sp.sold_destination.entry_fee|floatformat:0|intcomma }}円{% else %}—{% endif %}
+              </td>
+              <td class="text-end" data-label="成約費用">
+                {% if sp.sold_destination %}{{ sp.sold_destination.contract_fee|floatformat:0|intcomma }}円{% else %}—{% endif %}
+              </td>
+              <td class="text-end" data-label="個人宅陸送">
+                {{ sp.transport_fee_personal|floatformat:0|intcomma|default:"—" }}{% if sp.transport_fee_personal %}円{% endif %}
+              </td>
+              <td class="text-end" data-label="AA搬送費用">
+                {{ sp.transport_fee_auction|floatformat:0|intcomma|default:"—" }}{% if sp.transport_fee_auction %}円{% endif %}
+              </td>
+              <td class="text-end" data-label="その他費用">
+                {% if sp.other_fee %}{{ sp.other_fee|floatformat:0|intcomma }}円{% else %}—{% endif %}
+              </td>
+              <td class="text-end fw-bold" data-label="経常利益（概算）">
+                {% if sp.sold_price %}
+                {% with buy=sp.contract.purchase_price_excl_tax entry=sp.sold_destination.entry_fee|default:0 contract_fee=sp.sold_destination.contract_fee|default:0 %}
+                {% with profit=sp.sold_price|add:0 %}
+                <span id="profit-{{ sp.pk }}"
+                  data-sold="{{ sp.sold_price|default:0 }}"
+                  data-buy="{{ buy|default:0 }}"
+                  data-entry="{{ entry }}"
+                  data-contract="{{ contract_fee }}"
+                  data-personal="{{ sp.transport_fee_personal|default:0 }}"
+                  data-auction="{{ sp.transport_fee_auction|default:0 }}"
+                  data-other="{{ sp.other_fee|default:0 }}">
+                </span>
+                {% endwith %}
+                {% endwith %}
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endwith %}
+            {% endwith %}
+            {% empty %}
+            <tr><td colspan="14" class="text-center text-muted py-4">該当する売却情報はありません</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <nav class="mt-3">
+    <ul class="pagination justify-content-end">
+      {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&store={{ f_store }}&user={{ f_user }}&venue={{ f_venue }}&sold_from={{ f_sold_from }}&sold_to={{ f_sold_to }}">前へ</a>
+      </li>
+      {% endif %}
+      <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+      {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}&store={{ f_store }}&user={{ f_user }}&venue={{ f_venue }}&sold_from={{ f_sold_from }}&sold_to={{ f_sold_to }}">次へ</a>
+      </li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.querySelectorAll('[id^="profit-"]').forEach(el => {
+  const sold     = parseFloat(el.dataset.sold)     || 0;
+  const buy      = parseFloat(el.dataset.buy)      || 0;
+  const entry    = parseFloat(el.dataset.entry)    || 0;
+  const contract = parseFloat(el.dataset.contract) || 0;
+  const personal = parseFloat(el.dataset.personal) || 0;
+  const auction  = parseFloat(el.dataset.auction)  || 0;
+  const other    = parseFloat(el.dataset.other)    || 0;
+  const profit   = sold - buy - entry - contract - personal - auction - other;
+  el.textContent = profit.toLocaleString('ja-JP') + '円';
+  el.className   = profit >= 0 ? 'text-success' : 'text-danger';
+});
+</script>
+{% endblock %}

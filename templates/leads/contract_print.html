@@ -1,4 +1,4 @@
-{% load static humanize %}<!DOCTYPE html>
+{% load static humanize leads_extras %}<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -168,9 +168,9 @@
             <td class="bg-yellow" style="font-weight:bold">責任者</td>
           </tr>
           <tr style="height:12mm; font-size:12pt; font-weight:bold">
-            <td>{{ assessment.assigned_to.get_full_name|default:assessment.assigned_to.username }}</td>
-            <td>{% if contract.manager1 %}{{ contract.manager1.get_full_name|default:contract.manager1.username }}{% endif %}</td>
-            <td>{% if contract.manager2 %}{{ contract.manager2.get_full_name|default:contract.manager2.username }}{% endif %}</td>
+            <td>{{ assessment.assigned_to|ja_name }}</td>
+            <td>{% if contract.manager1 %}{{ contract.manager1|ja_name }}{% endif %}</td>
+            <td>{% if contract.manager2 %}{{ contract.manager2|ja_name }}{% endif %}</td>
           </tr>
         </table>
 

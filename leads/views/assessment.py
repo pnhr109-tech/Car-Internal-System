@@ -35,6 +35,7 @@ from ..models import (
 from .utils import (
     _current_user_display_name,
     _generate_application_number,
+    generate_case_number,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ def _auto_create_assessment_for_request(req, user):
         vehicle=req.vehicle,
         assigned_to=req.assigned_to or user,
         assessment_datetime=req.reservation_datetime,
+        case_number=generate_case_number(),
     )
 
 
@@ -700,6 +702,7 @@ def promote_to_case(request, request_id):
                 vehicle=req.vehicle,
                 assigned_to=assigned_user,
                 assessment_datetime=req.reservation_datetime,
+                case_number=generate_case_number(),
             )
             req.follow_status = CarAssessmentRequest.STATUS_PROMOTED
             req.save(update_fields=['follow_status', 'customer', 'vehicle', 'updated_at'])

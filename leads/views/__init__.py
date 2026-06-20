@@ -64,6 +64,7 @@ from .contract import (
     approve_contract,
     approve_correction,
     sales_process_list,
+    sale_info_list,
     toggle_sales_process_step,
     toggle_case_sales_step,
     update_sales_info,
@@ -116,7 +117,7 @@ __all__ = [
     'contract_list', 'approval_list', 'contract_print',
     'create_contract', 'update_contract',
     'request_contract_approval', 'approve_contract', 'approve_correction',
-    'sales_process_list', 'toggle_sales_process_step', 'toggle_case_sales_step', 'update_sales_info', 'save_step_dates',
+    'sales_process_list', 'sale_info_list', 'toggle_sales_process_step', 'toggle_case_sales_step', 'update_sales_info', 'save_step_dates',
     # customer
     'customer_list', 'customer_detail',
     'update_customer_direct', 'save_bank_account_direct', 'delete_bank_account_direct',

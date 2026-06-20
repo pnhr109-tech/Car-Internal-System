@@ -24,6 +24,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from accounts.models import Store
 from ..models import (
     Assessment,
     AuctionVenue,
@@ -597,6 +598,78 @@ def sales_process_list(request):
         'sales_users':   sales_users,
         'sales_user_id': sales_user_id,
         'steps':         SALES_PROCESS_STEPS,
+    })
+
+
+@login_required
+def sale_info_list(request):
+    """売却情報一覧"""
+    profile = getattr(request.user, 'profile', None)
+    is_approver = (profile and profile.can_approve) or request.user.is_superuser
+    if not is_approver:
+        messages.error(request, 'この画面はマネージャー以上のみアクセスできます')
+        return redirect('leads:case_list')
+
+    has_global = request.user.is_superuser or (profile and profile.has_global_access)
+
+    qs = SalesProcess.objects.select_related(
+        'contract',
+        'contract__assessment',
+        'contract__assessment__assigned_to',
+        'contract__assessment__assigned_to__profile',
+        'contract__assessment__assigned_to__profile__store',
+        'contract__vehicle',
+        'sold_destination',
+    ).order_by('-sold_at', '-contract__contract_date')
+
+    # 全権限以外は自店舗のみに限定
+    if not has_global and profile and profile.store:
+        qs = qs.filter(contract__assessment__assigned_to__profile__store=profile.store)
+
+    # 絞り込み（全権限のみ店舗フィルター使用可）
+    f_store      = request.GET.get('store', '').strip() if has_global else ''
+    f_user       = request.GET.get('user', '').strip()
+    f_venue      = request.GET.get('venue', '').strip()
+    f_sold_from  = request.GET.get('sold_from', '').strip()
+    f_sold_to    = request.GET.get('sold_to', '').strip()
+
+    if f_store:
+        qs = qs.filter(contract__assessment__assigned_to__profile__store_id=f_store)
+    if f_user:
+        qs = qs.filter(contract__assessment__assigned_to_id=f_user)
+    if f_venue:
+        qs = qs.filter(sold_destination_id=f_venue)
+    if f_sold_from:
+        qs = qs.filter(sold_at__gte=f_sold_from)
+    if f_sold_to:
+        qs = qs.filter(sold_at__lte=f_sold_to)
+
+    # フィルター用マスタ（担当者も表示範囲に応じて絞る）
+    stores  = Store.objects.filter(is_active=True).order_by('id') if has_global else None
+    User    = get_user_model()
+    user_qs = User.objects.filter(
+        is_active=True, assessments__contract__sales_process__isnull=False
+    ).distinct().order_by('last_name', 'first_name')
+    if not has_global and profile and profile.store:
+        user_qs = user_qs.filter(profile__store=profile.store)
+    users  = user_qs
+    venues = AuctionVenue.objects.order_by('name')
+
+    paginator = Paginator(qs, 100)
+    page_obj  = paginator.get_page(request.GET.get('page', 1))
+
+    return render(request, 'leads/sale_info_list.html', {
+        'page_obj':    page_obj,
+        'stores':      stores,
+        'users':       users,
+        'venues':      venues,
+        'f_store':     f_store,
+        'f_user':      f_user,
+        'f_venue':     f_venue,
+        'f_sold_from': f_sold_from,
+        'f_sold_to':   f_sold_to,
+        'has_global':  has_global,
+        'my_store':    profile.store if profile else None,
     })
 
 

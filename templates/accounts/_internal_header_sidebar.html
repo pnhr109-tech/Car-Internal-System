@@ -1,4 +1,4 @@
-{% load static %}
+{% load static leads_extras %}
 <nav class="navbar navbar-dark bg-dark sticky-top">
     <div class="container-fluid">
         <button class="navbar-toggler header-icon-btn p-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#appSidebar" aria-controls="appSidebar" aria-label="メニューを開く">
@@ -71,6 +71,9 @@
                 <a href="/sateiinfo/sales-process/" class="list-group-item list-group-item-action sidebar-menu-link">
                     <i class="bi bi-arrow-left-right me-2"></i>売掛管理
                 </a>
+                <a href="/sateiinfo/sale-info/" class="list-group-item list-group-item-action sidebar-menu-link">
+                    <i class="bi bi-graph-up me-2"></i>売却情報一覧
+                </a>
             </div>
             {% endif %}
             {% endwith %}
@@ -113,7 +116,7 @@
             <p class="mb-3 fw-semibold" id="attendanceWorkDuration" data-login-at="{{ attendance_login_at_iso }}" data-initial-minutes="{{ attendance_work_minutes }}" data-clocked-out="{{ attendance_is_clocked_out|yesno:'true,false' }}">{{ attendance_work_minutes }}分</p>
             <a href="/clock-out/" class="btn btn-warning w-100 mb-3">退勤</a>
             <div class="border-top pt-3 d-flex justify-content-between align-items-center">
-                <span class="small text-muted">{{ request.user.get_full_name|default:request.user.username }}</span>
+                <span class="small text-muted">{{ request.user|ja_name }}</span>
                 <a href="/logout/" class="btn btn-sm btn-outline-secondary">ログアウト</a>
             </div>
         </div>

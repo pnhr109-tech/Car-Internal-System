@@ -1,5 +1,5 @@
 {% extends 'base/internal_base.html' %}
-{% load static %}
+{% load static leads_extras %}
 {% block title %}顧客詳細 — {{ customer.name }}{% endblock %}
 
 {% block content %}
@@ -149,7 +149,7 @@
                   {% if a.vehicle %}{{ a.vehicle.maker }} {{ a.vehicle.car_model }}{% else %}-{% endif %}
                 </td>
                 <td data-label="ステータス">{{ a.get_status_display }}</td>
-                <td data-label="担当者">{% if a.assigned_to %}{{ a.assigned_to.get_full_name|default:a.assigned_to.username }}{% else %}-{% endif %}</td>
+                <td data-label="担当者">{% if a.assigned_to %}{{ a.assigned_to|ja_name }}{% else %}-{% endif %}</td>
                 <td data-label="申込日">{{ a.created_at|date:"Y/m/d" }}</td>
                 <td class="d-mobile-none">
                   <a href="{% url 'leads:case_detail' a.pk %}" class="btn btn-sm btn-outline-secondary">

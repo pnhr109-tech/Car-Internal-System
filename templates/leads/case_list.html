@@ -1,5 +1,5 @@
 {% extends 'base/internal_base.html' %}
-{% load humanize %}
+{% load humanize leads_extras %}
 {% block title %}案件一覧{% endblock %}
 
 {% block content %}
@@ -12,8 +12,8 @@
     <div class="card-body">
       <form method="get" class="row g-2 align-items-end">
         <div class="col-md-4">
-          <label class="form-label">顧客名・電話番号</label>
-          <input type="text" name="q" class="form-control" value="{{ q }}" placeholder="例：山田 / 090...">
+          <label class="form-label">管理番号・顧客名・電話番号</label>
+          <input type="text" name="q" class="form-control" value="{{ q }}" placeholder="例：260617-0001 / 山田 / 090...">
         </div>
         <div class="col-md-3">
           <label class="form-label">ステータス</label>
@@ -37,7 +37,7 @@
   <div class="card">
     <div class="card-body p-0">
       {% for a in page_obj %}
-      {% with owner=a.assigned_to.get_full_name|default:a.assigned_to.username %}
+      {% with owner=a.assigned_to|ja_name %}
       <div class="dash-feed-item" onclick="location.href='{% url 'leads:case_detail' a.pk %}'">
         <div class="dash-feed-main">
           <span class="dash-feed-name">{{ a.customer.name }}</span>
@@ -59,7 +59,8 @@
         {% endif %}
         {% endwith %}
         <div class="dash-feed-meta">
-          {% if a.assessment_datetime %}<i class="bi bi-clock"></i> {{ a.assessment_datetime|date:"Y-m-d H:i" }}{% endif %}
+          {% if a.case_number %}<span class="text-muted"><i class="bi bi-hash"></i> {{ a.case_number }}</span>{% endif %}
+          {% if a.assessment_datetime %} &nbsp;·&nbsp; <i class="bi bi-clock"></i> {{ a.assessment_datetime|date:"Y-m-d H:i" }}{% endif %}
           {% if a.assessment_price %} &nbsp;·&nbsp; <i class="bi bi-currency-yen"></i> {{ a.assessment_price|floatformat:0|intcomma }}円{% endif %}
           {% if a.approved_by %} &nbsp;·&nbsp; <span class="text-success"><i class="bi bi-check-circle-fill"></i> 承認済</span>{% else %} &nbsp;·&nbsp; <span class="text-warning"><i class="bi bi-hourglass"></i> 未承認</span>{% endif %}
         </div>

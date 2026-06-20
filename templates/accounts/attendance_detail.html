@@ -1,6 +1,6 @@
 {% extends 'base/internal_base.html' %}
-{% load static attendance_tags %}
-{% block title %}勤務表 - {{ profile.user.get_full_name }} {{ month_label }}{% endblock %}
+{% load static attendance_tags leads_extras %}
+{% block title %}勤務表 - {{ profile.user|ja_name }} {{ month_label }}{% endblock %}
 
 {% block content %}
 <div class="container-xxl py-4">
@@ -14,7 +14,7 @@
     <div>
       <h4 class="mb-1">
         <i class="bi bi-calendar3 text-primary"></i>
-        {{ profile.user.get_full_name|default:profile.user.username }} さんの勤務表
+        {{ profile.user|ja_name }} さんの勤務表
       </h4>
       <div class="text-muted small">
         {{ profile.store.name|default:"店舗なし" }} &nbsp;/&nbsp; {{ profile.get_role_display }}

@@ -1,5 +1,5 @@
 {% extends 'base/internal_base.html' %}
-{% load static humanize %}
+{% load static humanize leads_extras %}
 {% block title %}売掛管理{% endblock %}
 
 {% comment %}
@@ -23,7 +23,7 @@
             <option value="">すべて</option>
             {% for u in sales_users %}
             <option value="{{ u.pk }}" {% if sales_user_id == u.pk|stringformat:"s" %}selected{% endif %}>
-              {{ u.get_full_name|default:u.username }}
+              {{ u|ja_name }}
             </option>
             {% endfor %}
           </select>
@@ -52,7 +52,7 @@
   {% regroup processes by contract.assigned_to as sales_groups %}
 
   {% for group in sales_groups %}
-  {% with sales_name=group.grouper.get_full_name|default:group.grouper.username %}
+  {% with sales_name=group.grouper|ja_name %}
   <div class="mb-4 sales-group-block">
     <div class="d-flex align-items-center gap-2 mb-2">
       <i class="bi bi-person-fill text-primary"></i>
