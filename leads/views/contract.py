@@ -32,6 +32,7 @@ from ..models import (
     ContactHistory,
     Customer,
     CustomerBankAccount,
+    OwnershipRelease,
     PurchaseContract,
     SalesProcess,
     Vehicle,
@@ -243,6 +244,7 @@ def create_contract(request, assessment_id):
                 repair_flag=bool(payload.get('repair_flag', False)),
                 repair_notes=payload.get('repair_notes', ''),
                 ownership_release_flag=bool(payload.get('ownership_release_flag', False)),
+                debt_remaining_flag=bool(payload.get('debt_remaining_flag', False)),
                 remarks=payload.get('remarks', ''),
                 repair_history_flag=_parse_tristate(payload.get('repair_history_flag')),
                 meter_tampering=_parse_tristate(payload.get('meter_tampering')),
@@ -374,6 +376,7 @@ def update_contract(request, contract_id):
             contract.repair_flag                  = bool(payload.get('repair_flag', False))
             contract.repair_notes                 = payload.get('repair_notes', '')
             contract.ownership_release_flag       = bool(payload.get('ownership_release_flag', False))
+            contract.debt_remaining_flag          = bool(payload.get('debt_remaining_flag', False))
             contract.remarks                      = payload.get('remarks', '')
             contract.manager1                     = _get_user(payload.get('manager1_id'))
             contract.manager2                     = _get_user(payload.get('manager2_id'))
@@ -442,6 +445,53 @@ def update_contract(request, contract_id):
         return JsonResponse({'success': False, 'message': '契約の更新に失敗しました'}, status=500)
 
     return JsonResponse({'success': True, 'message': '契約を更新しました'})
+
+
+@login_required
+@require_POST
+def update_contract_procedure(request, contract_id):
+    """契約手続（所有権解除・残債）進捗更新 API"""
+    contract = get_object_or_404(PurchaseContract, pk=contract_id)
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    ownership_status = payload.get('ownership_release_status', PurchaseContract.OWNERSHIP_RELEASE_NOT_STARTED)
+    if ownership_status not in {s[0] for s in PurchaseContract.OWNERSHIP_RELEASE_STATUS_CHOICES}:
+        ownership_status = PurchaseContract.OWNERSHIP_RELEASE_NOT_STARTED
+
+    contract.ownership_release_status         = ownership_status
+    contract.ownership_release_requested_date = _parse_date(payload.get('ownership_release_requested_date', ''))
+    contract.ownership_release_completed_date = _parse_date(payload.get('ownership_release_completed_date', ''))
+    contract.updated_by                       = request.user
+
+    with transaction.atomic():
+        contract.save(update_fields=[
+            'ownership_release_status', 'ownership_release_requested_date', 'ownership_release_completed_date',
+            'updated_by', 'updated_at',
+        ])
+
+        if contract.debt_remaining_flag and 'or_pattern' in payload:
+            or_status = payload.get('or_status', 'pending')
+            valid_statuses = {s[0] for s in OwnershipRelease.STATUS_CHOICES}
+            if or_status in valid_statuses:
+                obj, _ = OwnershipRelease.objects.get_or_create(
+                    contract=contract, defaults={'pattern': payload.get('or_pattern', 'A')},
+                )
+                obj.pattern                  = payload.get('or_pattern', 'A')
+                obj.status                   = or_status
+                obj.inquiry_status           = (payload.get('or_inquiry_status') or '').strip()
+                obj.dealer_doc_sent_date     = _parse_date(payload.get('or_dealer_doc_sent_date', ''))
+                obj.debt_transfer_date       = _parse_date(payload.get('or_debt_transfer_date', ''))
+                obj.dealer_doc_returned_date = _parse_date(payload.get('or_dealer_doc_returned_date', ''))
+                obj.save()
+
+    return JsonResponse({
+        'success': True,
+        'message': '契約手続の進捗を更新しました',
+        'procedure_completed': contract.procedure_completed,
+    })
 
 
 @login_required

@@ -8,7 +8,7 @@ API:
   update_assessment_info, update_vehicle_info, update_customer_info,
   save_bank_account, delete_bank_account, approve_assessment,
   add_contact_history, add_check_item, delete_check_item,
-  update_ownership_release, add_advance_payment, delete_advance_payment,
+  add_advance_payment, delete_advance_payment,
   approve_advance_payment, update_required_docs
 """
 import json
@@ -712,52 +712,6 @@ def delete_check_item(request, item_id):
     item = get_object_or_404(AssessmentCheckItem, pk=item_id)
     item.delete()
     return JsonResponse({'success': True, 'message': 'チェック項目を削除しました'})
-
-
-# ---------------------------------------------------------------------------
-# 所有権解除 API
-# ---------------------------------------------------------------------------
-
-@login_required
-@require_POST
-def update_ownership_release(request, contract_id):
-    """所有権解除 進捗更新 API（作成 or 更新）"""
-    contract = get_object_or_404(PurchaseContract, pk=contract_id)
-    try:
-        payload = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
-
-    pattern = payload.get('pattern', 'A')
-    status  = payload.get('status', 'pending')
-
-    valid_statuses = {s[0] for s in OwnershipRelease.STATUS_CHOICES}
-    if status not in valid_statuses:
-        return JsonResponse({'success': False, 'message': 'ステータスが不正です'}, status=400)
-
-    def _parse_date(val):
-        if not val:
-            return None
-        try:
-            return datetime.strptime(val, '%Y-%m-%d').date()
-        except ValueError:
-            return None
-
-    with transaction.atomic():
-        obj, _ = OwnershipRelease.objects.get_or_create(contract=contract, defaults={'pattern': pattern})
-        obj.pattern                  = pattern
-        obj.status                   = status
-        obj.inquiry_status           = (payload.get('inquiry_status') or '').strip()
-        obj.dealer_doc_sent_date     = _parse_date(payload.get('dealer_doc_sent_date'))
-        obj.debt_transfer_date       = _parse_date(payload.get('debt_transfer_date'))
-        obj.dealer_doc_returned_date = _parse_date(payload.get('dealer_doc_returned_date'))
-        obj.save()
-
-    return JsonResponse({
-        'success': True,
-        'message': '所有権解除情報を更新しました',
-        'status_display': obj.get_status_display(),
-    })
 
 
 # ---------------------------------------------------------------------------

@@ -141,7 +141,7 @@ class AdvancePaymentInline(admin.TabularInline):
 @admin.register(PurchaseContract)
 class PurchaseContractAdmin(admin.ModelAdmin):
     list_display  = ['assessment', 'customer', 'vehicle', 'contract_date', 'purchase_price_incl_tax', 'status', 'approved_by']
-    list_filter   = ['status', 'contract_date', 'ownership_release_flag', 'repair_flag']
+    list_filter   = ['status', 'contract_date', 'ownership_release_flag', 'debt_remaining_flag', 'repair_flag']
     search_fields = ['customer__name', 'customer__phone_number', 'vehicle__maker', 'vehicle__car_model']
     readonly_fields = ['created_at', 'updated_at']
     raw_id_fields   = ['assessment', 'customer', 'vehicle', 'assigned_to', 'approved_by', 'updated_by']
@@ -150,7 +150,9 @@ class PurchaseContractAdmin(admin.ModelAdmin):
         ('基本情報',     {'fields': ('assessment', 'customer', 'vehicle', 'assigned_to', 'contract_date')}),
         ('金額',         {'fields': ('purchase_price_excl_tax', 'tax_amount', 'purchase_price_incl_tax', 'amount_correction_flag', 'corrected_price')}),
         ('予定日',       {'fields': ('payment_scheduled_date', 'auction_scheduled_date')}),
-        ('特記事項',     {'fields': ('repair_flag', 'repair_notes', 'ownership_release_flag')}),
+        ('特記事項',     {'fields': ('repair_flag', 'repair_notes', 'ownership_release_flag', 'ownership_release_completed', 'ownership_release_completed_date',
+                                     'debt_remaining_flag', 'debt_inquiry_completed', 'debt_inquiry_completed_date',
+                                     'debt_repayment_completed', 'debt_repayment_completed_date')}),
         ('ステータス',   {'fields': ('status', 'cancel_reason', 'cancelled_at')}),
         ('承認',         {'fields': ('approved_by', 'approved_at')}),
         ('備考',         {'fields': ('remarks',)}),

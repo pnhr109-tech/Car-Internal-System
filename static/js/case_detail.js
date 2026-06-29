@@ -185,6 +185,7 @@ function saveContract() {
       repair_flag:                  document.getElementById('contractRepairFlag').checked,
       repair_notes:                 document.getElementById('contractRepairNotes').value,
       ownership_release_flag:       document.getElementById('contractOwnershipFlag').checked,
+      debt_remaining_flag:          document.getElementById('contractDebtRemainingFlag').checked,
       remarks:                      document.getElementById('contractRemarks').value,
       manager1_id:                  document.getElementById('contractManager1').value || null,
       manager2_id:                  document.getElementById('contractManager2').value || null,
@@ -548,6 +549,10 @@ function onStatusSelectChange() {
 function submitStatusChange() {
   const status = document.getElementById('newStatusSelect').value;
 
+  if (typeof PROCEDURE_COMPLETED !== 'undefined' && !PROCEDURE_COMPLETED) {
+    if (!confirm('契約手続（必要書類受領・所有権解除・残債返済）が完了していませんが、ステータスを変更しますか？')) return;
+  }
+
   if (status === 'contracted') {
     const approverId = document.getElementById('statusChangeApproverSelect').value;
     if (!approverId) { showToast('エラー', '承認申請先を選択してください', 'danger'); return; }
@@ -623,6 +628,7 @@ function updateContract() {
       repair_flag:                  document.getElementById('editContractRepairFlag').checked,
       repair_notes:                 document.getElementById('editContractRepairNotes').value,
       ownership_release_flag:       document.getElementById('editContractOwnershipFlag').checked,
+      debt_remaining_flag:          document.getElementById('editContractDebtRemainingFlag').checked,
       remarks:                      document.getElementById('editContractRemarks').value,
       manager1_id:                  document.getElementById('editContractManager1').value || null,
       manager2_id:                  document.getElementById('editContractManager2').value || null,
@@ -692,27 +698,6 @@ function approveContract(action) {
   .then(d => {
     if (d.success) location.reload();
     else alert(d.message);
-  });
-}
-
-// ── 所有権解除 進捗 ────────────────────────────────────────────────────────
-
-function updateOwnershipRelease() {
-  apiFetch(`/sateiinfo/api/contracts/${CONTRACT_ID}/ownership-release/`, {
-    method: 'POST',
-    body: JSON.stringify({
-      pattern:                  document.getElementById('orPattern').value,
-      status:                   document.getElementById('orStatus').value,
-      inquiry_status:           document.getElementById('orInquiryStatus').value,
-      dealer_doc_sent_date:     document.getElementById('orDocSentDate').value || null,
-      debt_transfer_date:       document.getElementById('orDebtTransferDate').value || null,
-      dealer_doc_returned_date: document.getElementById('orDocReturnedDate').value || null,
-    }),
-  })
-  .then(r => r.json())
-  .then(d => {
-    if (d.success) showToast('保存完了', d.message, 'success');
-    else showToast('エラー', d.message || '更新に失敗しました', 'danger');
   });
 }
 
@@ -846,4 +831,36 @@ function saveAllDocDates() {
       showToast('エラー', d.message || '保存に失敗しました', 'danger');
     }
   });
+}
+
+// ── 所有権解除・残債管理 ─────────────────────────────────────────────────
+
+function updateContractProcedure() {
+  const payload = {};
+  const ownershipStatusEl = document.getElementById('procOwnershipReleaseStatus');
+  if (ownershipStatusEl) {
+    payload.ownership_release_status          = ownershipStatusEl.value;
+    payload.ownership_release_requested_date  = document.getElementById('procOwnershipReleaseRequestedDate').value || null;
+    payload.ownership_release_completed_date  = document.getElementById('procOwnershipReleaseCompletedDate').value || null;
+  }
+  const orPatternEl = document.getElementById('orPattern');
+  if (orPatternEl) {
+    payload.or_pattern                  = orPatternEl.value;
+    payload.or_status                   = document.getElementById('orStatus').value;
+    payload.or_inquiry_status           = document.getElementById('orInquiryStatus').value;
+    payload.or_dealer_doc_sent_date     = document.getElementById('orDocSentDate').value || null;
+    payload.or_debt_transfer_date       = document.getElementById('orDebtTransferDate').value || null;
+    payload.or_dealer_doc_returned_date = document.getElementById('orDocReturnedDate').value || null;
+  }
+
+  apiFetch(`/sateiinfo/api/contracts/${CONTRACT_ID}/procedure/`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) location.reload();
+    else showToast('エラー', d.message || '保存に失敗しました', 'danger');
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
 }

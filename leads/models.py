@@ -492,6 +492,20 @@ class PurchaseContract(models.Model):
     repair_flag                = models.BooleanField(default=False, verbose_name='加修フラグ')
     repair_notes               = models.TextField(blank=True, verbose_name='加修内容')
     ownership_release_flag     = models.BooleanField(default=False, verbose_name='所有権解除フラグ')
+    debt_remaining_flag        = models.BooleanField(default=False, verbose_name='残債フラグ')
+
+    # ── 契約手続 進捗（所有権解除・残債） ───────────────────────────
+    OWNERSHIP_RELEASE_NOT_STARTED = 'not_started'
+    OWNERSHIP_RELEASE_IN_PROGRESS = 'in_progress'
+    OWNERSHIP_RELEASE_COMPLETED   = 'completed'
+    OWNERSHIP_RELEASE_STATUS_CHOICES = [
+        (OWNERSHIP_RELEASE_NOT_STARTED, '未対応'),
+        (OWNERSHIP_RELEASE_IN_PROGRESS, '対応中'),
+        (OWNERSHIP_RELEASE_COMPLETED,   '完了'),
+    ]
+    ownership_release_status          = models.CharField(max_length=20, choices=OWNERSHIP_RELEASE_STATUS_CHOICES, default=OWNERSHIP_RELEASE_NOT_STARTED, verbose_name='所有権解除ステータス')
+    ownership_release_requested_date = models.DateField(null=True, blank=True, verbose_name='解除申請日')
+    ownership_release_completed_date = models.DateField(null=True, blank=True, verbose_name='所有権解除完了日')
 
     # ── 車両状況・事業者登録申告（契約書記載） ──────────────────────
     repair_history_flag          = models.BooleanField(null=True, blank=True, verbose_name='修復歴')
@@ -574,6 +588,34 @@ class PurchaseContract(models.Model):
 
     def __str__(self):
         return f"{self.customer} / {self.vehicle}（{self.get_status_display()}）"
+
+    @property
+    def all_required_docs_received(self):
+        """必要通数が設定されている書類について、すべて受領済みか"""
+        items = [
+            (self.required_inkan_count,    self.inkan_received),
+            (self.required_juminhyo_count, self.juminhyo_received),
+            (self.required_jotohyo_count,  self.jotohyo_received),
+            (self.required_ininjyo_count,  self.ininjyo_received),
+            (self.required_jotosho_count,  self.jotosho_received),
+            (self.required_kanpu_count,    self.kanpu_received),
+        ]
+        return all(received for count, received in items if count > 0)
+
+    DEBT_REPAID_STATUSES = ('debt_transferred', 'docs_returned')
+
+    @property
+    def procedure_completed(self):
+        """契約手続（書類受領・所有権解除・残債返済）が完了しているか"""
+        if not self.all_required_docs_received:
+            return False
+        if self.ownership_release_flag and self.ownership_release_status != self.OWNERSHIP_RELEASE_COMPLETED:
+            return False
+        if self.debt_remaining_flag:
+            ownership_release = getattr(self, 'ownership_release', None)
+            if not ownership_release or ownership_release.status not in self.DEBT_REPAID_STATUSES:
+                return False
+        return True
 
 
 class Document(models.Model):

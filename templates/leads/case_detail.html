@@ -61,7 +61,7 @@
     </li>
     <li class="nav-item">
       <a class="nav-link {% if active_tab == 'documents' %}active{% endif %}" href="?tab=documents">
-        <i class="bi bi-folder"></i> 書類
+        <i class="bi bi-folder"></i> 契約手続
       </a>
     </li>
     <li class="nav-item">
@@ -326,6 +326,8 @@
             </dd>
             <dt class="col-6 text-muted">所有権解除</dt>
             <dd class="col-6">{% if contract.ownership_release_flag %}<span class="badge bg-warning text-dark">あり</span>{% else %}なし{% endif %}</dd>
+            <dt class="col-6 text-muted">残債</dt>
+            <dd class="col-6">{% if contract.debt_remaining_flag %}<span class="badge bg-warning text-dark">あり</span>{% else %}なし{% endif %}</dd>
             {# 必要書類通数 #}
             <dt class="col-12 fw-semibold text-muted border-top pt-2 mt-1">必要書類</dt>
             {% for key, label, count, received, received_date in required_doc_fields %}
@@ -461,58 +463,6 @@
       </div>
     </div>
 
-    {# ── 所有権解除 進捗 ── #}
-    {% if contract.ownership_release_flag %}
-    <div class="col-12">
-      <div class="card">
-        <div class="card-header"><h6 class="mb-0"><i class="bi bi-key"></i> 所有権解除 進捗</h6></div>
-        <div class="card-body">
-          <div class="row g-3">
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">パターン</label>
-              <select id="orPattern" class="form-select form-select-sm">
-                <option value="A"{% if ownership_release.pattern == 'A' %} selected{% endif %}>A：ディーラー経由</option>
-                <option value="B"{% if ownership_release.pattern == 'B' %} selected{% endif %}>B：自己返済</option>
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">ステータス</label>
-              <select id="orStatus" class="form-select form-select-sm">
-                {% for val, label in ownership_release_status_choices %}
-                <option value="{{ val }}"{% if ownership_release and ownership_release.status == val %} selected{% elif not ownership_release and val == 'pending' %} selected{% endif %}>{{ label }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">残債照会状況</label>
-              <input type="text" id="orInquiryStatus" class="form-control form-control-sm"
-                value="{{ ownership_release.inquiry_status|default:'' }}" placeholder="例：残債200万円確認済">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">書類送付日（ディーラーへ）</label>
-              <input type="date" id="orDocSentDate" class="form-control form-control-sm"
-                value="{{ ownership_release.dealer_doc_sent_date|date:'Y-m-d'|default:'' }}">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">残債振込日</label>
-              <input type="date" id="orDebtTransferDate" class="form-control form-control-sm"
-                value="{{ ownership_release.debt_transfer_date|date:'Y-m-d'|default:'' }}">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-semibold">書類返却日（ディーラーから）</label>
-              <input type="date" id="orDocReturnedDate" class="form-control form-control-sm"
-                value="{{ ownership_release.dealer_doc_returned_date|date:'Y-m-d'|default:'' }}">
-            </div>
-            <div class="col-12 text-end">
-              <button class="btn btn-sm btn-primary" onclick="updateOwnershipRelease()">
-                <i class="bi bi-save"></i> 保存
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endif %}
 
     {# ── 先払い入金 ── #}
     <div class="col-12">
@@ -572,8 +522,18 @@
   {% endif %}
   {% endif %}
 
-  {# ── タブ③: 書類 ────────────────────────────────────── #}
+  {# ── タブ③: 契約手続 ────────────────────────────────────── #}
   {% elif active_tab == 'documents' %}
+
+  {% if contract %}
+  <div class="d-flex justify-content-end mb-3">
+    {% if contract.procedure_completed %}
+    <span class="badge bg-success fs-6"><i class="bi bi-check-circle-fill"></i> 契約手続 完了</span>
+    {% else %}
+    <span class="badge bg-secondary fs-6">契約手続 未完了</span>
+    {% endif %}
+  </div>
+  {% endif %}
 
   {# ── 必要書類 受取確認 ── #}
   {% if contract %}
@@ -622,7 +582,7 @@
   </div>
 
   <div class="card mb-3">
-    <div class="card-header"><h6 class="mb-0"><i class="bi bi-calendar-date"></i> 受領日入力</h6></div>
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-calendar-date"></i> 受領日変更</h6></div>
     <div class="card-body">
       <div class="row g-3">
         {% for key, label, count, received, received_date in required_doc_fields %}
@@ -640,6 +600,82 @@
       </div>
     </div>
   </div>
+
+  {% if contract.ownership_release_flag or contract.debt_remaining_flag %}
+  <div class="card mb-3">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-key"></i> 所有権解除・残債管理</h6></div>
+    <div class="card-body">
+      <div class="row g-3">
+        {% if contract.ownership_release_flag %}
+        <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">所有権解除</h6></div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">ステータス</label>
+          <select id="procOwnershipReleaseStatus" class="form-select form-select-sm">
+            {% for val, label in contract.OWNERSHIP_RELEASE_STATUS_CHOICES %}
+            <option value="{{ val }}"{% if contract.ownership_release_status == val %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">解除申請日</label>
+          <input type="date" id="procOwnershipReleaseRequestedDate" class="form-control"
+            value="{{ contract.ownership_release_requested_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">完了日</label>
+          <input type="date" id="procOwnershipReleaseCompletedDate" class="form-control"
+            value="{{ contract.ownership_release_completed_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        {% endif %}
+
+        {% if contract.debt_remaining_flag %}
+        <div class="col-12"><h6 class="border-bottom pb-1 text-secondary">残債</h6></div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">パターン</label>
+          <select id="orPattern" class="form-select form-select-sm">
+            <option value="A"{% if ownership_release.pattern == 'A' %} selected{% endif %}>A：ディーラー経由</option>
+            <option value="B"{% if ownership_release.pattern == 'B' %} selected{% endif %}>B：自己返済</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">ステータス</label>
+          <select id="orStatus" class="form-select form-select-sm">
+            {% for val, label in ownership_release_status_choices %}
+            <option value="{{ val }}"{% if ownership_release and ownership_release.status == val %} selected{% elif not ownership_release and val == 'pending' %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">残債照会状況</label>
+          <input type="text" id="orInquiryStatus" class="form-control form-control-sm"
+            value="{{ ownership_release.inquiry_status|default:'' }}" placeholder="例：残債200万円確認済">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">書類送付日（ディーラーへ）</label>
+          <input type="date" id="orDocSentDate" class="form-control form-control-sm"
+            value="{{ ownership_release.dealer_doc_sent_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">残債振込日</label>
+          <input type="date" id="orDebtTransferDate" class="form-control form-control-sm"
+            value="{{ ownership_release.debt_transfer_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small fw-semibold">書類返却日（ディーラーから）</label>
+          <input type="date" id="orDocReturnedDate" class="form-control form-control-sm"
+            value="{{ ownership_release.dealer_doc_returned_date|date:'Y-m-d'|default:'' }}">
+        </div>
+        {% endif %}
+
+        <div class="col-12 d-flex justify-content-end">
+          <button class="btn btn-primary" onclick="updateContractProcedure()">
+            <i class="bi bi-save"></i> 保存
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
   {% endif %}
 
   {# ── タブ④: 顧客 ──────────────────────────────── #}
@@ -872,9 +908,9 @@
     </div>
   </div>
 
-  {# ── 各ステップ完了日 ── #}
+  {# ── 各ステップ完了日変更 ── #}
   <div class="card mb-3">
-    <div class="card-header"><h6 class="mb-0"><i class="bi bi-calendar-check"></i> 各ステップ完了日</h6></div>
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-calendar-check"></i> 各ステップ完了日変更</h6></div>
     <div class="card-body">
       <div class="row g-3">
         <div class="col-6 col-md-2">
@@ -1252,6 +1288,10 @@
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="contractOwnershipFlag">
               <label class="form-check-label" for="contractOwnershipFlag">所有権解除あり</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="contractDebtRemainingFlag">
+              <label class="form-check-label" for="contractDebtRemainingFlag">残債あり</label>
             </div>
           </div>
           <div class="col-12" id="repairNotesArea" style="display:none">
@@ -1776,6 +1816,10 @@
               <input class="form-check-input" type="checkbox" id="editContractOwnershipFlag" {% if contract.ownership_release_flag %}checked{% endif %}>
               <label class="form-check-label" for="editContractOwnershipFlag">所有権解除あり</label>
             </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="editContractDebtRemainingFlag" {% if contract.debt_remaining_flag %}checked{% endif %}>
+              <label class="form-check-label" for="editContractDebtRemainingFlag">残債あり</label>
+            </div>
           </div>
           <div class="col-12" id="editRepairNotesArea" style="{% if not contract.repair_flag %}display:none{% endif %}">
             <label class="form-label">加修内容</label>
@@ -2158,6 +2202,7 @@
 const ASSESSMENT_ID = {{ assessment.pk }};
 const REQUEST_ID    = {{ assessment.assessment_request.pk }};
 {% if contract %}const CONTRACT_ID = {{ contract.pk }};{% endif %}
+const PROCEDURE_COMPLETED = {% if contract %}{{ contract.procedure_completed|yesno:"true,false" }}{% else %}true{% endif %};
 {% if sales_process %}const SALES_PROCESS_ID = {{ sales_process.pk }};{% endif %}
 const ASSESSMENT_STATUS = '{{ assessment.status }}';
 const ASSESSMENT_APPROVAL_REQUESTED_TO_ID = {{ assessment.approval_requested_to_id|default:0 }};
