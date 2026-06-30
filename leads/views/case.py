@@ -32,6 +32,7 @@ from ..models import (
     AuctionVenue,
     CarAssessmentRequest,
     ContactHistory,
+    ContractFileUpload,
     Customer,
     CustomerBankAccount,
     OwnershipRelease,
@@ -39,7 +40,7 @@ from ..models import (
     SalesProcess,
     Vehicle,
 )
-from .utils import _current_user_display_name
+from .utils import _current_user_display_name, _serialize_contract_file, _sync_document_done
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,10 @@ def case_detail(request, pk):
     check_items     = assessment.check_items.all()
     documents       = contract.documents.select_related('document_type').all() if contract else []
     identity_docs   = contract.identity_documents.all() if contract else []
+    contract_files_by_type = {}
+    if contract:
+        for f in contract.file_uploads.select_related('uploaded_by'):
+            contract_files_by_type.setdefault(f.doc_type, []).append(_serialize_contract_file(f))
     bank_accounts   = assessment.customer.bank_accounts.all()
     primary_bank_account = bank_accounts.filter(is_primary=True).first() or bank_accounts.first()
     ownership_release = getattr(contract, 'ownership_release', None) if contract else None
@@ -153,6 +158,8 @@ def case_detail(request, pk):
         'documents':                    documents,
         'editable_status_choices':      editable_status_choices,
         'identity_docs':                identity_docs,
+        'contract_files_by_type':       contract_files_by_type,
+        'contract_doc_type_choices':    ContractFileUpload.DOC_TYPE_CHOICES,
         'bank_accounts':                bank_accounts,
         'vehicle_images':               vehicle_images,
         'active_tab':                   active_tab,
@@ -185,12 +192,14 @@ def case_detail(request, pk):
         'disposition_choices':           SalesProcess.DISPOSITION_CHOICES,
         'auction_venues':                AuctionVenue.objects.all(),
         'required_doc_fields': [
-            ('inkan',    '印鑑証明', contract.required_inkan_count    if contract else 0, contract.inkan_received    if contract else False, contract.inkan_received_date    if contract else None),
-            ('juminhyo', '住民票',   contract.required_juminhyo_count if contract else 0, contract.juminhyo_received if contract else False, contract.juminhyo_received_date if contract else None),
-            ('jotohyo',  '除票',     contract.required_jotohyo_count  if contract else 0, contract.jotohyo_received  if contract else False, contract.jotohyo_received_date  if contract else None),
-            ('ininjyo',  '委任状',   contract.required_ininjyo_count  if contract else 0, contract.ininjyo_received  if contract else False, contract.ininjyo_received_date  if contract else None),
-            ('jotosho',  '譲渡書',   contract.required_jotosho_count  if contract else 0, contract.jotosho_received  if contract else False, contract.jotosho_received_date  if contract else None),
-            ('kanpu',    '還付',     contract.required_kanpu_count    if contract else 0, contract.kanpu_received    if contract else False, contract.kanpu_received_date    if contract else None),
+            row for row in [
+                ('inkan',    '印鑑証明', contract.required_inkan_count    if contract else 0, contract.inkan_received    if contract else False, contract.inkan_received_date    if contract else None),
+                ('juminhyo', '住民票',   contract.required_juminhyo_count if contract else 0, contract.juminhyo_received if contract else False, contract.juminhyo_received_date if contract else None),
+                ('jotohyo',  '除票',     contract.required_jotohyo_count  if contract else 0, contract.jotohyo_received  if contract else False, contract.jotohyo_received_date  if contract else None),
+                ('ininjyo',  '委任状',   contract.required_ininjyo_count  if contract else 0, contract.ininjyo_received  if contract else False, contract.ininjyo_received_date  if contract else None),
+                ('jotosho',  '譲渡書',   contract.required_jotosho_count  if contract else 0, contract.jotosho_received  if contract else False, contract.jotosho_received_date  if contract else None),
+                ('kanpu',    '還付',     contract.required_kanpu_count    if contract else 0, contract.kanpu_received    if contract else False, contract.kanpu_received_date    if contract else None),
+            ] if row[2] >= 1
         ],
     })
 
@@ -366,9 +375,11 @@ def import_from_assessment_system(request, assessment_id):
         assessment.assessment_price = data['assessment_price']
     if data.get('recycle_amount') is not None:
         assessment.assessment_system_recycle_amount = data['recycle_amount']
+    if data.get('overall_rating') is not None:
+        assessment.overall_rating = data['overall_rating']
     assessment.save(update_fields=[
         'assessment_system_id', 'assessment_system_imported_at',
-        'assessment_price', 'assessment_system_recycle_amount', 'updated_at',
+        'assessment_price', 'assessment_system_recycle_amount', 'overall_rating', 'updated_at',
     ])
 
     return JsonResponse({
@@ -376,6 +387,7 @@ def import_from_assessment_system(request, assessment_id):
         'message':             '査定システムから車両情報を取り込みました',
         'assessment_price':    data.get('assessment_price'),
         'recycle_amount':      data.get('recycle_amount'),
+        'overall_rating':      data.get('overall_rating'),
         'vehicle':             {
             k: str(v) if v is not None else ''
             for k, v in data['vehicle'].items()
@@ -812,68 +824,42 @@ _REQUIRED_DOC_FIELDS = ['inkan', 'juminhyo', 'jotohyo', 'ininjyo', 'jotosho', 'k
 @login_required
 @require_POST
 def update_required_docs(request, contract_id):
-    """必要書類 受取フラグ更新 API"""
+    """必要書類 受取フラグ更新 API。受領日はボタン押下時点の日付を自動設定する。"""
     contract = get_object_or_404(PurchaseContract, pk=contract_id)
     try:
         payload = json.loads(request.body)
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
 
-    update_fields = []
+    update_fields  = []
+    updated_dates  = {}
+    today          = timezone.localdate()
     for key in _REQUIRED_DOC_FIELDS:
         received_field = f'{key}_received'
-        date_field     = f'{key}_received_date'
-        if received_field in payload:
-            setattr(contract, received_field, bool(payload[received_field]))
-            update_fields.append(received_field)
-        if date_field in payload:
-            raw = payload[date_field]
-            if raw:
-                from datetime import date as _date
-                try:
-                    setattr(contract, date_field, _date.fromisoformat(raw))
-                except ValueError:
-                    pass
-            else:
-                setattr(contract, date_field, None)
-            update_fields.append(date_field)
+        if received_field not in payload:
+            continue
+        is_received = bool(payload[received_field])
+        date_field  = f'{key}_received_date'
+        date_value  = today if is_received else None
+        setattr(contract, received_field, is_received)
+        setattr(contract, date_field, date_value)
+        update_fields.extend([received_field, date_field])
+        updated_dates[key] = date_value.isoformat() if date_value else None
 
     if update_fields:
         update_fields.append('updated_at')
         contract.save(update_fields=update_fields)
 
     # 書類ステップの自動完了 / 自動取消
-    auto_doc_done   = False
-    auto_doc_undone = False
-    doc_fields_with_count = [
-        ('inkan',    contract.required_inkan_count,    contract.inkan_received),
-        ('juminhyo', contract.required_juminhyo_count, contract.juminhyo_received),
-        ('jotohyo',  contract.required_jotohyo_count,  contract.jotohyo_received),
-        ('ininjyo',  contract.required_ininjyo_count,  contract.ininjyo_received),
-        ('jotosho',  contract.required_jotosho_count,  contract.jotosho_received),
-        ('kanpu',    contract.required_kanpu_count,    contract.kanpu_received),
-    ]
-    required = [(name, received) for name, count, received in doc_fields_with_count if count > 0]
-    try:
-        sp = SalesProcess.objects.get(contract=contract)
-        if required and all(received for _, received in required):
-            if not sp.document_done:
-                sp.document_done = True
-                sp.updated_by = request.user
-                sp.save(update_fields=['document_done', 'updated_by', 'updated_at'])
-                auto_doc_done = True
-        else:
-            if sp.document_done:
-                sp.document_done = False
-                sp.updated_by = request.user
-                sp.save(update_fields=['document_done', 'updated_by', 'updated_at'])
-                auto_doc_undone = True
-    except SalesProcess.DoesNotExist:
-        pass
+    # contract.procedure_completed（書類受領・所有権解除・残債返済を含む）と一致させる。
+    changed         = _sync_document_done(contract, request.user)
+    auto_doc_done   = changed and contract.procedure_completed
+    auto_doc_undone = changed and not contract.procedure_completed
 
     return JsonResponse({
-        'success':        True,
-        'message':        '受取状況を更新しました',
-        'auto_doc_done':  auto_doc_done,
+        'success':         True,
+        'message':         '受取状況を更新しました',
+        'updated_dates':   updated_dates,
+        'auto_doc_done':   auto_doc_done,
         'auto_doc_undone': auto_doc_undone,
     })

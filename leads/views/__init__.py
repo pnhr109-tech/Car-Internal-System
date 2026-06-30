@@ -59,7 +59,10 @@ from .contract import (
     contract_print,
     create_contract,
     update_contract,
+    reset_contract,
     update_contract_procedure,
+    upload_contract_file,
+    delete_contract_file,
     request_contract_approval,
     approve_contract,
     approve_correction,
@@ -115,7 +118,8 @@ __all__ = [
     'approve_advance_payment', 'update_required_docs',
     # contract
     'contract_list', 'approval_list', 'contract_print',
-    'create_contract', 'update_contract', 'update_contract_procedure',
+    'create_contract', 'update_contract', 'reset_contract', 'update_contract_procedure',
+    'upload_contract_file', 'delete_contract_file',
     'request_contract_approval', 'approve_contract', 'approve_correction',
     'sales_process_list', 'sale_info_list', 'toggle_sales_process_step', 'toggle_case_sales_step', 'update_sales_info', 'save_step_dates',
     # customer

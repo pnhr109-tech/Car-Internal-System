@@ -7,6 +7,9 @@
 
 // ── DOMContentLoaded 初期化 ───────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // 契約手続書類 添付ファイルの初期表示
+  _initContractFiles();
+
   // 履歴入力の日時初期値
   const now = new Date();
   const pad = n => String(n).padStart(2, '0');
@@ -451,6 +454,7 @@ function _showImportConfirmModal(data) {
   const priceRows = [
     data.assessment_price != null ? `<tr><td class="text-muted">買取金額（振込金額④）</td><td class="fw-bold text-success">${Number(data.assessment_price).toLocaleString()} 円</td></tr>` : '',
     data.recycle_amount   != null ? `<tr><td class="text-muted">リサイクル券</td><td class="fw-bold">${Number(data.recycle_amount).toLocaleString()} 円</td></tr>` : '',
+    data.overall_rating   != null ? `<tr><td class="text-muted">総合評価</td><td class="fw-bold">${data.overall_rating}</td></tr>` : '',
   ].join('');
 
   let modal = document.getElementById('importConfirmModal');
@@ -670,6 +674,17 @@ function updateContract() {
   .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
 }
 
+function resetContract() {
+  apiFetch(`/sateiinfo/api/contracts/${CONTRACT_ID}/reset/`, { method: 'POST' })
+  .then(r => r.text())
+  .then(text => {
+    let d; try { d = JSON.parse(text); } catch (e) { showToast('エラー', 'サーバーエラーが発生しました', 'danger'); return; }
+    if (d.success) location.href = '?tab=contract';
+    else showToast('エラー', d.message || '契約のリセットに失敗しました', 'danger');
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
+}
+
 // ── 契約承認申請 ──────────────────────────────────────────────────────────
 
 function requestContractApproval() {
@@ -753,20 +768,10 @@ function _formatDateDisplay(isoStr) {
 }
 
 function toggleRequiredDoc(key, received) {
-  const btn       = document.getElementById(`doc_btn_${key}`);
-  const dateInput = document.getElementById(`doc_date_${key}`);
+  const btn = document.getElementById(`doc_btn_${key}`);
   if (btn) btn.disabled = true;
 
   const payload = { [`${key}_received`]: received };
-  if (received && dateInput && !dateInput.value) {
-    const today = new Date();
-    const pad = n => String(n).padStart(2, '0');
-    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
-    dateInput.value = todayStr;
-    payload[`${key}_received_date`] = todayStr;
-  } else if (received && dateInput && dateInput.value) {
-    payload[`${key}_received_date`] = dateInput.value;
-  }
 
   apiFetch(`/sateiinfo/api/contracts/${CONTRACT_ID}/required-docs/`, {
     method: 'POST',
@@ -775,15 +780,15 @@ function toggleRequiredDoc(key, received) {
   .then(r => r.json())
   .then(d => {
     if (d.success) {
-      const badge   = document.getElementById(`doc_badge_${key}`);
+      const badge    = document.getElementById(`doc_badge_${key}`);
       const dateText = document.getElementById(`doc_date_text_${key}`);
-      const dateInput = document.getElementById(`doc_date_${key}`);
       if (badge) {
         badge.className = `badge ${received ? 'bg-success' : 'bg-secondary'}`;
         badge.textContent = received ? '✓ 受領済' : '未済';
       }
       if (dateText) {
-        dateText.textContent = received && dateInput ? _formatDateDisplay(dateInput.value) : '-';
+        const dateIso = (d.updated_dates || {})[key];
+        dateText.textContent = dateIso ? _formatDateDisplay(dateIso) : '-';
       }
       if (btn) {
         btn.className = `btn btn-sm ${received ? 'btn-outline-secondary' : 'btn-success'}`;
@@ -807,30 +812,124 @@ function toggleRequiredDoc(key, received) {
   });
 }
 
-function saveAllDocDates() {
-  const keys = ['inkan', 'juminhyo', 'jotohyo', 'ininjyo', 'jotosho', 'kanpu'];
-  const payload = {};
-  keys.forEach(key => {
-    const el = document.getElementById(`doc_date_${key}`);
-    if (el) payload[`${key}_received_date`] = el.value || null;
-  });
-  apiFetch(`/sateiinfo/api/contracts/${CONTRACT_ID}/required-docs/`, {
+// ── 契約手続書類 添付ファイル ───────────────────────────────────────────────
+
+const DOC_FILE_TYPES = {
+  inkan: '印鑑証明', juminhyo: '住民票', jotohyo: '除票',
+  ininjyo: '委任状', jotosho: '譲渡書', kanpu: '還付',
+  contract_signed: '契約書（署名後）',
+};
+
+let _contractFiles = {};
+let _currentDocFileType = null;
+
+function _initContractFiles() {
+  const el = document.getElementById('contract-files-data');
+  _contractFiles = el ? JSON.parse(el.textContent) : {};
+  Object.keys(DOC_FILE_TYPES).forEach(_updateDocFileBadge);
+}
+
+function _updateDocFileBadge(key) {
+  const badge = document.getElementById(`docfile_badge_${key}`);
+  if (!badge) return;
+  const count = (_contractFiles[key] || []).length;
+  badge.textContent = count > 0 ? `${count}件` : '未添付';
+}
+
+function openDocFileModal(key) {
+  _currentDocFileType = key;
+  document.getElementById('docFileModalLabel').textContent = `${DOC_FILE_TYPES[key]} — 添付ファイル`;
+  _renderDocFileList();
+  new bootstrap.Modal(document.getElementById('docFileModal')).show();
+}
+
+function _renderDocFileList() {
+  const container = document.getElementById('docFileModalList');
+  const files = _contractFiles[_currentDocFileType] || [];
+  if (files.length === 0) {
+    container.innerHTML = '<p class="text-muted small mb-0">添付ファイルはまだありません</p>';
+    return;
+  }
+  container.innerHTML = files.map(f => `
+    <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+      <a href="${f.url}" target="_blank" rel="noopener">
+        <i class="bi bi-file-earmark-text"></i> ${escapeHtml(f.filename)}
+      </a>
+      <div class="text-end">
+        <div class="text-muted small">${escapeHtml(f.uploaded_by)} ${f.uploaded_at}</div>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteDocFile(${f.id})">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function triggerDocFileUpload() {
+  const input = document.getElementById(`docFileInput_${_currentDocFileType}`);
+  if (input) input.click();
+}
+
+function handleDocFileSelected(input) {
+  // capture 属性でカメラ起動後、端末によってはページがバックグラウンドで再読込され
+  // JS変数の状態が失われることがあるため、書類種別は input 自身の data 属性から読み取る
+  const docType = input.dataset.docType;
+  const files = Array.from(input.files || []);
+  input.value = '';
+  files.forEach(file => uploadDocFile(file, docType));
+}
+
+function uploadDocFile(file, docType) {
+  const formData = new FormData();
+  formData.append('doc_type', docType);
+  formData.append('file', file);
+  apiFetch(`/sateiinfo/api/contracts/${CONTRACT_ID}/documents/upload/`, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: formData,
   })
   .then(r => r.json())
   .then(d => {
     if (d.success) {
-      keys.forEach(key => {
-        const el      = document.getElementById(`doc_date_${key}`);
-        const dateText = document.getElementById(`doc_date_text_${key}`);
-        if (el && dateText) dateText.textContent = _formatDateDisplay(el.value);
-      });
-      showToast('保存', '受領日を保存しました', 'success');
+      const key = d.data.doc_type;
+      if (key === 'contract_signed') {
+        // 契約手続の完了ステータス（バッジ・案件フロー）に影響するため再読込して同期する
+        location.reload();
+        return;
+      }
+      if (!_contractFiles[key]) _contractFiles[key] = [];
+      _contractFiles[key].unshift(d.data);
+      _updateDocFileBadge(key);
+      if (_currentDocFileType === key) _renderDocFileList();
+      showToast('保存', 'ファイルを保存しました', 'success');
     } else {
-      showToast('エラー', d.message || '保存に失敗しました', 'danger');
+      showToast('エラー', d.message || 'アップロードに失敗しました', 'danger');
     }
-  });
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
+}
+
+function deleteDocFile(fileId) {
+  if (!confirm('このファイルを削除しますか？')) return;
+  apiFetch(`/sateiinfo/api/contract-files/${fileId}/delete/`, { method: 'POST' })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      if (_currentDocFileType === 'contract_signed') {
+        // 契約手続の完了ステータス（バッジ・案件フロー）に影響するため再読込して同期する
+        location.reload();
+        return;
+      }
+      Object.keys(_contractFiles).forEach(key => {
+        _contractFiles[key] = (_contractFiles[key] || []).filter(f => f.id !== fileId);
+      });
+      _updateDocFileBadge(_currentDocFileType);
+      _renderDocFileList();
+      showToast('削除', 'ファイルを削除しました', 'success');
+    } else {
+      showToast('エラー', d.message || '削除に失敗しました', 'danger');
+    }
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
 }
 
 // ── 所有権解除・残債管理 ─────────────────────────────────────────────────

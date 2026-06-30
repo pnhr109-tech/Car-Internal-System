@@ -5,12 +5,14 @@ views/utils.py — ビュー共通ヘルパー
 views パッケージ内のみで使用する。
 """
 import logging
+import os
 from datetime import datetime
 
 from django.db import transaction
 from django.http import HttpResponseForbidden
+from django.utils import timezone
 
-from ..models import CarAssessmentRequest, NumberSequence
+from ..models import CarAssessmentRequest, NumberSequence, SalesProcess
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +112,32 @@ def _parse_date(raw: str):
 
 
 # ---------------------------------------------------------------------------
+# 契約手続ステップ 自動同期
+# ---------------------------------------------------------------------------
+
+def _sync_document_done(contract, updated_by) -> bool:
+    """SalesProcess.document_done を contract.procedure_completed に同期する。
+
+    案件フローの「契約手続」ステップ表示が、契約手続タブの完了バッジ
+    （書類受領・所有権解除・残債返済を含む procedure_completed）とズレないようにする。
+    戻り値は document_done が変化したかどうか。
+    """
+    try:
+        sp = SalesProcess.objects.get(contract=contract)
+    except SalesProcess.DoesNotExist:
+        return False
+
+    completed = contract.procedure_completed
+    if sp.document_done == completed:
+        return False
+
+    sp.document_done = completed
+    sp.updated_by = updated_by
+    sp.save(update_fields=['document_done', 'updated_by', 'updated_at'])
+    return True
+
+
+# ---------------------------------------------------------------------------
 # 顧客マスタ自動反映
 # ---------------------------------------------------------------------------
 
@@ -143,3 +171,20 @@ def _sync_customer_from_contract(customer, payload_map: dict, updated_by) -> Non
 
     customer.updated_by = updated_by
     customer.save(update_fields=list(set(update_fields)))
+
+
+# ---------------------------------------------------------------------------
+# 契約書類ファイル
+# ---------------------------------------------------------------------------
+
+def _serialize_contract_file(file_obj) -> dict:
+    """ContractFileUpload を JS 側で扱いやすい dict に変換する"""
+    uploaded_by = file_obj.uploaded_by
+    return {
+        'id':          file_obj.id,
+        'doc_type':    file_obj.doc_type,
+        'url':         file_obj.file.url,
+        'filename':    os.path.basename(file_obj.file.name),
+        'uploaded_at': timezone.localtime(file_obj.uploaded_at).strftime('%Y/%m/%d %H:%M'),
+        'uploaded_by': (uploaded_by.get_full_name() or uploaded_by.username) if uploaded_by else '-',
+    }

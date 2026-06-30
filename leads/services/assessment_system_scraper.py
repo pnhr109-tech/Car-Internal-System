@@ -7,6 +7,7 @@
     3. 検索結果から内部IDを取得
     4. 詳細ページ（/editDetail.do?id=...）から車両情報を抽出
 """
+import re
 import time
 import logging
 from datetime import date
@@ -75,6 +76,18 @@ def _parse_price(value: str) -> int | None:
         return None
 
 
+def _parse_rating(value: str) -> float | None:
+    """'3.5' → 3.5  /  '4中' → 4.0（'中'などの評価ランク表記は無視）  /  '' → None"""
+    cleaned = (value or '').strip()
+    match = re.match(r'\d+(\.\d+)?', cleaned)
+    if not match:
+        return None
+    try:
+        return float(match.group())
+    except ValueError:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # メイン処理
 # ---------------------------------------------------------------------------
@@ -90,6 +103,7 @@ def scrape_vehicle_data(assessment_system_id: str) -> dict:
                                   passenger_count, body_type, drive_type, inspection_expiry },
             'assessment_price': int | None,
             'recycle_amount':   int | None,
+            'overall_rating':   float | None,
         }
     Raises:
         requests.HTTPError, ValueError
@@ -331,4 +345,5 @@ def _extract_data(soup: BeautifulSoup) -> dict:
         },
         'assessment_price': _parse_price(_get_input_value(soup, 'nyuuko_price')),
         'recycle_amount':   _parse_price(_get_input_value(soup, 'result_recycling_price')),
+        'overall_rating':   _parse_rating(_get_text(soup, 'EXTERIOR')),
     }

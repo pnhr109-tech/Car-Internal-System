@@ -30,6 +30,7 @@ from ..models import (
     AuctionVenue,
     CarAssessmentRequest,
     ContactHistory,
+    ContractFileUpload,
     Customer,
     CustomerBankAccount,
     OwnershipRelease,
@@ -37,7 +38,7 @@ from ..models import (
     SalesProcess,
     Vehicle,
 )
-from .utils import _parse_tristate, _parse_date, _sync_customer_from_contract
+from .utils import _parse_tristate, _parse_date, _sync_customer_from_contract, _serialize_contract_file, _sync_document_done
 
 logger = logging.getLogger(__name__)
 
@@ -449,6 +450,124 @@ def update_contract(request, contract_id):
 
 @login_required
 @require_POST
+def reset_contract(request, contract_id):
+    """買取契約を最初から作成し直す（契約内容・契約手続の進捗を初期状態にリセット） API"""
+    contract = get_object_or_404(PurchaseContract.objects.select_related('assessment'), pk=contract_id)
+    assessment = contract.assessment
+
+    price_excl = assessment.assessment_price or Decimal('0')
+    tax_amount = (price_excl * Decimal('0.10')).quantize(Decimal('1'))
+
+    with transaction.atomic():
+        OwnershipRelease.objects.filter(contract=contract).delete()
+
+        contract.contract_date           = timezone.now().date()
+        contract.purchase_price_excl_tax = price_excl
+        contract.tax_amount              = tax_amount
+        contract.purchase_price_incl_tax = price_excl + tax_amount
+        contract.recycle_amount          = assessment.assessment_system_recycle_amount
+        contract.payment_scheduled_date  = None
+        contract.auction_scheduled_date  = None
+        contract.status                  = PurchaseContract.STATUS_PENDING
+        contract.cancel_reason           = ''
+        contract.cancelled_at            = None
+        contract.vehicle_handover_date   = None
+        contract.document_handover_date  = None
+        contract.amount_correction_flag  = False
+        contract.corrected_price         = None
+        contract.correction_approved_by  = None
+        contract.correction_approved_at  = None
+        contract.repair_flag             = False
+        contract.repair_notes            = ''
+        contract.ownership_release_flag  = False
+        contract.debt_remaining_flag     = False
+        contract.ownership_release_status         = PurchaseContract.OWNERSHIP_RELEASE_NOT_STARTED
+        contract.ownership_release_requested_date = None
+        contract.ownership_release_completed_date = None
+        contract.repair_history_flag          = None
+        contract.meter_tampering              = None
+        contract.flood_hail_damage            = None
+        contract.malfunction                  = None
+        contract.parking_violation            = None
+        contract.automobile_tax_unpaid        = None
+        contract.qualified_invoice_registered = None
+        contract.invoice_registration_number  = ''
+        contract.required_inkan_count    = 0
+        contract.required_juminhyo_count = 0
+        contract.required_jotohyo_count  = 0
+        contract.required_ininjyo_count  = 0
+        contract.required_jotosho_count  = 0
+        contract.required_kanpu_count    = 0
+        contract.inkan_received          = False
+        contract.juminhyo_received       = False
+        contract.jotohyo_received        = False
+        contract.ininjyo_received        = False
+        contract.jotosho_received        = False
+        contract.kanpu_received          = False
+        contract.inkan_received_date     = None
+        contract.juminhyo_received_date  = None
+        contract.jotohyo_received_date   = None
+        contract.ininjyo_received_date   = None
+        contract.jotosho_received_date   = None
+        contract.kanpu_received_date     = None
+        contract.manager1                = None
+        contract.manager2                = None
+        contract.approved_by             = None
+        contract.approved_at             = None
+        contract.approval_requested_to   = None
+        contract.approval_requested_at   = None
+        contract.remarks                 = ''
+        contract.updated_by              = request.user
+        contract.save()
+
+    return JsonResponse({'success': True, 'message': '契約をリセットしました。内容を入力し直してください。'})
+
+
+@login_required
+@require_POST
+def upload_contract_file(request, contract_id):
+    """契約手続書類のスキャン・撮影ファイルをアップロードする API"""
+    contract = get_object_or_404(PurchaseContract, pk=contract_id)
+
+    doc_type = request.POST.get('doc_type')
+    if doc_type not in dict(ContractFileUpload.DOC_TYPE_CHOICES):
+        return JsonResponse({'success': False, 'message': '書類種別が不正です'}, status=400)
+
+    upload = request.FILES.get('file')
+    if not upload:
+        return JsonResponse({'success': False, 'message': 'ファイルが選択されていません'}, status=400)
+
+    file_obj = ContractFileUpload.objects.create(
+        contract=contract,
+        doc_type=doc_type,
+        file=upload,
+        uploaded_by=request.user,
+    )
+
+    if doc_type == 'contract_signed':
+        _sync_document_done(contract, request.user)
+
+    return JsonResponse({'success': True, 'data': _serialize_contract_file(file_obj)})
+
+
+@login_required
+@require_POST
+def delete_contract_file(request, file_id):
+    """契約手続書類ファイルを削除する API"""
+    file_obj = get_object_or_404(ContractFileUpload, pk=file_id)
+    doc_type = file_obj.doc_type
+    contract = file_obj.contract
+    file_obj.file.delete(save=False)
+    file_obj.delete()
+
+    if doc_type == 'contract_signed':
+        _sync_document_done(contract, request.user)
+
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
 def update_contract_procedure(request, contract_id):
     """契約手続（所有権解除・残債）進捗更新 API"""
     contract = get_object_or_404(PurchaseContract, pk=contract_id)
@@ -486,6 +605,8 @@ def update_contract_procedure(request, contract_id):
                 obj.debt_transfer_date       = _parse_date(payload.get('or_debt_transfer_date', ''))
                 obj.dealer_doc_returned_date = _parse_date(payload.get('or_dealer_doc_returned_date', ''))
                 obj.save()
+
+        _sync_document_done(contract, request.user)
 
     return JsonResponse({
         'success': True,
@@ -607,7 +728,7 @@ def approve_correction(request, contract_id):
 # ---------------------------------------------------------------------------
 
 SALES_PROCESS_STEPS = [
-    ('document',  '書類'),
+    ('document',  '契約手続'),
     ('intake',    '入庫'),
     ('repair',    '加修'),
     ('transport', '陸送'),
@@ -769,7 +890,7 @@ def _prerequisite_ok(step, sp, contract):
     repair_flag = contract.repair_flag if contract else False
     if step == 'intake':
         if not sp.document_done:
-            return False, '「書類」が完了していません'
+            return False, '「契約手続」が完了していません'
     elif step == 'repair':
         if not sp.intake_done:
             return False, '「入庫」が完了していません'
@@ -824,6 +945,7 @@ def toggle_case_sales_step(request, process_id):
     try:
         payload = json.loads(request.body)
         step    = payload.get('step', '')
+        force   = bool(payload.get('force'))
     except (json.JSONDecodeError, AttributeError):
         return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
 
@@ -842,7 +964,13 @@ def toggle_case_sales_step(request, process_id):
     if new_value:
         ok, msg = _prerequisite_ok(step, process, process.contract)
         if not ok:
-            return JsonResponse({'success': False, 'message': msg}, status=400)
+            # 振込は前提未達の場合は常にブロック。それ以外は警告の上で強制続行を許可する。
+            if step == 'transfer' or not force:
+                return JsonResponse({
+                    'success': False,
+                    'message': msg,
+                    'requires_confirm': step != 'transfer',
+                }, status=400)
     else:
         ok, msg = _successor_ok(step, process)
         if not ok:

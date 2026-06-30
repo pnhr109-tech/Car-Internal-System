@@ -7,6 +7,7 @@ from .models import (
     AuctionVenue,
     CarAssessmentRequest,
     ContactHistory,
+    ContractFileUpload,
     Customer,
     CustomerBankAccount,
     Document,
@@ -138,6 +139,13 @@ class AdvancePaymentInline(admin.TabularInline):
     fields = ['expected_amount', 'payment_date', 'status', 'approved_by']
 
 
+class ContractFileUploadInline(admin.TabularInline):
+    model  = ContractFileUpload
+    extra  = 0
+    fields = ['doc_type', 'file', 'uploaded_at', 'uploaded_by']
+    readonly_fields = ['uploaded_at']
+
+
 @admin.register(PurchaseContract)
 class PurchaseContractAdmin(admin.ModelAdmin):
     list_display  = ['assessment', 'customer', 'vehicle', 'contract_date', 'purchase_price_incl_tax', 'status', 'approved_by']
@@ -145,7 +153,7 @@ class PurchaseContractAdmin(admin.ModelAdmin):
     search_fields = ['customer__name', 'customer__phone_number', 'vehicle__maker', 'vehicle__car_model']
     readonly_fields = ['created_at', 'updated_at']
     raw_id_fields   = ['assessment', 'customer', 'vehicle', 'assigned_to', 'approved_by', 'updated_by']
-    inlines         = [DocumentInline, IdentityDocumentInline, AdvancePaymentInline]
+    inlines         = [DocumentInline, IdentityDocumentInline, AdvancePaymentInline, ContractFileUploadInline]
     fieldsets = (
         ('基本情報',     {'fields': ('assessment', 'customer', 'vehicle', 'assigned_to', 'contract_date')}),
         ('金額',         {'fields': ('purchase_price_excl_tax', 'tax_amount', 'purchase_price_incl_tax', 'amount_correction_flag', 'corrected_price')}),

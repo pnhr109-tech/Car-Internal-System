@@ -101,16 +101,18 @@ function initBackToTop(btnId, threshold = 300) {
 
 /**
  * JSON API への fetch ラッパー。CSRF ヘッダーと credentials を自動付与する。
+ * body が FormData の場合は Content-Type を付与しない（ブラウザが multipart の boundary を自動設定する）。
  * @param {string} url
  * @param {RequestInit} [options={}]
  * @returns {Promise<Response>}
  */
 function apiFetch(url, options = {}) {
   const { headers: extraHeaders = {}, ...rest } = options;
+  const isFormData = rest.body instanceof FormData;
   return fetch(url, {
     credentials: 'same-origin',
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       'X-CSRFToken': getCsrf(),
       ...extraHeaders,
     },

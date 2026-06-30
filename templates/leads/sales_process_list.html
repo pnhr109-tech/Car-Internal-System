@@ -90,7 +90,7 @@
                 </td>
                 <td class="align-middle py-2">
                   <div class="step-badge-row">
-                    <button type="button" class="step-badge {% if p.document_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="document" data-label="書類"><i class="bi {% if p.document_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>書類</button>
+                    <button type="button" class="step-badge {% if p.document_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="document" data-label="契約手続"><i class="bi {% if p.document_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>契約手続</button>
                     <button type="button" class="step-badge {% if p.intake_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="intake" data-label="入庫"><i class="bi {% if p.intake_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>入庫</button>
                     <button type="button" class="step-badge {% if p.repair_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="repair" data-label="加修"><i class="bi {% if p.repair_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>加修</button>
                     <button type="button" class="step-badge {% if p.transport_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="transport" data-label="陸送"><i class="bi {% if p.transport_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>陸送</button>
@@ -135,7 +135,7 @@
               &nbsp;·&nbsp; ¥{{ p.contract.purchase_price_incl_tax|floatformat:0|intcomma }}
             </div>
             <div class="step-badge-row mt-1" style="overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px;">
-              <button type="button" class="step-badge {% if p.document_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="document" data-label="書類" style="flex-shrink:0"><i class="bi {% if p.document_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>書類</button>
+              <button type="button" class="step-badge {% if p.document_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="document" data-label="契約手続" style="flex-shrink:0"><i class="bi {% if p.document_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>契約手続</button>
               <button type="button" class="step-badge {% if p.intake_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="intake" data-label="入庫" style="flex-shrink:0"><i class="bi {% if p.intake_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>入庫</button>
               <button type="button" class="step-badge {% if p.repair_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="repair" data-label="加修" style="flex-shrink:0"><i class="bi {% if p.repair_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>加修</button>
               <button type="button" class="step-badge {% if p.transport_done %}step-badge--done{% else %}step-badge--pending{% endif %}" data-process-id="{{ p.pk }}" data-step="transport" data-label="陸送" style="flex-shrink:0"><i class="bi {% if p.transport_done %}bi-check-circle-fill{% else %}bi-circle{% endif %}"></i>陸送</button>

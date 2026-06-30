@@ -591,7 +591,7 @@ class PurchaseContract(models.Model):
 
     @property
     def all_required_docs_received(self):
-        """必要通数が設定されている書類について、すべて受領済みか"""
+        """必要通数が1通以上設定されている書類について、すべて受領済みか"""
         items = [
             (self.required_inkan_count,    self.inkan_received),
             (self.required_juminhyo_count, self.juminhyo_received),
@@ -602,12 +602,19 @@ class PurchaseContract(models.Model):
         ]
         return all(received for count, received in items if count > 0)
 
+    @property
+    def contract_signed_attached(self):
+        """契約書（お客様署名後）が添付済みか"""
+        return self.file_uploads.filter(doc_type='contract_signed').exists()
+
     DEBT_REPAID_STATUSES = ('debt_transferred', 'docs_returned')
 
     @property
     def procedure_completed(self):
-        """契約手続（書類受領・所有権解除・残債返済）が完了しているか"""
+        """契約手続（書類受領・契約書添付・所有権解除・残債返済）が完了しているか"""
         if not self.all_required_docs_received:
+            return False
+        if not self.contract_signed_attached:
             return False
         if self.ownership_release_flag and self.ownership_release_status != self.OWNERSHIP_RELEASE_COMPLETED:
             return False
@@ -661,6 +668,41 @@ class Document(models.Model):
 
     def __str__(self):
         return f"{self.document_type}（{self.get_status_display()}）"
+
+
+class ContractFileUpload(models.Model):
+    """契約手続書類のスキャン・撮影ファイル"""
+
+    DOC_TYPE_CHOICES = [
+        ('inkan',           '印鑑証明'),
+        ('juminhyo',        '住民票'),
+        ('jotohyo',         '除票'),
+        ('ininjyo',         '委任状'),
+        ('jotosho',         '譲渡書'),
+        ('kanpu',           '還付'),
+        ('contract_signed', '契約書（署名後）'),
+    ]
+
+    contract    = models.ForeignKey(PurchaseContract, on_delete=models.CASCADE, related_name='file_uploads', verbose_name='買取契約')
+    doc_type    = models.CharField(max_length=20, choices=DOC_TYPE_CHOICES, verbose_name='書類種別')
+    file        = models.FileField(upload_to='contract_documents/%Y/%m/', verbose_name='ファイル')
+    uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name='アップロード日時')
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='uploaded_contract_files',
+        verbose_name='アップロード者',
+    )
+
+    class Meta:
+        db_table = 'contract_file_uploads'
+        verbose_name = '契約書類ファイル'
+        verbose_name_plural = '契約書類ファイル'
+        ordering = ['doc_type', '-uploaded_at']
+
+    def __str__(self):
+        return f"{self.contract} / {self.get_doc_type_display()}"
 
 
 class IdentityDocument(models.Model):
@@ -863,7 +905,7 @@ class SalesProcess(models.Model):
         verbose_name='区分',
     )
 
-    document_done  = models.BooleanField(default=False, verbose_name='書類')
+    document_done  = models.BooleanField(default=False, verbose_name='契約手続')
     intake_done    = models.BooleanField(default=False, verbose_name='入庫')
     repair_done    = models.BooleanField(default=False, verbose_name='加修')
     transport_done = models.BooleanField(default=False, verbose_name='陸送')
