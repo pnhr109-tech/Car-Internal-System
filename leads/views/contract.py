@@ -11,21 +11,22 @@ API:
 import json
 import logging
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_DOWN
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q, Sum
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from accounts.models import Store
+from accounts.models import Store, UserProfile
 from ..models import (
+    AASaleImageUpload,
     Assessment,
     AuctionVenue,
     CarAssessmentRequest,
@@ -33,12 +34,20 @@ from ..models import (
     ContractFileUpload,
     Customer,
     CustomerBankAccount,
+    OtherFeeItem,
     OwnershipRelease,
     PurchaseContract,
     SalesProcess,
     Vehicle,
 )
-from .utils import _parse_tristate, _parse_date, _sync_customer_from_contract, _serialize_contract_file, _sync_document_done
+from .utils import (
+    _parse_tristate, _parse_date,
+    _sync_customer_from_contract,
+    _serialize_contract_file, _serialize_aa_image,
+    _serialize_other_fee_item, _sync_other_fee,
+    _sync_document_done,
+    ja_full_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -455,7 +464,10 @@ def reset_contract(request, contract_id):
     contract = get_object_or_404(PurchaseContract.objects.select_related('assessment'), pk=contract_id)
     assessment = contract.assessment
 
-    price_excl = assessment.assessment_price or Decimal('0')
+    total      = assessment.assessment_price or Decimal('0')
+    recycle    = assessment.assessment_system_recycle_amount or Decimal('0')
+    incl       = total - recycle  # リサイクル除いた税込額
+    price_excl = (incl / Decimal('1.1')).quantize(Decimal('1'), rounding=ROUND_DOWN)
     tax_amount = (price_excl * Decimal('0.10')).quantize(Decimal('1'))
 
     with transaction.atomic():
@@ -465,7 +477,7 @@ def reset_contract(request, contract_id):
         contract.purchase_price_excl_tax = price_excl
         contract.tax_amount              = tax_amount
         contract.purchase_price_incl_tax = price_excl + tax_amount
-        contract.recycle_amount          = assessment.assessment_system_recycle_amount
+        contract.recycle_amount          = recycle
         contract.payment_scheduled_date  = None
         contract.auction_scheduled_date  = None
         contract.status                  = PurchaseContract.STATUS_PENDING
@@ -568,6 +580,39 @@ def delete_contract_file(request, file_id):
 
 @login_required
 @require_POST
+def upload_aa_image(request, sp_id):
+    """AA出品画像をアップロードする API"""
+    sp = get_object_or_404(SalesProcess, pk=sp_id)
+
+    image_type = request.POST.get('image_type')
+    if image_type not in dict(AASaleImageUpload.IMAGE_TYPE_CHOICES):
+        return JsonResponse({'success': False, 'message': '画像種別が不正です'}, status=400)
+
+    upload = request.FILES.get('file')
+    if not upload:
+        return JsonResponse({'success': False, 'message': 'ファイルが選択されていません'}, status=400)
+
+    img = AASaleImageUpload.objects.create(
+        sales_process=sp,
+        image_type=image_type,
+        file=upload,
+        uploaded_by=request.user,
+    )
+    return JsonResponse({'success': True, 'data': _serialize_aa_image(img)})
+
+
+@login_required
+@require_POST
+def delete_aa_image(request, image_id):
+    """AA出品画像を削除する API"""
+    img = get_object_or_404(AASaleImageUpload, pk=image_id)
+    img.file.delete(save=False)
+    img.delete()
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
 def update_contract_procedure(request, contract_id):
     """契約手続（所有権解除・残債）進捗更新 API"""
     contract = get_object_or_404(PurchaseContract, pk=contract_id)
@@ -642,8 +687,8 @@ def request_contract_approval(request, contract_id):
 
     return JsonResponse({
         'success': True,
-        'message': f'{approver.get_full_name() or approver.username} に承認申請しました',
-        'approver_name': approver.get_full_name() or approver.username,
+        'message': f'{ja_full_name(approver)} に承認申請しました',
+        'approver_name': ja_full_name(approver),
     })
 
 
@@ -732,7 +777,7 @@ SALES_PROCESS_STEPS = [
     ('intake',    '入庫'),
     ('repair',    '加修'),
     ('transport', '陸送'),
-    ('listing',   '出品'),
+    ('listing',   'AA'),
     ('sale',      '売却'),
     ('payment',   '入金'),
     ('transfer',  '振込'),
@@ -921,7 +966,7 @@ _STEP_SUCCESSORS = {
     'transfer':  [],
 }
 _STEP_LABELS = {
-    'repair': '加修', 'transport': '陸送', 'listing': '出品',
+    'repair': '加修', 'transport': '陸送', 'listing': 'AA',
     'sale': '売却', 'payment': '入金',
 }
 
@@ -1031,8 +1076,115 @@ def save_step_dates(request, process_id):
 
 @login_required
 @require_POST
+def update_aa_fees(request, process_id):
+    """AA情報（AA会場・陸送費用）更新 API。その他費用は add_other_fee_item で管理。"""
+    process = get_object_or_404(SalesProcess, pk=process_id)
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    update_fields = ['updated_at']
+
+    raw_venue_id = payload.get('sold_destination_id', '')
+    if raw_venue_id:
+        try:
+            process.sold_destination = AuctionVenue.objects.get(pk=int(raw_venue_id))
+        except (AuctionVenue.DoesNotExist, ValueError):
+            return JsonResponse({'success': False, 'message': 'オークション会場が不正です'}, status=400)
+    else:
+        process.sold_destination = None
+    update_fields.append('sold_destination')
+
+    for fee_field in ('entry_fee', 'contract_fee'):
+        raw = payload.get(fee_field, '')
+        try:
+            setattr(process, fee_field, Decimal(str(raw)) if raw != '' and raw is not None else Decimal(0))
+        except (InvalidOperation, ValueError):
+            return JsonResponse({'success': False, 'message': f'{fee_field} の形式が不正です'}, status=400)
+        update_fields.append(fee_field)
+
+    raw_score = payload.get('aa_score', '')
+    valid_scores = {c[0] for c in SalesProcess.AA_SCORE_CHOICES}
+    if raw_score in valid_scores:
+        process.aa_score = raw_score
+    else:
+        process.aa_score = ''
+    update_fields.append('aa_score')
+
+    for fee_field in ('transport_fee_personal', 'transport_fee_auction'):
+        raw = payload.get(fee_field, '')
+        if raw != '' and raw is not None:
+            try:
+                setattr(process, fee_field, Decimal(str(raw)))
+            except (InvalidOperation, ValueError):
+                return JsonResponse({'success': False, 'message': f'{fee_field} の形式が不正です'}, status=400)
+        else:
+            setattr(process, fee_field, None)
+        update_fields.append(fee_field)
+
+    process.updated_by = request.user
+    update_fields.append('updated_by')
+    process.save(update_fields=update_fields)
+
+    return JsonResponse({'success': True, 'message': 'AA情報を保存しました'})
+
+
+@login_required
+@require_POST
+def add_other_fee_item(request, process_id):
+    """その他費用明細を追加する API（multipart）"""
+    process = get_object_or_404(SalesProcess, pk=process_id)
+
+    category = request.POST.get('category', '')
+    if category not in dict(OtherFeeItem.CATEGORY_CHOICES):
+        return JsonResponse({'success': False, 'message': '種別が不正です'}, status=400)
+
+    raw_amount = request.POST.get('amount', '')
+    try:
+        amount = Decimal(str(raw_amount))
+    except (InvalidOperation, ValueError):
+        return JsonResponse({'success': False, 'message': '金額の形式が不正です'}, status=400)
+
+    receipt = request.FILES.get('receipt_image') or None
+
+    item = OtherFeeItem.objects.create(
+        sales_process=process,
+        category=category,
+        amount=amount,
+        receipt_image=receipt,
+        created_by=request.user,
+    )
+    _sync_other_fee(process)
+
+    return JsonResponse({
+        'success':   True,
+        'data':      _serialize_other_fee_item(item),
+        'new_total': int(process.other_fee or 0),
+    })
+
+
+@login_required
+@require_POST
+def delete_other_fee_item(request, item_id):
+    """その他費用明細を削除する API"""
+    item = get_object_or_404(OtherFeeItem, pk=item_id)
+    process = item.sales_process
+    if item.receipt_image:
+        item.receipt_image.delete(save=False)
+    item.delete()
+    _sync_other_fee(process)
+
+    return JsonResponse({
+        'success':   True,
+        'new_total': int(process.other_fee or 0),
+    })
+
+
+@login_required
+@require_POST
 def update_sales_info(request, process_id):
-    """売却情報（区分・売却日・売却金額・売却先・各種費用）更新 API"""
+    """売却情報（区分・売却日・売却金額）更新 API。費用は update_aa_fees で管理。"""
     process = get_object_or_404(SalesProcess, pk=process_id)
     try:
         payload = json.loads(request.body)
@@ -1063,35 +1215,14 @@ def update_sales_info(request, process_id):
         process.sold_price = None
     update_fields.append('sold_price')
 
-    raw_venue_id = payload.get('sold_destination_id', '')
-    if raw_venue_id:
-        try:
-            process.sold_destination = AuctionVenue.objects.get(pk=int(raw_venue_id))
-        except (AuctionVenue.DoesNotExist, ValueError):
-            return JsonResponse({'success': False, 'message': 'オークション会場が不正です'}, status=400)
-    else:
-        process.sold_destination = None
-    update_fields.append('sold_destination')
-
-    for fee_field in ('transport_fee_personal', 'transport_fee_auction', 'other_fee'):
-        raw = payload.get(fee_field, '')
-        if raw != '' and raw is not None:
-            try:
-                setattr(process, fee_field, Decimal(str(raw)))
-            except (InvalidOperation, ValueError):
-                return JsonResponse({'success': False, 'message': f'{fee_field} の形式が不正です'}, status=400)
-        else:
-            setattr(process, fee_field, None)
-        update_fields.append(fee_field)
-
     process.updated_by = request.user
     update_fields.append('updated_by')
 
-    # sold_at が入力されたら sale_done を自動完了（出品完了が前提）
+    # sold_at が入力されたら sale_done を自動完了（AA完了が前提）
     # sold_at が空になったら sale_done をリセット（入金・振込が未完了の場合のみ）
     if process.sold_at:
         if not process.listing_done:
-            return JsonResponse({'success': False, 'message': '「出品」が完了していません'}, status=400)
+            return JsonResponse({'success': False, 'message': '「AA」が完了していません'}, status=400)
         if not process.sale_done:
             process.sale_done = True
             update_fields.append('sale_done')
@@ -1110,4 +1241,139 @@ def update_sales_info(request, process_id):
         'success': True,
         'message': '売却情報を保存しました',
         'sale_done': process.sale_done,
+    })
+
+
+# ---------------------------------------------------------------------------
+# 店舗別実績
+# ---------------------------------------------------------------------------
+
+# CC以外で実績ページを表示する店舗コード
+_SALES_STORE_CODES = [
+    Store.TSUKUBA,
+    Store.MITO,
+    Store.OYAMA,
+    Store.UTSUNOMIYA,
+]
+
+@login_required
+def cc_performance(request):
+    """後方互換: CC実績 → store_performance(CC) にリダイレクト"""
+    from django.shortcuts import redirect
+    return redirect('leads:store_performance', store_code=Store.CC)
+
+
+@login_required
+def store_performance(request, store_code):
+    """店舗別実績一覧（CC: 商談取得者基準 / 営業店舗: 案件担当者基準）"""
+    # 有効な店舗コードか確認
+    valid_codes = [Store.CC] + _SALES_STORE_CODES
+    if store_code not in valid_codes:
+        from django.http import Http404
+        raise Http404
+
+    store = get_object_or_404(Store, code=store_code)
+    is_cc = (store_code == Store.CC)
+
+    # 期間フィルター（assessment_datetime 基準）
+    f_from = request.GET.get('date_from', '').strip()
+    f_to   = request.GET.get('date_to',   '').strip()
+    f_user = request.GET.get('user',      '').strip()
+
+    base_qs = Assessment.objects.select_related(
+        'appointment_getter',
+        'appointment_getter__profile',
+        'appointment_getter__profile__store',
+        'assigned_to',
+        'assigned_to__profile',
+        'assigned_to__profile__store',
+        'contract',
+    )
+
+    if is_cc:
+        # CC: 商談を取得した人（appointment_getter）が CC 所属のもの
+        qs = base_qs.filter(appointment_getter__profile__store__code=Store.CC)
+        user_filter_field = 'appointment_getter_id'
+        person_field = 'appointment_getter'
+    else:
+        # 営業店舗: 案件担当者（assigned_to）がその店舗所属のもの
+        qs = base_qs.filter(assigned_to__profile__store__code=store_code)
+        user_filter_field = 'assigned_to_id'
+        person_field = 'assigned_to'
+
+    if f_from:
+        qs = qs.filter(assessment_datetime__date__gte=f_from)
+    if f_to:
+        qs = qs.filter(assessment_datetime__date__lte=f_to)
+    if f_user:
+        qs = qs.filter(**{user_filter_field: f_user})
+
+    # 個人別集計
+    User = get_user_model()
+    store_users = User.objects.filter(
+        is_active=True,
+        profile__store__code=store_code,
+    ).order_by('last_name', 'first_name')
+
+    per_person = []
+    for user in store_users:
+        user_qs = qs.filter(**{person_field: user})
+        total       = user_qs.count()
+        contracted  = user_qs.filter(status=Assessment.STATUS_CONTRACTED).count()
+        managed     = user_qs.filter(status=Assessment.STATUS_MANAGED).count()
+        lost        = user_qs.filter(status__in=[Assessment.STATUS_LOST, Assessment.STATUS_PRE_CANCEL]).count()
+        in_progress = user_qs.filter(status=Assessment.STATUS_IN_PROGRESS).count()
+        contract_rate = round(contracted / total * 100, 1) if total else 0
+        purchase_total = user_qs.filter(
+            status=Assessment.STATUS_CONTRACTED,
+            contract__isnull=False,
+        ).aggregate(s=Sum('contract__purchase_price_incl_tax'))['s'] or 0
+
+        per_person.append({
+            'user':          user,
+            'total':         total,
+            'in_progress':   in_progress,
+            'contracted':    contracted,
+            'managed':       managed,
+            'lost':          lost,
+            'contract_rate': contract_rate,
+            'purchase_total': purchase_total,
+        })
+
+    # 全体集計
+    total_all       = qs.count()
+    contracted_all  = qs.filter(status=Assessment.STATUS_CONTRACTED).count()
+    managed_all     = qs.filter(status=Assessment.STATUS_MANAGED).count()
+    lost_all        = qs.filter(status__in=[Assessment.STATUS_LOST, Assessment.STATUS_PRE_CANCEL]).count()
+    in_progress_all = qs.filter(status=Assessment.STATUS_IN_PROGRESS).count()
+    rate_all        = round(contracted_all / total_all * 100, 1) if total_all else 0
+    purchase_all    = qs.filter(
+        status=Assessment.STATUS_CONTRACTED, contract__isnull=False,
+    ).aggregate(s=Sum('contract__purchase_price_incl_tax'))['s'] or 0
+
+    # 案件一覧（絞り込み後、最新順）
+    case_qs  = qs.order_by('-assessment_datetime')
+    paginator = Paginator(case_qs, 50)
+    page_obj  = paginator.get_page(request.GET.get('page', 1))
+
+    # サイドバー用: 実績ページを持つ全店舗
+    perf_stores = Store.objects.filter(code__in=valid_codes, is_active=True).order_by('id')
+
+    return render(request, 'leads/store_performance.html', {
+        'store':          store,
+        'is_cc':          is_cc,
+        'per_person':     per_person,
+        'store_users':    store_users,
+        'total_all':      total_all,
+        'contracted_all': contracted_all,
+        'managed_all':    managed_all,
+        'lost_all':       lost_all,
+        'in_progress_all': in_progress_all,
+        'rate_all':       rate_all,
+        'purchase_all':   purchase_all,
+        'page_obj':       page_obj,
+        'f_from':         f_from,
+        'f_to':           f_to,
+        'f_user':         f_user,
+        'perf_stores':    perf_stores,
     })

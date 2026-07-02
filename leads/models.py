@@ -339,11 +339,20 @@ class Assessment(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name='assessments',
-        verbose_name='担当者',
+        verbose_name='案件担当者',
+    )
+    appointment_getter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='gotten_appointments',
+        verbose_name='商談取得者',
     )
     assessment_datetime = models.DateTimeField(null=True, blank=True, verbose_name='査定日時')
     assessment_price    = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='査定額')
-    market_price        = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='市場相場価格')
+    market_price_min    = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='市場相場価格（下限）')
+    market_price_max    = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='市場相場価格（上限）')
     overall_rating      = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True, verbose_name='総合評価（1〜5、0.5刻み）')
     status              = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_IN_PROGRESS, verbose_name='ステータス')
     management_status   = models.CharField(max_length=20, choices=MANAGEMENT_STATUS_CHOICES, blank=True, verbose_name='管理方針')
@@ -705,6 +714,89 @@ class ContractFileUpload(models.Model):
         return f"{self.contract} / {self.get_doc_type_display()}"
 
 
+class AASaleImageUpload(models.Model):
+    """AA出品画像（出品画面・流れ画面・落札画面）"""
+
+    IMAGE_TYPE_CHOICES = [
+        ('listing_screen',     '出品画面'),
+        ('flow_screen',        '流れ画面'),
+        ('winning_bid_screen', '落札画面'),
+    ]
+
+    sales_process = models.ForeignKey(
+        'SalesProcess',
+        on_delete=models.CASCADE,
+        related_name='aa_images',
+        verbose_name='売却プロセス',
+    )
+    image_type  = models.CharField(max_length=30, choices=IMAGE_TYPE_CHOICES, verbose_name='画像種別')
+    file        = models.FileField(upload_to='aa_images/%Y/%m/', verbose_name='画像ファイル')
+    uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name='アップロード日時')
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='uploaded_aa_images',
+        verbose_name='アップロード者',
+    )
+
+    class Meta:
+        db_table = 'aa_sale_images'
+        verbose_name = 'AA出品画像'
+        verbose_name_plural = 'AA出品画像'
+        ordering = ['image_type', '-uploaded_at']
+
+    def __str__(self):
+        return f"{self.sales_process} / {self.get_image_type_display()}"
+
+
+class OtherFeeItem(models.Model):
+    """AA出品その他費用明細（書類作成・自社陸送など）"""
+
+    CATEGORY_CHOICES = [
+        ('document',      '書類作成'),
+        ('listing_sheet', '出品表作成'),
+        ('own_transport', '自社陸送'),
+        ('finishing',     '仕上げ'),
+        ('car_wash',      '洗車'),
+        ('fuel',          '燃料'),
+        ('expressway',    '高速'),
+        ('parts',         '部品'),
+        ('labor',         '工賃'),
+    ]
+
+    sales_process = models.ForeignKey(
+        'SalesProcess',
+        on_delete=models.CASCADE,
+        related_name='other_fee_items',
+        verbose_name='売却プロセス',
+    )
+    category      = models.CharField(max_length=20, choices=CATEGORY_CHOICES, verbose_name='種別')
+    amount        = models.DecimalField(max_digits=10, decimal_places=0, verbose_name='金額（円）')
+    receipt_image = models.FileField(
+        upload_to='other_fee_receipts/%Y/%m/',
+        blank=True, null=True,
+        verbose_name='領収書画像',
+    )
+    created_at    = models.DateTimeField(auto_now_add=True, verbose_name='作成日時')
+    created_by    = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='created_other_fee_items',
+        verbose_name='登録者',
+    )
+
+    class Meta:
+        db_table         = 'other_fee_items'
+        verbose_name     = 'その他費用明細'
+        verbose_name_plural = 'その他費用明細'
+        ordering         = ['created_at']
+
+    def __str__(self):
+        return f"{self.get_category_display()} {self.amount}円"
+
+
 class IdentityDocument(models.Model):
     """本人確認書類"""
 
@@ -931,9 +1023,17 @@ class SalesProcess(models.Model):
         verbose_name='売却先（会場）',
     )
 
+    entry_fee              = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name='出品費用（円）')
+    contract_fee           = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name='成約費用（円）')
     transport_fee_personal = models.DecimalField(max_digits=10, decimal_places=0, default=8800, null=True, blank=True, verbose_name='個人宅陸送費用（円）')
     transport_fee_auction  = models.DecimalField(max_digits=10, decimal_places=0, default=8800, null=True, blank=True, verbose_name='オークション会場搬送費用（円）')
     other_fee              = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True, verbose_name='その他費用（円）')
+    AA_SCORE_CHOICES = [
+        ('5.0', '5.0'), ('4.5', '4.5'), ('4.0', '4.0'), ('3.5', '3.5'),
+        ('3.0', '3.0'), ('2.5', '2.5'), ('2.0', '2.0'), ('1.5', '1.5'),
+        ('1.0', '1.0'), ('R', 'R'),
+    ]
+    aa_score               = models.CharField(max_length=5, choices=AA_SCORE_CHOICES, blank=True, default='', verbose_name='AA会場評価点')
 
     transfer_approval_requested_at = models.DateTimeField(null=True, blank=True, verbose_name='振込承認申請日時')
     transfer_approved_by = models.ForeignKey(

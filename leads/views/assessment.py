@@ -24,6 +24,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from accounts.models import Store
 from ..models import (
     Assessment,
     CarAssessmentRequest,
@@ -39,6 +40,14 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _is_cc_user(user):
+    """ユーザーがCC（コンタクトセンター）所属かどうかを返す。"""
+    try:
+        return user.profile.store.code == Store.CC
+    except Exception:
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -76,11 +85,17 @@ def _auto_create_assessment_for_request(req, user):
         req.vehicle = vehicle
         req.save(update_fields=['vehicle', 'updated_at'])
 
+    # 商談取得者 = ステータス変更した本人（user）
+    # CC所属なら案件担当者は未設定にして、後で営業担当者を手動割り当て
+    appointment_getter = user
+    assigned_to = None if _is_cc_user(user) else (req.assigned_to or user)
+
     Assessment.objects.create(
         assessment_request=req,
         customer=req.customer,
         vehicle=req.vehicle,
-        assigned_to=req.assigned_to or user,
+        assigned_to=assigned_to,
+        appointment_getter=appointment_getter,
         assessment_datetime=req.reservation_datetime,
         case_number=generate_case_number(),
     )
@@ -684,23 +699,27 @@ def promote_to_case(request, request_id):
                 )
                 req.vehicle = vehicle
 
-            # assigned_to: 申込の担当者を優先。未設定の場合は sales_owner_name からユーザーを検索
-            assigned_user = req.assigned_to
-            if not assigned_user and req.sales_owner_name:
+            # 商談取得者: 申込の担当者を優先。未設定の場合は sales_owner_name からユーザーを検索
+            appointment_getter = req.assigned_to
+            if not appointment_getter and req.sales_owner_name:
                 from django.contrib.auth import get_user_model
                 _User = get_user_model()
                 name_parts = req.sales_owner_name.strip().split()
                 if len(name_parts) >= 2:
-                    assigned_user = _User.objects.filter(
+                    appointment_getter = _User.objects.filter(
                         last_name=name_parts[0], first_name=name_parts[1]
                     ).first()
-            assigned_user = assigned_user or request.user
+            appointment_getter = appointment_getter or request.user
+
+            # CC所属なら案件担当者は未設定にして後で手動割り当て
+            assigned_to = None if _is_cc_user(appointment_getter) else appointment_getter
 
             assessment = Assessment.objects.create(
                 assessment_request=req,
                 customer=req.customer,
                 vehicle=req.vehicle,
-                assigned_to=assigned_user,
+                assigned_to=assigned_to,
+                appointment_getter=appointment_getter,
                 assessment_datetime=req.reservation_datetime,
                 case_number=generate_case_number(),
             )

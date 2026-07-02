@@ -9,6 +9,12 @@
 document.addEventListener('DOMContentLoaded', () => {
   // 契約手続書類 添付ファイルの初期表示
   _initContractFiles();
+  // AA出品画像の初期表示
+  _initAAImages();
+  // その他費用明細の初期表示
+  _initOtherFeeItems();
+  // AA損益シミュレーションの初期描画
+  _updateAASimulation();
 
   // 履歴入力の日時初期値
   const now = new Date();
@@ -261,10 +267,10 @@ function saveAssessmentInfo() {
   apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/update/`, {
     method: 'POST',
     body: JSON.stringify({
-      status:               document.getElementById('editStatus').value,
       assessment_datetime:  document.getElementById('editAssessmentDatetime').value,
       assessment_price:     document.getElementById('editAssessmentPrice').value,
-      market_price:         document.getElementById('editMarketPrice').value,
+      market_price_min:     document.getElementById('editMarketPriceMin').value,
+      market_price_max:     document.getElementById('editMarketPriceMax').value,
       overall_rating:       document.getElementById('editOverallRating').value,
       remarks:              document.getElementById('editRemarks').value,
     }),
@@ -925,6 +931,290 @@ function deleteDocFile(fileId) {
       _updateDocFileBadge(_currentDocFileType);
       _renderDocFileList();
       showToast('削除', 'ファイルを削除しました', 'success');
+    } else {
+      showToast('エラー', d.message || '削除に失敗しました', 'danger');
+    }
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
+}
+
+// ── AA出品 画像 ─────────────────────────────────────────────────────────────
+
+const AA_IMAGE_TYPES = {
+  listing_screen:     '出品画面',
+  flow_screen:        '流れ画面',
+  winning_bid_screen: '落札画面',
+};
+
+let _aaImages = {};
+
+function _initAAImages() {
+  const el = document.getElementById('aa-images-data');
+  _aaImages = el ? JSON.parse(el.textContent) : {};
+  _renderAAImageList();
+}
+
+function _renderAAImageList() {
+  const container = document.getElementById('aaImageList');
+  if (!container) return;
+
+  const html = Object.entries(AA_IMAGE_TYPES).map(([key, label]) => {
+    const images = _aaImages[key] || [];
+    const badge  = images.length > 0
+      ? ` <span class="badge bg-secondary ms-1">${images.length}</span>` : '';
+    const rows = images.length === 0
+      ? '<div class="text-muted small px-3 py-2">なし</div>'
+      : images.map(img => `
+          <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom">
+            <a href="${img.url}" target="_blank" rel="noopener" class="flex-shrink-0">
+              <img src="${img.url}" alt="${escapeHtml(img.filename)}"
+                style="width:72px;height:54px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;">
+            </a>
+            <div class="flex-grow-1 overflow-hidden">
+              <div class="small fw-semibold text-truncate">${escapeHtml(img.filename)}</div>
+              <div class="text-muted small">${escapeHtml(img.uploaded_by)} · ${img.uploaded_at}</div>
+            </div>
+            <button class="btn btn-sm btn-outline-danger flex-shrink-0" onclick="deleteAAImage(${img.id})">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        `).join('');
+
+    return `
+      <div>
+        <div class="px-3 py-2 bg-light border-bottom fw-semibold small">${escapeHtml(label)}${badge}</div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  container.innerHTML = html;
+}
+
+function openAAImageUploadModal() {
+  const sel = document.getElementById('aaImgUploadType');
+  const inp = document.getElementById('aaImgUploadFile');
+  if (sel) sel.value = '';
+  if (inp) inp.value = '';
+  new bootstrap.Modal(document.getElementById('aaImageUploadModal')).show();
+}
+
+function doUploadAAImages() {
+  const sel   = document.getElementById('aaImgUploadType');
+  const inp   = document.getElementById('aaImgUploadFile');
+  const files = Array.from(inp?.files || []);
+
+  if (!sel?.value) {
+    showToast('エラー', '画面の種類を選択してください', 'danger');
+    return;
+  }
+  if (files.length === 0) {
+    showToast('エラー', '画像ファイルを選択してください', 'danger');
+    return;
+  }
+
+  const imageType = sel.value;
+  bootstrap.Modal.getInstance(document.getElementById('aaImageUploadModal'))?.hide();
+  files.forEach(file => _uploadAAImage(file, imageType));
+}
+
+function _uploadAAImage(file, imageType) {
+  const formData = new FormData();
+  formData.append('image_type', imageType);
+  formData.append('file', file);
+  apiFetch(`/sateiinfo/api/sales-process/${SALES_PROCESS_ID}/aa-images/upload/`, {
+    method: 'POST',
+    body: formData,
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      const key = d.data.image_type;
+      if (!_aaImages[key]) _aaImages[key] = [];
+      _aaImages[key].unshift(d.data);
+      _renderAAImageList();
+      showToast('保存', '画像を保存しました', 'success');
+    } else {
+      showToast('エラー', d.message || 'アップロードに失敗しました', 'danger');
+    }
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
+}
+
+function deleteAAImage(imageId) {
+  if (!confirm('この画像を削除しますか？')) return;
+  apiFetch(`/sateiinfo/api/aa-images/${imageId}/delete/`, { method: 'POST' })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      Object.keys(_aaImages).forEach(key => {
+        _aaImages[key] = (_aaImages[key] || []).filter(img => img.id !== imageId);
+      });
+      _renderAAImageList();
+      showToast('削除', '画像を削除しました', 'success');
+    } else {
+      showToast('エラー', d.message || '削除に失敗しました', 'danger');
+    }
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
+}
+
+// ── AA 損益シミュレーション ──────────────────────────────────────────────
+
+function _updateAASimulation() {
+  const fmt = n => Math.round(n).toLocaleString() + ' 円';
+
+  const purchasePrice    = typeof PURCHASE_PRICE !== 'undefined' ? PURCHASE_PRICE : 0;
+  const entryFee         = parseFloat(document.getElementById('aaFeeEntryFee')?.value)         || 0;
+  const contractFee      = parseFloat(document.getElementById('aaFeeContractFee')?.value)       || 0;
+  const transPersonal    = parseFloat(document.getElementById('aaFeeTransportPersonal')?.value) || 0;
+  const transAuction     = parseFloat(document.getElementById('aaFeeTransportAuction')?.value)  || 0;
+  const otherFee         = _otherFeeItems.reduce((s, i) => s + i.amount, 0);
+  const totalCost        = purchasePrice + entryFee + contractFee + transPersonal + transAuction + otherFee;
+
+  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  setText('simPurchasePrice',    purchasePrice ? fmt(purchasePrice) : '—');
+  setText('simEntryFee',         fmt(entryFee));
+  setText('simContractFee',      fmt(contractFee));
+  setText('simTransportPersonal', fmt(transPersonal));
+  setText('simTransportAuction', fmt(transAuction));
+  setText('simOtherFee',         fmt(otherFee));
+  setText('simTotalCost',        fmt(totalCost));
+  setText('simBreakEven',        purchasePrice ? fmt(totalCost) : '—');
+
+  const box = document.getElementById('simResultBox');
+
+  const priceMin = typeof MARKET_PRICE_MIN !== 'undefined' ? MARKET_PRICE_MIN : null;
+  const priceMax = typeof MARKET_PRICE_MAX !== 'undefined' ? MARKET_PRICE_MAX : null;
+
+  if (priceMin !== null || priceMax !== null) {
+    const mid = (priceMin !== null && priceMax !== null)
+      ? (priceMin + priceMax) / 2
+      : (priceMin ?? priceMax);
+
+    let compareText = '';
+    if (priceMin !== null && priceMax !== null) {
+      compareText = `相場 ${Math.round(priceMin).toLocaleString()}〜${Math.round(priceMax).toLocaleString()} 円`;
+    } else if (priceMin !== null) {
+      compareText = `相場下限 ${Math.round(priceMin).toLocaleString()} 円`;
+    } else {
+      compareText = `相場上限 ${Math.round(priceMax).toLocaleString()} 円`;
+    }
+    if (purchasePrice && totalCost > 0) {
+      const breakEven = totalCost;
+      if (priceMin !== null && priceMin >= breakEven) {
+        compareText += ' ✅ 相場下限でも利益が出ます';
+        if (box) box.className = box.className.replace(/border-\S+/g, 'border-success');
+      } else if (priceMax !== null && priceMax < breakEven) {
+        compareText += ' ⚠️ 相場上限でも赤字になります';
+        if (box) box.className = box.className.replace(/border-\S+/g, 'border-danger');
+      } else {
+        compareText += ' 📊 相場内での損益分岐点あり';
+        if (box) box.className = box.className.replace(/border-\S+/g, 'border-warning');
+      }
+    }
+    setText('simMarketCompare', compareText);
+
+    if (purchasePrice && totalCost > 0) {
+      const estProfit = mid - totalCost;
+      const profitEl = document.getElementById('simEstProfit');
+      if (profitEl) {
+        profitEl.textContent = (estProfit >= 0 ? '+' : '') + Math.round(estProfit).toLocaleString() + ' 円';
+        profitEl.className = 'fw-semibold ' + (estProfit >= 0 ? 'text-success' : 'text-danger');
+      }
+    } else {
+      setText('simEstProfit', '—');
+    }
+  } else {
+    setText('simMarketCompare', '査定タブで市場相場を入力してください');
+    setText('simEstProfit', '—');
+  }
+}
+
+// ── その他費用 明細 ──────────────────────────────────────────────────────
+
+let _otherFeeItems = [];
+
+function _initOtherFeeItems() {
+  const el = document.getElementById('other-fee-items-data');
+  _otherFeeItems = el ? JSON.parse(el.textContent) : [];
+  _renderOtherFeeItems();
+}
+
+function _renderOtherFeeItems() {
+  const container = document.getElementById('otherFeeItemList');
+  if (!container) return;
+  if (_otherFeeItems.length === 0) {
+    container.innerHTML = '<p class="text-muted small mb-0">明細はまだ登録されていません</p>';
+  } else {
+    container.innerHTML = _otherFeeItems.map(item => `
+      <div class="d-flex align-items-center gap-2 py-1 border-bottom" data-fee-item-id="${item.id}">
+        <span class="badge bg-secondary">${item.category_label}</span>
+        <span class="fw-semibold">${item.amount.toLocaleString()} 円</span>
+        ${item.receipt_url ? `<a href="${item.receipt_url}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-1"><i class="bi bi-paperclip"></i> 領収書</a>` : ''}
+        <span class="text-muted small ms-auto">${item.created_by} ${item.created_at}</span>
+        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteOtherFeeItem(${item.id})">
+          <i class="bi bi-trash"></i>
+        </button>
+      </div>
+    `).join('');
+  }
+  _updateOtherFeeTotal();
+}
+
+function _updateOtherFeeTotal() {
+  const total = _otherFeeItems.reduce((sum, item) => sum + item.amount, 0);
+  const el = document.getElementById('otherFeeTotal');
+  if (el) el.textContent = total.toLocaleString();
+  const saleEl = document.getElementById('saleOtherFee');
+  if (saleEl) {
+    saleEl.value = total;
+    if (typeof updateSaleProfit === 'function') updateSaleProfit();
+  }
+  _updateAASimulation();
+}
+
+function addOtherFeeItem() {
+  const category = document.getElementById('newOtherFeeCategory').value;
+  const amount   = document.getElementById('newOtherFeeAmount').value;
+  const receipt  = document.getElementById('newOtherFeeReceipt').files[0];
+  if (!category) { showToast('エラー', '種別を選択してください', 'danger'); return; }
+  if (!amount || parseFloat(amount) <= 0) { showToast('エラー', '金額を入力してください', 'danger'); return; }
+
+  const formData = new FormData();
+  formData.append('category', category);
+  formData.append('amount', amount);
+  if (receipt) formData.append('receipt_image', receipt);
+
+  apiFetch(`/sateiinfo/api/sales-process/${SALES_PROCESS_ID}/other-fee-items/add/`, {
+    method: 'POST',
+    body: formData,
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      _otherFeeItems.push(d.data);
+      _renderOtherFeeItems();
+      document.getElementById('newOtherFeeCategory').value = '';
+      document.getElementById('newOtherFeeAmount').value = '';
+      document.getElementById('newOtherFeeReceipt').value = '';
+      showToast('追加', '費用を追加しました', 'success');
+    } else {
+      showToast('エラー', d.message || '追加に失敗しました', 'danger');
+    }
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
+}
+
+function deleteOtherFeeItem(itemId) {
+  if (!confirm('この費用を削除しますか？')) return;
+  apiFetch(`/sateiinfo/api/other-fee-items/${itemId}/delete/`, { method: 'POST' })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      _otherFeeItems = _otherFeeItems.filter(item => item.id !== itemId);
+      _renderOtherFeeItems();
+      showToast('削除', '費用を削除しました', 'success');
     } else {
       showToast('エラー', d.message || '削除に失敗しました', 'danger');
     }

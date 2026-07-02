@@ -1,0 +1,181 @@
+{% extends 'base/internal_base.html' %}
+{% load humanize leads_extras %}
+{% block title %}CC実績{% endblock %}
+
+{% block content %}
+<div class="container-xxl py-4">
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-headset"></i> CC実績</h4>
+</div>
+
+{# ── フィルター ── #}
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small mb-1">査定日（FROM）</label>
+        <input type="date" name="date_from" class="form-control form-control-sm" value="{{ f_from }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-1">査定日（TO）</label>
+        <input type="date" name="date_to" class="form-control form-control-sm" value="{{ f_to }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-1">担当者（CC）</label>
+        <select name="user" class="form-select form-select-sm">
+          <option value="">全員</option>
+          {% for u in cc_users %}
+          <option value="{{ u.pk }}" {% if f_user == u.pk|stringformat:"s" %}selected{% endif %}>
+            {{ u|ja_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-sm btn-primary w-100">
+          <i class="bi bi-search"></i> 絞り込み
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── CC全体サマリー ── #}
+<div class="card mb-4">
+  <div class="card-header"><h6 class="mb-0"><i class="bi bi-bar-chart-fill"></i> CC全体サマリー</h6></div>
+  <div class="card-body">
+    <div class="row g-3 text-center">
+      <div class="col-6 col-md-2">
+        <div class="fs-3 fw-bold text-primary">{{ total_all }}</div>
+        <div class="small text-muted">商談取得数</div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="fs-3 fw-bold text-secondary">{{ in_progress_all }}</div>
+        <div class="small text-muted">査定中</div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="fs-3 fw-bold text-success">{{ contracted_all }}</div>
+        <div class="small text-muted">成約</div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="fs-3 fw-bold text-warning">{{ managed_all }}</div>
+        <div class="small text-muted">管理</div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="fs-3 fw-bold text-danger">{{ lost_all }}</div>
+        <div class="small text-muted">没・キャンセル</div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="fs-3 fw-bold">{{ rate_all }}%</div>
+        <div class="small text-muted">成約率</div>
+      </div>
+    </div>
+    <hr class="my-2">
+    <div class="text-center">
+      <span class="text-muted small">成約買取金額合計（税込）：</span>
+      <span class="fs-5 fw-bold">{{ purchase_all|floatformat:0|intcomma }} 円</span>
+    </div>
+  </div>
+</div>
+
+{# ── 個人別集計 ── #}
+<div class="card mb-4">
+  <div class="card-header"><h6 class="mb-0"><i class="bi bi-person-lines-fill"></i> 個人別実績</h6></div>
+  <div class="table-responsive">
+    <table class="table table-hover table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>担当者</th>
+          <th class="text-center">商談取得数</th>
+          <th class="text-center">査定中</th>
+          <th class="text-center text-success">成約</th>
+          <th class="text-center text-warning">管理</th>
+          <th class="text-center text-danger">没・キャンセル</th>
+          <th class="text-center">成約率</th>
+          <th class="text-end">成約買取金額（税込）</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in per_person %}
+        {% if row.total > 0 %}
+        <tr>
+          <td>{{ row.user|ja_name }}</td>
+          <td class="text-center fw-semibold">{{ row.total }}</td>
+          <td class="text-center text-secondary">{{ row.in_progress }}</td>
+          <td class="text-center text-success fw-semibold">{{ row.contracted }}</td>
+          <td class="text-center text-warning fw-semibold">{{ row.managed }}</td>
+          <td class="text-center text-danger">{{ row.lost }}</td>
+          <td class="text-center">
+            <span class="badge {% if row.contract_rate >= 50 %}bg-success{% elif row.contract_rate >= 30 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+              {{ row.contract_rate }}%
+            </span>
+          </td>
+          <td class="text-end">{{ row.purchase_total|floatformat:0|intcomma }} 円</td>
+        </tr>
+        {% endif %}
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-4">CC所属ユーザーがいません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── 案件一覧 ── #}
+<div class="card">
+  <div class="card-header"><h6 class="mb-0"><i class="bi bi-list-ul"></i> 案件一覧（{{ page_obj.paginator.count }}件）</h6></div>
+  <div class="table-responsive">
+    <table class="table table-hover table-sm align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>査定日</th>
+          <th>顧客</th>
+          <th>車両</th>
+          <th>商談取得者</th>
+          <th>案件担当者</th>
+          <th class="text-center">ステータス</th>
+          <th class="text-end">買取金額（税込）</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in page_obj %}
+        <tr class="{% if a.status == 'contracted' %}table-success{% elif a.status == 'lost' or a.status == 'pre_cancel' %}table-danger{% elif a.status == 'managed' %}table-warning{% endif %}">
+          <td class="text-nowrap">{{ a.assessment_datetime|date:"Y/m/d"|default:"-" }}</td>
+          <td>
+            <a href="{% url 'leads:case_detail' a.pk %}">{{ a.customer.name }}</a>
+          </td>
+          <td class="text-nowrap">{{ a.vehicle.maker }} {{ a.vehicle.car_model }}</td>
+          <td>{{ a.appointment_getter|ja_name|default:"-" }}</td>
+          <td>{{ a.assigned_to|ja_name|default:"-" }}</td>
+          <td class="text-center">
+            {% if a.status == 'contracted' %}<span class="badge bg-success">成約</span>
+            {% elif a.status == 'in_progress' %}<span class="badge bg-secondary">査定中</span>
+            {% elif a.status == 'managed' %}<span class="badge bg-warning text-dark">管理</span>
+            {% elif a.status == 'lost' %}<span class="badge bg-danger">没</span>
+            {% elif a.status == 'pre_cancel' %}<span class="badge bg-danger">査定前キャンセル</span>
+            {% else %}<span class="badge bg-light text-dark">{{ a.status }}</span>{% endif %}
+          </td>
+          <td class="text-end">
+            {% if a.contract %}{{ a.contract.purchase_price_incl_tax|floatformat:0|intcomma }} 円{% else %}-{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">該当案件がありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj.has_other_pages %}
+  <div class="card-footer">
+    <nav>
+      <ul class="pagination pagination-sm mb-0 justify-content-center">
+        {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?{% if f_from %}date_from={{ f_from }}&{% endif %}{% if f_to %}date_to={{ f_to }}&{% endif %}{% if f_user %}user={{ f_user }}&{% endif %}page={{ page_obj.previous_page_number }}">前</a></li>{% endif %}
+        <li class="page-item disabled"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+        {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?{% if f_from %}date_from={{ f_from }}&{% endif %}{% if f_to %}date_to={{ f_to }}&{% endif %}{% if f_user %}user={{ f_user }}&{% endif %}page={{ page_obj.next_page_number }}">次</a></li>{% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+</div>
+{% endblock %}

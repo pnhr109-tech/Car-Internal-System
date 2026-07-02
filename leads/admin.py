@@ -1,7 +1,9 @@
 from django.contrib import admin
 
 from .models import (
+    AASaleImageUpload,
     AdvancePayment,
+    OtherFeeItem,
     Assessment,
     AssessmentCheckItem,
     AuctionVenue,
@@ -15,6 +17,7 @@ from .models import (
     IdentityDocument,
     OwnershipRelease,
     PurchaseContract,
+    SalesProcess,
     Vehicle,
     VehicleImage,
 )
@@ -105,11 +108,11 @@ class AssessmentAdmin(admin.ModelAdmin):
     list_filter   = ['status', 'management_status']
     search_fields = ['customer__name', 'customer__phone_number', 'vehicle__maker', 'vehicle__car_model']
     readonly_fields = ['created_at', 'updated_at']
-    raw_id_fields   = ['assessment_request', 'customer', 'vehicle', 'assigned_to', 'approved_by', 'updated_by']
+    raw_id_fields   = ['assessment_request', 'customer', 'vehicle', 'assigned_to', 'appointment_getter', 'approved_by', 'updated_by']
     inlines         = [AssessmentCheckItemInline]
     fieldsets = (
-        ('基本情報',   {'fields': ('assessment_request', 'customer', 'vehicle', 'assigned_to')}),
-        ('査定内容',   {'fields': ('assessment_datetime', 'assessment_price', 'market_price', 'overall_rating')}),
+        ('基本情報',   {'fields': ('assessment_request', 'customer', 'vehicle', 'assigned_to', 'appointment_getter')}),
+        ('査定内容',   {'fields': ('assessment_datetime', 'assessment_price', 'market_price_min', 'market_price_max', 'overall_rating')}),
         ('ステータス', {'fields': ('status', 'management_status', 'cancel_reason', 'cancelled_at')}),
         ('承認',       {'fields': ('approved_by', 'approved_at')}),
         ('備考',       {'fields': ('remarks',)}),
@@ -203,3 +206,29 @@ class AuctionVenueAdmin(admin.ModelAdmin):
     list_display  = ['name', 'entry_fee', 'contract_fee', 'created_at']
     search_fields = ['name']
     readonly_fields = ['created_at']
+
+
+# ---------------------------------------------------------------------------
+# AA出品画像
+# ---------------------------------------------------------------------------
+
+class AASaleImageInline(admin.TabularInline):
+    model  = AASaleImageUpload
+    extra  = 0
+    fields = ['image_type', 'file', 'uploaded_at', 'uploaded_by']
+    readonly_fields = ['uploaded_at']
+
+
+class OtherFeeItemInline(admin.TabularInline):
+    model  = OtherFeeItem
+    extra  = 0
+    fields = ['category', 'amount', 'receipt_image', 'created_at', 'created_by']
+    readonly_fields = ['created_at']
+
+
+@admin.register(SalesProcess)
+class SalesProcessAdmin(admin.ModelAdmin):
+    list_display    = ['contract', 'vehicle_disposition', 'listing_done', 'sale_done', 'payment_done']
+    readonly_fields = ['created_at', 'updated_at']
+    raw_id_fields   = ['contract', 'sold_destination', 'transfer_approved_by', 'updated_by']
+    inlines         = [AASaleImageInline, OtherFeeItemInline]

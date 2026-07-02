@@ -26,6 +26,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..models import (
+    AASaleImageUpload,
     AdvancePayment,
     Assessment,
     AssessmentCheckItem,
@@ -35,12 +36,19 @@ from ..models import (
     ContractFileUpload,
     Customer,
     CustomerBankAccount,
+    OtherFeeItem,
     OwnershipRelease,
     PurchaseContract,
     SalesProcess,
     Vehicle,
 )
-from .utils import _current_user_display_name, _serialize_contract_file, _sync_document_done
+from .utils import (
+    _current_user_display_name,
+    _serialize_contract_file, _serialize_aa_image,
+    _serialize_other_fee_item,
+    _sync_document_done,
+    ja_full_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +135,15 @@ def case_detail(request, pk):
         }
     else:
         step_available = {}
+    aa_images_by_type = {}
+    other_fee_items_list = []
+    if sales_process:
+        for img in sales_process.aa_images.select_related('uploaded_by'):
+            aa_images_by_type.setdefault(img.image_type, []).append(_serialize_aa_image(img))
+        other_fee_items_list = [
+            _serialize_other_fee_item(item)
+            for item in sales_process.other_fee_items.select_related('created_by')
+        ]
     vehicle_images = assessment.vehicle.images.all()
 
     active_tab = request.GET.get('tab', 'assessment')
@@ -144,15 +161,22 @@ def case_detail(request, pk):
     ).distinct().order_by('last_name', 'first_name')
 
     contract_tax_rate = 10
+    contract_total_payment = None
     if contract and contract.purchase_price_excl_tax and contract.purchase_price_excl_tax > 0:
         rate = round(float(contract.tax_amount / contract.purchase_price_excl_tax * 100))
         contract_tax_rate = rate if rate in (0, 8, 10) else 10
+        contract_total_payment = (
+            contract.purchase_price_excl_tax
+            + contract.tax_amount
+            + (contract.recycle_amount or 0)
+        )
 
     editable_status_choices = Assessment.STATUS_CHOICES
 
     return render(request, 'leads/case_detail.html', {
         'assessment':                   assessment,
         'contract':                     contract,
+        'contract_total_payment':       contract_total_payment,
         'histories':                    histories,
         'check_items':                  check_items,
         'documents':                    documents,
@@ -189,6 +213,10 @@ def case_detail(request, pk):
         'advance_payments':              advance_payments,
         'sales_process':                 sales_process,
         'step_available':                step_available,
+        'aa_images_by_type':             aa_images_by_type,
+        'aa_image_types':                AASaleImageUpload.IMAGE_TYPE_CHOICES,
+        'other_fee_items':               other_fee_items_list,
+        'other_fee_category_choices':    OtherFeeItem.CATEGORY_CHOICES,
         'disposition_choices':           SalesProcess.DISPOSITION_CHOICES,
         'auction_venues':                AuctionVenue.objects.all(),
         'required_doc_fields': [
@@ -231,8 +259,44 @@ def change_case_assignee(request, assessment_id):
 
     return JsonResponse({
         'success': True,
-        'message': f'担当者を {new_assignee.get_full_name() or new_assignee.username} に変更しました',
-        'assigned_to_name': new_assignee.get_full_name() or new_assignee.username,
+        'message': f'担当者を {ja_full_name(new_assignee)} に変更しました',
+        'assigned_to_name': ja_full_name(new_assignee),
+    })
+
+
+@login_required
+@require_POST
+def change_appointment_getter(request, assessment_id):
+    """商談取得者変更 API（管理者・承認権限者のみ）"""
+    profile = getattr(request.user, 'profile', None)
+    if not ((profile and profile.can_approve) or request.user.is_superuser):
+        return JsonResponse({'success': False, 'message': '商談取得者変更には承認権限が必要です'}, status=403)
+
+    assessment = get_object_or_404(Assessment, pk=assessment_id)
+    try:
+        payload = json.loads(request.body.decode('utf-8')) if request.body else {}
+        raw_id = payload.get('user_id', '')
+        user_id = int(raw_id) if raw_id else None
+    except (ValueError, json.JSONDecodeError):
+        return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
+
+    if user_id:
+        User = get_user_model()
+        new_getter = get_object_or_404(User, pk=user_id, is_active=True)
+        assessment.appointment_getter = new_getter
+        getter_name = ja_full_name(new_getter)
+        msg = f'商談取得者を {getter_name} に変更しました'
+    else:
+        assessment.appointment_getter = None
+        getter_name = '未設定'
+        msg = '商談取得者を未設定にしました'
+
+    assessment.save(update_fields=['appointment_getter'])
+
+    return JsonResponse({
+        'success': True,
+        'message': msg,
+        'appointment_getter_name': getter_name,
     })
 
 
@@ -246,17 +310,16 @@ def update_assessment_info(request, assessment_id):
     except (json.JSONDecodeError, AttributeError):
         return JsonResponse({'success': False, 'message': 'リクエスト形式が不正です'}, status=400)
 
-    # contracted → ステータス変更は専用 cancel-contracted API で行う
-    if assessment.status == Assessment.STATUS_CONTRACTED:
-        return JsonResponse({'success': False, 'message': '成約中の案件は成約キャンセル操作を使用してください'}, status=400)
-
     allowed_statuses = {s for s, _ in Assessment.STATUS_CHOICES} - {Assessment.STATUS_CONTRACTED}
     status = payload.get('status', '').strip()
-    if status and status not in allowed_statuses:
-        return JsonResponse({'success': False, 'message': 'ステータスが不正です'}, status=400)
 
     update_fields = ['updated_at']
     if status:
+        # contracted → ステータス変更は専用 cancel-contracted API で行う
+        if assessment.status == Assessment.STATUS_CONTRACTED:
+            return JsonResponse({'success': False, 'message': '成約中の案件は成約キャンセル操作を使用してください'}, status=400)
+        if status not in allowed_statuses:
+            return JsonResponse({'success': False, 'message': 'ステータスが不正です'}, status=400)
         assessment.status = status
         update_fields.append('status')
         if status == Assessment.STATUS_MANAGED and not assessment.managed_at:
@@ -273,11 +336,13 @@ def update_assessment_info(request, assessment_id):
         except ValueError:
             pass
 
-    for field in ('assessment_price', 'market_price'):
+    for field in ('assessment_price', 'market_price_min', 'market_price_max'):
         val = payload.get(field)
         if val is not None and val != '':
             setattr(assessment, field, val)
-            update_fields.append(field)
+        else:
+            setattr(assessment, field, None)
+        update_fields.append(field)
 
     overall_rating = payload.get('overall_rating')
     if overall_rating is not None and overall_rating != '':
@@ -546,8 +611,8 @@ def request_assessment_approval(request, assessment_id):
 
     return JsonResponse({
         'success': True,
-        'message': f'{approver.get_full_name() or approver.username} に承認申請しました',
-        'approver_name': approver.get_full_name() or approver.username,
+        'message': f'{ja_full_name(approver)} に承認申請しました',
+        'approver_name': ja_full_name(approver),
     })
 
 
@@ -810,7 +875,7 @@ def approve_advance_payment(request, ap_id):
     return JsonResponse({
         'success': True,
         'message': '先払い入金を承認しました',
-        'approved_by_name': request.user.get_full_name() or request.user.username,
+        'approved_by_name': ja_full_name(request.user),
         'status_display': ap.get_status_display(),
     })
 

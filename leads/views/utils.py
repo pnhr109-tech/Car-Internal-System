@@ -9,10 +9,11 @@ import os
 from datetime import datetime
 
 from django.db import transaction
+from django.db.models import Sum
 from django.http import HttpResponseForbidden
 from django.utils import timezone
 
-from ..models import CarAssessmentRequest, NumberSequence, SalesProcess
+from ..models import CarAssessmentRequest, NumberSequence, OtherFeeItem, SalesProcess
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +71,19 @@ def generate_case_number() -> str:
 # ユーザー
 # ---------------------------------------------------------------------------
 
+def ja_full_name(user) -> str:
+    """姓名順でフルネームを返す（日本語表示用）。未設定時は username にフォールバック。"""
+    if user is None:
+        return ''
+    last  = (getattr(user, 'last_name',  '') or '').strip()
+    first = (getattr(user, 'first_name', '') or '').strip()
+    full  = f'{last} {first}'.strip()
+    return full or (getattr(user, 'username', '') or '')
+
+
 def _current_user_display_name(user) -> str:
-    """ユーザーの表示名（姓名 > username）を返す"""
-    full_name = user.get_full_name().strip()
-    return full_name or user.username
+    """ユーザーの表示名（姓名順 > username）を返す"""
+    return ja_full_name(user)
 
 
 # ---------------------------------------------------------------------------
@@ -186,5 +196,45 @@ def _serialize_contract_file(file_obj) -> dict:
         'url':         file_obj.file.url,
         'filename':    os.path.basename(file_obj.file.name),
         'uploaded_at': timezone.localtime(file_obj.uploaded_at).strftime('%Y/%m/%d %H:%M'),
-        'uploaded_by': (uploaded_by.get_full_name() or uploaded_by.username) if uploaded_by else '-',
+        'uploaded_by': ja_full_name(uploaded_by) if uploaded_by else '-',
     }
+
+
+def _serialize_aa_image(img) -> dict:
+    """AASaleImageUpload を JS 側で扱いやすい dict に変換する"""
+    uploaded_by = img.uploaded_by
+    return {
+        'id':          img.id,
+        'image_type':  img.image_type,
+        'url':         img.file.url,
+        'filename':    os.path.basename(img.file.name),
+        'uploaded_at': timezone.localtime(img.uploaded_at).strftime('%Y/%m/%d %H:%M'),
+        'uploaded_by': ja_full_name(uploaded_by) if uploaded_by else '-',
+    }
+
+
+# ---------------------------------------------------------------------------
+# その他費用明細
+# ---------------------------------------------------------------------------
+
+def _serialize_other_fee_item(item) -> dict:
+    """OtherFeeItem を JS 側で扱いやすい dict に変換する"""
+    created_by = item.created_by
+    return {
+        'id':              item.id,
+        'category':        item.category,
+        'category_label':  item.get_category_display(),
+        'amount':          int(item.amount),
+        'receipt_url':     item.receipt_image.url if item.receipt_image else None,
+        'receipt_filename': os.path.basename(item.receipt_image.name) if item.receipt_image else None,
+        'created_at':      timezone.localtime(item.created_at).strftime('%Y/%m/%d %H:%M'),
+        'created_by':      ja_full_name(created_by) if created_by else '-',
+    }
+
+
+def _sync_other_fee(sales_process) -> None:
+    """OtherFeeItem 合計を SalesProcess.other_fee に同期する"""
+    from decimal import Decimal
+    total = sales_process.other_fee_items.aggregate(total=Sum('amount'))['total']
+    sales_process.other_fee = total if total is not None else Decimal(0)
+    SalesProcess.objects.filter(pk=sales_process.pk).update(other_fee=sales_process.other_fee)

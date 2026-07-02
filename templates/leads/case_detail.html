@@ -36,9 +36,15 @@
             {{ assessment.get_status_display }}
           </span>
           <div class="text-muted small mt-1 d-flex align-items-center gap-2">
-            担当：<span id="assigneeName">{{ assessment.assigned_to|ja_name }}</span>
+            担当：{% if assessment.assigned_to %}<span id="assigneeName">{{ assessment.assigned_to|ja_name }}</span>{% else %}<span id="assigneeName" class="text-danger fw-semibold">未設定</span>{% endif %}
             {% if can_approve %}
             <button class="btn btn-link btn-sm p-0 text-muted" onclick="openChangeAssigneeModal()" title="担当者変更"><i class="bi bi-pencil"></i></button>
+            {% endif %}
+          </div>
+          <div class="text-muted small mt-1 d-flex align-items-center gap-2">
+            商談取得者：<span id="appointmentGetterName">{{ assessment.appointment_getter|ja_name|default:"未設定" }}</span>
+            {% if can_approve %}
+            <button class="btn btn-link btn-sm p-0 text-muted" onclick="openChangeAppointmentGetterModal()" title="商談取得者変更"><i class="bi bi-pencil"></i></button>
             {% endif %}
           </div>
         </div>
@@ -143,11 +149,11 @@
         </div>
         {% endwith %}
 
-        {# 出品（手動） #}
+        {# AA（手動） #}
         {% with avail=step_available.listing done=sales_process.listing_done %}
         <div class="col" id="step-card-listing">
           <div class="p-2 rounded border {% if done %}bg-success text-white{% elif not avail %}bg-light text-muted opacity-50{% else %}bg-light text-muted{% endif %}">
-            <div class="small fw-semibold">出品</div>
+            <div class="small fw-semibold">AA</div>
             <div class="small mt-1">
               {% if done %}<i class="bi bi-check-circle-fill"></i> 完了
               {% elif not avail %}<i class="bi bi-lock"></i> 未解放
@@ -238,7 +244,7 @@
     </li>
     <li class="nav-item">
       <a class="nav-link {% if active_tab == 'listing' %}active{% endif %}" href="?tab=listing">
-        <i class="bi bi-megaphone"></i> 出品
+        <i class="bi bi-hammer"></i> AA
       </a>
     </li>
     <li class="nav-item">
@@ -312,7 +318,13 @@
             <dd class="col-7">{{ assessment.assessment_system_recycle_amount|floatformat:"0"|intcomma }}円</dd>
             {% endif %}
             <dt class="col-5 text-muted">市場相場価格</dt>
-            <dd class="col-7">{% if assessment.market_price %}{{ assessment.market_price|floatformat:0|intcomma }}円{% else %}-{% endif %}</dd>
+            <dd class="col-7">
+              {% if assessment.market_price_min or assessment.market_price_max %}
+                {% if assessment.market_price_min %}{{ assessment.market_price_min|floatformat:0|intcomma }}円{% else %}-{% endif %}
+                〜
+                {% if assessment.market_price_max %}{{ assessment.market_price_max|floatformat:0|intcomma }}円{% else %}-{% endif %}
+              {% else %}-{% endif %}
+            </dd>
             <dt class="col-5 text-muted">総合評価</dt>
             <dd class="col-7">{% if assessment.overall_rating %}{{ assessment.overall_rating }} / 5{% else %}-{% endif %}</dd>
             {% if assessment.status != 'lost' and assessment.status != 'pre_cancel' %}
@@ -492,14 +504,21 @@
             <dt class="col-6 text-muted">契約日</dt>
             <dd class="col-6">{{ contract.contract_date|date:"Y年m月d日" }}</dd>
             <dt class="col-6 text-muted">買取価格（税込）</dt>
-            <dd class="col-6 fw-bold">{{ contract.purchase_price_incl_tax|floatformat:0 }}円</dd>
+            <dd class="col-6 fw-bold">
+              {% if contract_total_payment %}{{ contract_total_payment|floatformat:0|intcomma }}円{% else %}{{ contract.purchase_price_incl_tax|floatformat:0|intcomma }}円{% endif %}
+              <div class="text-muted fw-normal" style="font-size:0.78em;">
+                {{ contract.purchase_price_excl_tax|floatformat:0|intcomma }}（税抜）
+                ＋ {{ contract.tax_amount|floatformat:0|intcomma }}（消費税）
+                {% if contract.recycle_amount %}＋ {{ contract.recycle_amount|floatformat:0|intcomma }}（リサイクル）{% endif %}
+              </div>
+            </dd>
             <dt class="col-6 text-muted">買取価格（税抜）</dt>
-            <dd class="col-6">{{ contract.purchase_price_excl_tax|floatformat:0 }}円</dd>
+            <dd class="col-6">{{ contract.purchase_price_excl_tax|floatformat:0|intcomma }}円</dd>
             <dt class="col-6 text-muted">消費税額</dt>
-            <dd class="col-6">{{ contract.tax_amount|floatformat:0 }}円</dd>
+            <dd class="col-6">{{ contract.tax_amount|floatformat:0|intcomma }}円</dd>
             {% if contract.recycle_amount %}
             <dt class="col-6 text-muted">リサイクル券金額</dt>
-            <dd class="col-6">{{ contract.recycle_amount|floatformat:0 }}円</dd>
+            <dd class="col-6">{{ contract.recycle_amount|floatformat:0|intcomma }}円</dd>
             {% endif %}
             <dt class="col-6 text-muted">支払い予定日</dt>
             <dd class="col-6">{{ contract.payment_scheduled_date|date:"Y年m月d日"|default:"-" }}</dd>
@@ -1003,12 +1022,12 @@
   </div>
   {% endif %}
 
-  {# ── タブ: 出品 ──────────────────────────────── #}
+  {# ── タブ: AA ──────────────────────────────── #}
   {% elif active_tab == 'listing' %}
   {% if sales_process %}
-  <div class="card">
+  <div class="card mb-3">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <h6 class="mb-0"><i class="bi bi-megaphone"></i> 出品</h6>
+      <h6 class="mb-0"><i class="bi bi-hammer"></i> AA</h6>
       <span class="badge {% if sales_process.listing_done %}bg-success{% else %}bg-secondary{% endif %}"
         id="step-tab-badge-listing" data-done="{% if sales_process.listing_done %}true{% else %}false{% endif %}">
         {% if sales_process.listing_done %}完了{% else %}未完了{% endif %}
@@ -1033,9 +1052,230 @@
       </div>
     </div>
   </div>
+
+  <div class="card mb-3">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-building"></i> AA情報</h6></div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">AA会場</label>
+          <select id="aaFeeVenue" class="form-select" onchange="onVenueChangeAA()">
+            <option value="">― 選択してください ―</option>
+            {% for venue in auction_venues %}
+            <option value="{{ venue.pk }}"{% if sales_process.sold_destination_id == venue.pk %} selected{% endif %}>{{ venue.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">出品費用 <small class="text-muted fw-normal">（変更可）</small></label>
+          <div class="input-group">
+            <input type="number" id="aaFeeEntryFee" class="form-control" min="0" step="1"
+              value="{% if sales_process.entry_fee %}{{ sales_process.entry_fee }}{% elif sales_process.sold_destination %}{{ sales_process.sold_destination.entry_fee }}{% else %}0{% endif %}">
+            <span class="input-group-text">円</span>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold">成約費用 <small class="text-muted fw-normal">（変更可）</small></label>
+          <div class="input-group">
+            <input type="number" id="aaFeeContractFee" class="form-control" min="0" step="1"
+              value="{% if sales_process.contract_fee %}{{ sales_process.contract_fee }}{% elif sales_process.sold_destination %}{{ sales_process.sold_destination.contract_fee }}{% else %}0{% endif %}">
+            <span class="input-group-text">円</span>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">個人宅陸送費用</label>
+          <div class="input-group">
+            <input type="number" id="aaFeeTransportPersonal" class="form-control" min="0" step="1"
+              value="{{ sales_process.transport_fee_personal|default:'8800' }}" placeholder="8800">
+            <span class="input-group-text">円</span>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">AA会場搬送費用</label>
+          <div class="input-group">
+            <input type="number" id="aaFeeTransportAuction" class="form-control" min="0" step="1"
+              value="{{ sales_process.transport_fee_auction|default:'8800' }}" placeholder="8800">
+            <span class="input-group-text">円</span>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-semibold">AA会場評価点</label>
+          <select id="aaScoreInput" class="form-select">
+            <option value="">― 選択してください ―</option>
+            {% for score_val, score_label in sales_process.AA_SCORE_CHOICES %}
+            <option value="{{ score_val }}"{% if sales_process.aa_score == score_val %} selected{% endif %}>{{ score_label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 d-flex justify-content-end">
+          <button class="btn btn-primary" onclick="saveAAFees()">
+            <i class="bi bi-save"></i> 保存
+          </button>
+        </div>
+
+        {# ── その他費用 明細 ── #}
+        <div class="col-12">
+          <hr class="my-1">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label fw-semibold mb-0">その他費用</label>
+            <span class="fw-semibold">合計: <span id="otherFeeTotal">0</span> 円</span>
+          </div>
+          <div id="otherFeeItemList" class="mb-3">
+            {# JS (_initOtherFeeItems) で動的描画 #}
+          </div>
+          <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+              <label class="form-label small mb-1">種別 <span class="text-danger">*</span></label>
+              <select id="newOtherFeeCategory" class="form-select form-select-sm">
+                <option value="">選択してください</option>
+                {% for cat_key, cat_label in other_fee_category_choices %}
+                <option value="{{ cat_key }}">{{ cat_label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1">金額 <span class="text-danger">*</span></label>
+              <div class="input-group input-group-sm">
+                <input type="number" id="newOtherFeeAmount" class="form-control" min="0" step="1" placeholder="0">
+                <span class="input-group-text">円</span>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-1">領収書 <small class="text-muted">(任意)</small></label>
+              <input type="file" id="newOtherFeeReceipt" class="form-control form-control-sm" accept="image/*,application/pdf">
+            </div>
+            <div class="col-md-2">
+              <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="addOtherFeeItem()">
+                <i class="bi bi-plus"></i> 追加
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── 参考情報・損益シミュレーション ── #}
+  <div class="card mb-3">
+    <div class="card-header"><h6 class="mb-0"><i class="bi bi-graph-up"></i> 損益シミュレーション</h6></div>
+    <div class="card-body">
+      <div class="row g-3">
+        {# 査定参考情報 #}
+        <div class="col-md-4">
+          <div class="p-3 bg-light rounded h-100">
+            <div class="text-muted small fw-semibold mb-2">査定情報（参考）</div>
+            <div class="mb-1">
+              <span class="text-muted small">査定時評価</span><br>
+              <span class="fw-semibold">{% if assessment.overall_rating %}{{ assessment.overall_rating }} / 5{% else %}—{% endif %}</span>
+            </div>
+            <div class="mb-1">
+              <span class="text-muted small">AA会場評価点</span><br>
+              <span class="fw-semibold" id="aaScoreDisplay">{% if sales_process.aa_score %}{{ sales_process.aa_score }}{% else %}—{% endif %}</span>
+            </div>
+            <div class="mb-1">
+              <span class="text-muted small">市場相場価格</span><br>
+              <span class="fw-semibold">
+                {% if assessment.market_price_min or assessment.market_price_max %}
+                  {% if assessment.market_price_min %}{{ assessment.market_price_min|floatformat:0|intcomma }}{% else %}—{% endif %}
+                  〜
+                  {% if assessment.market_price_max %}{{ assessment.market_price_max|floatformat:0|intcomma }}{% else %}—{% endif %} 円
+                {% else %}—{% endif %}
+              </span>
+            </div>
+            <div>
+              <span class="text-muted small">買取価格（税込）</span><br>
+              <span class="fw-semibold">{% if contract %}{{ contract.purchase_price_incl_tax|floatformat:0|intcomma }}円{% else %}—{% endif %}</span>
+            </div>
+          </div>
+        </div>
+        {# 費用内訳 #}
+        <div class="col-md-4">
+          <div class="p-3 bg-light rounded h-100">
+            <div class="text-muted small fw-semibold mb-2">費用内訳</div>
+            <div class="d-flex justify-content-between small mb-1"><span>買取価格（税抜）</span><span id="simPurchasePrice">—</span></div>
+            <div class="d-flex justify-content-between small mb-1"><span>出品費用</span><span id="simEntryFee">—</span></div>
+            <div class="d-flex justify-content-between small mb-1"><span>成約費用</span><span id="simContractFee">—</span></div>
+            <div class="d-flex justify-content-between small mb-1"><span>個人宅陸送費用</span><span id="simTransportPersonal">—</span></div>
+            <div class="d-flex justify-content-between small mb-1"><span>AA会場搬送費用</span><span id="simTransportAuction">—</span></div>
+            <div class="d-flex justify-content-between small mb-1"><span>その他費用</span><span id="simOtherFee">—</span></div>
+            <hr class="my-1">
+            <div class="d-flex justify-content-between fw-semibold"><span>費用合計</span><span id="simTotalCost">—</span></div>
+          </div>
+        </div>
+        {# 損益判定 #}
+        <div class="col-md-4">
+          <div class="p-3 rounded h-100 border border-2" id="simResultBox">
+            <div class="text-muted small fw-semibold mb-2">損益判定</div>
+            <div class="mb-2">
+              <span class="text-muted small">損益分岐点（この金額以上で利益）</span><br>
+              <span class="fs-5 fw-bold" id="simBreakEven">—</span>
+            </div>
+            <div class="mb-2">
+              <span class="text-muted small">市場相場との比較</span><br>
+              <span id="simMarketCompare" class="small">—</span>
+            </div>
+            <div>
+              <span class="text-muted small">市場相場中間値での予想利益</span><br>
+              <span class="fw-semibold" id="simEstProfit">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h6 class="mb-0"><i class="bi bi-images"></i> 画像</h6>
+      <button type="button" class="btn btn-sm btn-outline-primary" onclick="openAAImageUploadModal()">
+        <i class="bi bi-plus-circle"></i> 画像を追加
+      </button>
+    </div>
+    <div id="aaImageList">
+      {# JS (_initAAImages) で動的描画 #}
+    </div>
+  </div>
+
+  {{ aa_images_by_type|json_script:"aa-images-data" }}
+  {{ other_fee_items|json_script:"other-fee-items-data" }}
+
+  {# ── AA画像アップロードモーダル ── #}
+  <div class="modal fade" id="aaImageUploadModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-camera"></i> 画像を追加</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">画面の種類 <span class="text-danger">*</span></label>
+            <select class="form-select" id="aaImgUploadType">
+              <option value="">選択してください</option>
+              {% for img_key, img_label in aa_image_types %}
+              <option value="{{ img_key }}">{{ img_label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">画像ファイル <span class="text-danger">*</span></label>
+            <input type="file" class="form-control" id="aaImgUploadFile" accept="image/*" multiple>
+            <div class="form-text">複数枚同時に選択できます</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+          <button type="button" class="btn btn-primary" onclick="doUploadAAImages()">
+            <i class="bi bi-upload"></i> アップロード
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   {% else %}
   <div class="alert alert-info">
-    <i class="bi bi-info-circle"></i> 出品情報は契約承認後に入力できます。
+    <i class="bi bi-info-circle"></i> AA情報は契約承認後に入力できます。
   </div>
   {% endif %}
 
@@ -1215,61 +1455,53 @@
           </button>
         </div>
 
-        {# 売却先（AA会場）と会場費用 #}
+        {# 売却先・費用（AAタブ入力値を自動反映・読み取り専用） #}
+        <div class="col-12">
+          <hr class="my-0">
+          <p class="small text-muted mt-2 mb-0"><i class="bi bi-info-circle"></i> 以下はAAタブで入力した内容が自動反映されます</p>
+        </div>
         <div class="col-md-6">
           <label class="form-label fw-semibold">売却先（AA会場）</label>
-          <select id="saleSoldDestination" class="form-select" onchange="onVenueChange()">
-            <option value="">― 選択してください ―</option>
-            {% for venue in auction_venues %}
-            <option value="{{ venue.pk }}"
-              {% if sales_process.sold_destination_id == venue.pk %}selected{% endif %}>
-              {{ venue.name }}
-            </option>
-            {% endfor %}
-          </select>
+          <input type="text" class="form-control bg-light" readonly
+            value="{{ sales_process.sold_destination.name|default:'―' }}">
         </div>
         <div class="col-md-3">
-          <label class="form-label fw-semibold">出品費用 <small class="text-muted fw-normal">（会場マスタ）</small></label>
+          <label class="form-label fw-semibold">出品費用</label>
           <div class="input-group">
             <input type="text" id="saleEntryFee" class="form-control bg-light" readonly
-              value="{{ sales_process.sold_destination.entry_fee|default:0 }}">
+              value="{% if sales_process.entry_fee %}{{ sales_process.entry_fee }}{% elif sales_process.sold_destination %}{{ sales_process.sold_destination.entry_fee }}{% else %}0{% endif %}">
             <span class="input-group-text">円</span>
           </div>
         </div>
         <div class="col-md-3">
-          <label class="form-label fw-semibold">成約費用 <small class="text-muted fw-normal">（会場マスタ）</small></label>
+          <label class="form-label fw-semibold">成約費用</label>
           <div class="input-group">
             <input type="text" id="saleContractFee" class="form-control bg-light" readonly
-              value="{{ sales_process.sold_destination.contract_fee|default:0 }}">
+              value="{% if sales_process.contract_fee %}{{ sales_process.contract_fee }}{% elif sales_process.sold_destination %}{{ sales_process.sold_destination.contract_fee }}{% else %}0{% endif %}">
             <span class="input-group-text">円</span>
           </div>
         </div>
-
-        {# 陸送・搬送費用（編集可） #}
         <div class="col-md-4">
           <label class="form-label fw-semibold">個人宅陸送費用</label>
           <div class="input-group">
-            <input type="number" id="saleTransportFeePersonal" class="form-control" min="0" step="1"
-              value="{{ sales_process.transport_fee_personal|default:'8800' }}" placeholder="8800"
-              oninput="updateSaleProfit()">
+            <input type="text" id="saleTransportFeePersonal" class="form-control bg-light" readonly
+              value="{{ sales_process.transport_fee_personal|default:'' }}">
             <span class="input-group-text">円</span>
           </div>
         </div>
         <div class="col-md-4">
           <label class="form-label fw-semibold">AA会場搬送費用</label>
           <div class="input-group">
-            <input type="number" id="saleTransportFeeAuction" class="form-control" min="0" step="1"
-              value="{{ sales_process.transport_fee_auction|default:'8800' }}" placeholder="8800"
-              oninput="updateSaleProfit()">
+            <input type="text" id="saleTransportFeeAuction" class="form-control bg-light" readonly
+              value="{{ sales_process.transport_fee_auction|default:'' }}">
             <span class="input-group-text">円</span>
           </div>
         </div>
         <div class="col-md-4">
           <label class="form-label fw-semibold">その他費用</label>
           <div class="input-group">
-            <input type="number" id="saleOtherFee" class="form-control" min="0" step="1"
-              value="{{ sales_process.other_fee|default:'' }}" placeholder="0"
-              oninput="updateSaleProfit()">
+            <input type="text" id="saleOtherFee" class="form-control bg-light" readonly
+              value="{{ sales_process.other_fee|default:'' }}">
             <span class="input-group-text">円</span>
           </div>
         </div>
@@ -1362,10 +1594,20 @@
         </div>
         <div class="mb-3">
           <label class="form-label">市場相場価格（円）</label>
-          <div class="input-group">
-            <input type="number" id="editMarketPrice" class="form-control" min="0" step="1"
-              value="{{ assessment.market_price|default:'' }}">
-            <span class="input-group-text">円</span>
+          <div class="d-flex align-items-center gap-2">
+            <div class="input-group">
+              <span class="input-group-text">FROM</span>
+              <input type="number" id="editMarketPriceMin" class="form-control" min="0" step="1"
+                value="{{ assessment.market_price_min|default:'' }}" placeholder="下限">
+              <span class="input-group-text">円</span>
+            </div>
+            <span class="text-muted">〜</span>
+            <div class="input-group">
+              <span class="input-group-text">TO</span>
+              <input type="number" id="editMarketPriceMax" class="form-control" min="0" step="1"
+                value="{{ assessment.market_price_max|default:'' }}" placeholder="上限">
+              <span class="input-group-text">円</span>
+            </div>
           </div>
         </div>
         <div class="mb-3">
@@ -2444,6 +2686,35 @@
 </div>
 {% endif %}
 
+{# 商談取得者変更モーダル #}
+{% if can_approve %}
+<div class="modal fade" id="changeAppointmentGetterModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">商談取得者変更</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">商談取得者を選択</label>
+        <select id="newAppointmentGetterSelect" class="form-select">
+          <option value="">未設定</option>
+          {% for u in all_users %}
+          <option value="{{ u.pk }}" {% if assessment.appointment_getter and u.pk == assessment.appointment_getter.pk %}selected{% endif %}>
+            {{ u|ja_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+        <button type="button" class="btn btn-primary" onclick="saveAppointmentGetterChange()">変更する</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -2457,8 +2728,10 @@ const ASSESSMENT_STATUS = '{{ assessment.status }}';
 const ASSESSMENT_APPROVAL_REQUESTED_TO_ID = {{ assessment.approval_requested_to_id|default:0 }};
 {% if contract %}const CONTRACT_APPROVAL_REQUESTED_TO_ID = {{ contract.approval_requested_to_id|default:0 }};{% endif %}
 // 査定システム取込データ（いずれも円単位）
-const SATEI_PRICE_YEN   = {{ assessment.assessment_price|default:0 }};
-const SATEI_RECYCLE_YEN = {{ assessment.assessment_system_recycle_amount|default:0 }};
+const SATEI_PRICE_YEN       = {{ assessment.assessment_price|default:0 }};
+const SATEI_RECYCLE_YEN     = {{ assessment.assessment_system_recycle_amount|default:0 }};
+const MARKET_PRICE_MIN      = {{ assessment.market_price_min|default:'null' }};
+const MARKET_PRICE_MAX      = {{ assessment.market_price_max|default:'null' }};
 // 買取金額（経常利益計算用）
 {% if contract %}
 const PURCHASE_PRICE = {% if contract.amount_correction_flag and contract.corrected_price %}{{ contract.corrected_price }}{% else %}{{ contract.purchase_price_excl_tax|default:0 }}{% endif %};
@@ -2488,8 +2761,36 @@ function saveAssigneeChange() {
   .then(r => r.json())
   .then(d => {
     if (d.success) {
-      document.getElementById('assigneeName').textContent = d.assigned_to_name;
+      const el = document.getElementById('assigneeName');
+      el.textContent = d.assigned_to_name;
+      el.classList.remove('text-danger', 'fw-semibold');
       changeAssigneeModal.hide();
+      showToast('成功', d.message, 'success');
+    } else {
+      alert(d.message);
+    }
+  })
+  .catch(err => alert('通信エラー: ' + err.message));
+}
+
+let changeAppointmentGetterModal;
+document.addEventListener('DOMContentLoaded', () => {
+  changeAppointmentGetterModal = new bootstrap.Modal(document.getElementById('changeAppointmentGetterModal'));
+});
+function openChangeAppointmentGetterModal() {
+  changeAppointmentGetterModal.show();
+}
+function saveAppointmentGetterChange() {
+  const userId = document.getElementById('newAppointmentGetterSelect').value;
+  apiFetch(`/sateiinfo/api/cases/${ASSESSMENT_ID}/change-appointment-getter/`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: userId }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      document.getElementById('appointmentGetterName').textContent = d.appointment_getter_name;
+      changeAppointmentGetterModal.hide();
       showToast('成功', d.message, 'success');
     } else {
       alert(d.message);
@@ -2500,24 +2801,56 @@ function saveAssigneeChange() {
 {% endif %}
 
 {% if sales_process %}
-function onVenueChange() {
-  const venueId = document.getElementById('saleSoldDestination').value;
+function onVenueChangeAA() {
+  const venueId = document.getElementById('aaFeeVenue').value;
   const fees = AUCTION_VENUE_FEES[venueId] || {entry: 0, contract: 0};
-  document.getElementById('saleEntryFee').value = fees.entry;
-  document.getElementById('saleContractFee').value = fees.contract;
-  updateSaleProfit();
+  document.getElementById('aaFeeEntryFee').value = fees.entry;
+  document.getElementById('aaFeeContractFee').value = fees.contract;
+}
+
+function saveAAFees() {
+  apiFetch(`/sateiinfo/api/sales-process/${SALES_PROCESS_ID}/aa-fees/`, {
+    method: 'POST',
+    body: JSON.stringify({
+      sold_destination_id:    document.getElementById('aaFeeVenue').value,
+      entry_fee:              document.getElementById('aaFeeEntryFee').value,
+      contract_fee:           document.getElementById('aaFeeContractFee').value,
+      transport_fee_personal: document.getElementById('aaFeeTransportPersonal').value,
+      transport_fee_auction:  document.getElementById('aaFeeTransportAuction').value,
+      aa_score:               document.getElementById('aaScoreInput').value,
+    }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      showToast('保存', d.message, 'success');
+      const efEl  = document.getElementById('saleEntryFee');
+      const cfEl  = document.getElementById('saleContractFee');
+      if (efEl) efEl.value = document.getElementById('aaFeeEntryFee').value;
+      if (cfEl) cfEl.value = document.getElementById('aaFeeContractFee').value;
+      const scoreVal = document.getElementById('aaScoreInput').value;
+      const scoreDisp = document.getElementById('aaScoreDisplay');
+      if (scoreDisp) scoreDisp.textContent = scoreVal || '—';
+      if (typeof updateSaleProfit === 'function') updateSaleProfit();
+      _updateAASimulation();
+    } else {
+      showToast('エラー', d.message || '保存に失敗しました', 'danger');
+    }
+  })
+  .catch(err => showToast('エラー', '通信エラー: ' + err.message, 'danger'));
 }
 
 function updateSaleProfit() {
-  const soldPrice      = parseFloat(document.getElementById('saleSoldPrice').value) || 0;
-  const entryFee       = parseFloat(document.getElementById('saleEntryFee').value) || 0;
-  const contractFee    = parseFloat(document.getElementById('saleContractFee').value) || 0;
-  const transPersonal  = parseFloat(document.getElementById('saleTransportFeePersonal').value) || 0;
-  const transAuction   = parseFloat(document.getElementById('saleTransportFeeAuction').value) || 0;
-  const otherFee       = parseFloat(document.getElementById('saleOtherFee').value) || 0;
+  const soldPrice      = parseFloat(document.getElementById('saleSoldPrice')?.value) || 0;
+  const entryFee       = parseFloat(document.getElementById('saleEntryFee')?.value) || 0;
+  const contractFee    = parseFloat(document.getElementById('saleContractFee')?.value) || 0;
+  const transPersonal  = parseFloat(document.getElementById('saleTransportFeePersonal')?.value) || 0;
+  const transAuction   = parseFloat(document.getElementById('saleTransportFeeAuction')?.value) || 0;
+  const otherFee       = parseFloat(document.getElementById('saleOtherFee')?.value) || 0;
   const totalCost = PURCHASE_PRICE + entryFee + contractFee + transPersonal + transAuction + otherFee;
   const profit = soldPrice - totalCost;
   const el = document.getElementById('saleProfit');
+  if (!el) return;
   if (soldPrice === 0 && totalCost === 0) {
     el.textContent = '---';
     el.className = 'fs-4 fw-bold text-muted';
@@ -2531,13 +2864,9 @@ function saveSaleInfo() {
   apiFetch(`/sateiinfo/api/sales-process/${SALES_PROCESS_ID}/update-info/`, {
     method: 'POST',
     body: JSON.stringify({
-      vehicle_disposition:    document.getElementById('saleDisposition').value,
-      sold_at:                document.getElementById('saleSoldAt').value,
-      sold_price:             document.getElementById('saleSoldPrice').value,
-      sold_destination_id:    document.getElementById('saleSoldDestination').value,
-      transport_fee_personal: document.getElementById('saleTransportFeePersonal').value,
-      transport_fee_auction:  document.getElementById('saleTransportFeeAuction').value,
-      other_fee:              document.getElementById('saleOtherFee').value,
+      vehicle_disposition: document.getElementById('saleDisposition').value,
+      sold_at:             document.getElementById('saleSoldAt').value,
+      sold_price:          document.getElementById('saleSoldPrice').value,
     }),
   })
   .then(r => r.json())

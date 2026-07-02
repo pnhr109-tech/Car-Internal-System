@@ -19,6 +19,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from ..models import Assessment, PurchaseContract, SalesProcess, Vehicle
+from .utils import ja_full_name
 
 logger = logging.getLogger(__name__)
 
@@ -443,7 +444,7 @@ def inventory_table_csv(request):
             str(c.contract_date) if c.contract_date else '',
             sp.get_vehicle_disposition_display() if sp and sp.vehicle_disposition else '',
             store_name,
-            c.assigned_to.get_full_name() if c.assigned_to else '',
+            ja_full_name(c.assigned_to) if c.assigned_to else '',
         ])
 
     return response
@@ -527,7 +528,7 @@ def inventory_table_pdf(request):
             cell(str(c.contract_date) if c.contract_date else ''),
             cell(n(sp.get_vehicle_disposition_display()) if sp and sp.vehicle_disposition else ''),
             cell(n(store_name)),
-            cell(n(c.assigned_to.get_full_name()) if c.assigned_to else ''),
+            cell(n(ja_full_name(c.assigned_to)) if c.assigned_to else ''),
         ])
 
     table = Table(data, colWidths=col_widths, repeatRows=1)

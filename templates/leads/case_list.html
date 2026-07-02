@@ -45,7 +45,7 @@
             <span class="ui-badge {% if a.status == 'contracted' %}ui-badge--success{% elif a.status == 'lost' or a.status == 'pre_cancel' %}ui-badge--danger{% elif a.status == 'managed' %}ui-badge--warning{% else %}ui-badge--info{% endif %}">
               {{ a.get_status_display }}
             </span>
-            {% if owner %}<span class="dash-feed-owner">{{ owner }}</span>{% endif %}
+            {% if owner %}<span class="dash-feed-owner">{{ owner }}</span>{% else %}<span class="dash-feed-owner text-danger fw-semibold">担当未設定</span>{% endif %}
           </div>
         </div>
         {% with vehicle=a.vehicle %}
